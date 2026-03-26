@@ -1,0 +1,70 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cnllm"
+version = "0.1.0"
+description = "统一的中文大模型适配库，将中国大模型 API 输出转换为 OpenAI 格式，无缝接入openai、langchain等任何openai结构适配的python库"
+readme = "README.md"
+license = {text = "MIT"}
+authors = [
+    {name = "kanchengw", email = "wangkancheng1122@163.com"}
+]
+keywords = ["ai", "llm", "openai", "langchain", "minimax", "chinese-llm", "adapter"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+requires-python = ">=3.8"
+dependencies = [
+    "requests>=2.25.0",
+    "python-dotenv>=0.19.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+    "black>=23.0.0",
+    "flake8>=6.0.0",
+    "mypy>=1.0.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/kanchengw/cnllm"
+Documentation = "https://github.com/kanchengw/cnllm#readme"
+Repository = "https://github.com/kanchengw/cnllm"
+Issues = "https://github.com/kanchengw/cnllm/issues"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["cnllm*"]
+
+[tool.black]
+line-length = 100
+target-version = ['py38', 'py39', 'py310', 'py311', 'py312']
+
+[tool.isort]
+profile = "black"
+line_length = 100
+
+[tool.mypy]
+python_version = "3.8"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_functions = ["test_*"]
+addopts = "-v --tb=short"
