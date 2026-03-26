@@ -2,6 +2,14 @@
 
 [English](README_en.md) | [中文](README.md)
 
+![PyPI Version](https://img.shields.io/pypi/v/cnllm)
+![Python Versions](https://img.shields.io/pypi/pyversions/cnllm)
+![License](https://img.shields.io/github/license/kanchengw/cnllm)
+![GitHub Stars](https://img.shields.io/github/stars/kanchengw/cnllm?style=social)
+![GitHub Forks](https://img.shields.io/github/forks/kanchengw/cnllm?style=social)
+
+---
+
 A unified adapter library for Chinese large language models (LLMs). It converts API outputs from various Chinese LLMs (such as MiniMax, Doubao, Kimi, etc.) into the unified OpenAI format, enabling zero-cost integration with mainstream AI frameworks like LangChain and AutoGen.
 
 ## Features

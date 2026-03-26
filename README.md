@@ -2,6 +2,14 @@
 
 [English](README_en.md) | 中文
 
+![PyPI Version](https://img.shields.io/pypi/v/cnllm)
+![Python Versions](https://img.shields.io/pypi/pyversions/cnllm)
+![License](https://img.shields.io/github/license/kanchengw/cnllm)
+![GitHub Stars](https://img.shields.io/github/stars/kanchengw/cnllm?style=social)
+![GitHub Forks](https://img.shields.io/github/forks/kanchengw/cnllm?style=social)
+
+---
+
 统一的中文大模型适配库，将各种国产大模型（如 MiniMax、字节豆包、Kimi 等）的 API 输出转换为统一的 OpenAI 格式，零成本接入 LangChain、AutoGen 等主流 AI 框架。
 
 ## 特性
