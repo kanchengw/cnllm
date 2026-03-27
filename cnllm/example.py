@@ -1,13 +1,9 @@
-from cnllm import MiniMaxChat, Message
+from cnllm import CNLLM
 
-llm = MiniMaxChat(
-    api_key="你的 MINIMAX_API_KEY",
-    model="MiniMax-M1"
+client = CNLLM(
+    api_key="your MINIMAX_API_KEY",
+    model="minimax-m2.7"
 )
 
-messages = [
-    Message(role="user", content="提取实验标题和总结")
-]
-
-resp = llm.invoke(messages)
-print(resp.content)
+resp = client("用一句话介绍自己")
+print(resp["choices"][0]["message"]["content"])

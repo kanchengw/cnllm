@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "cnllm"
-version = "0.1.0"
+version = "0.2.0"
 description = "统一的中文大模型适配库，将中国大模型 API 输出转换为 OpenAI 格式，无缝接入openai、langchain等任何openai结构适配的python库"
 readme = "README.md"
 license = {text = "MIT"}
@@ -37,6 +37,7 @@ dev = [
     "black>=23.0.0",
     "flake8>=6.0.0",
     "mypy>=1.0.0",
+    "langchain-core>=0.3.0",
 ]
 
 [project.urls]
@@ -48,23 +49,3 @@ Issues = "https://github.com/kanchengw/cnllm/issues"
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["cnllm*"]
-
-[tool.black]
-line-length = 100
-target-version = ['py38', 'py39', 'py310', 'py311', 'py312']
-
-[tool.isort]
-profile = "black"
-line_length = 100
-
-[tool.mypy]
-python_version = "3.8"
-warn_return_any = true
-warn_unused_configs = true
-disallow_untyped_defs = false
-
-[tool.pytest.ini_options]
-testpaths = ["tests"]
-python_files = ["test_*.py"]
-python_functions = ["test_*"]
-addopts = "-v --tb=short"

@@ -1,8 +1,11 @@
+import sys
+import io
+sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+
 from cnllm import CNLLM, MINIMAX_API_KEY
-import time
 
 print("=" * 60)
-print("CNLLM 优化功能测试")
+print("CNLLM 完整功能测试")
 print("=" * 60)
 
 print("\n[1] 测试模型参数可配置...")
@@ -67,49 +70,67 @@ resp_m27 = client.chat.create(
 content_m27 = resp_m27["choices"][0]["message"]["content"]
 print(f"    M2.7 回复: {content_m27[:50]}...")
 
-print("\n[8] LangChain 函数兼容性验证...")
+print("\n[8] 测试 prompt 参数...")
+resp_prompt = client.chat.create(prompt="用一句话介绍自己")
+content_prompt = resp_prompt["choices"][0]["message"]["content"]
+print(f"    prompt 参数回复: {content_prompt[:50]}...")
+
+print("\n[9] 测试 __call__ 极简调用...")
+resp_call = client("用一句话介绍自己")
+content_call = resp_call["choices"][0]["message"]["content"]
+print(f"    __call__ 回复: {content_call[:50]}...")
+
+print("\n[10] 测试模型覆盖机制...")
+resp_override = client.chat.create(
+    prompt="用一句话介绍自己",
+    model="minimax-m2.5"
+)
+content_override = resp_override["choices"][0]["message"]["content"]
+print(f"    覆盖模型回复: {content_override[:50]}...")
+
+print("\n[11] LangChain 函数兼容性验证...")
 
 try:
     from langchain_core.messages import (
-        HumanMessage, 
-        AIMessage, 
+        HumanMessage,
+        AIMessage,
         SystemMessage,
         BaseMessage,
         message_to_dict,
         messages_to_dict
     )
-    
+
     print("    [OK] LangChain 已安装，验证函数兼容性...")
-    
+
     resp = client.chat.create(
         messages=[{"role": "user", "content": "你好"}],
         model="minimax-m2.7"
     )
-    
+
     content = resp["choices"][0]["message"]["content"]
     role = resp["choices"][0]["message"]["role"]
     msg_id = resp["id"]
     created = resp["created"]
     model = resp["model"]
-    
+
     print(f"    CNLLM 输出格式:")
     print(f"        content: {content[:30]}...")
     print(f"        role: {role}")
     print(f"        id: {msg_id}")
     print(f"        created: {created}")
     print(f"        model: {model}")
-    
+
     print("\n    [测试1] LangChain AIMessage 解析...")
     ai_msg = AIMessage(content=content)
     assert ai_msg.content == content, "AIMessage 内容不匹配"
     print(f"        [OK] AIMessage 解析成功: {ai_msg.content[:30]}...")
-    
+
     print("\n    [测试2] LangChain message_to_dict 转换...")
     msg_dict = message_to_dict(ai_msg)
     assert msg_dict["data"]["content"] == content, "message_to_dict 内容不匹配"
     print(f"        [OK] message_to_dict 转换成功")
     print(f"        转换结果: {msg_dict}")
-    
+
     print("\n    [测试3] LangChain messages_to_dict 批量转换...")
     messages = [
         HumanMessage(content="你好"),
@@ -119,13 +140,13 @@ try:
     msgs_dict = messages_to_dict(messages)
     assert len(msgs_dict) == 3, "消息数量不匹配"
     print(f"        [OK] messages_to_dict 转换成功，共 {len(msgs_dict)} 条消息")
-    
+
     print("\n    [测试4] LangChain 消息类型检查...")
     assert isinstance(ai_msg, BaseMessage), "AIMessage 不是 BaseMessage 的实例"
     assert isinstance(HumanMessage(content="test"), BaseMessage), "HumanMessage 不是 BaseMessage"
     assert isinstance(SystemMessage(content="test"), BaseMessage), "SystemMessage 不是 BaseMessage"
     print(f"        [OK] 所有消息类型都是 BaseMessage 的子类")
-    
+
     print("\n    [测试5] 验证 OpenAI 标准格式完全兼容...")
     assert "choices" in resp, "缺少 choices 字段"
     assert "id" in resp, "缺少 id 字段"
@@ -134,9 +155,9 @@ try:
     assert "usage" in resp, "缺少 usage 字段"
     assert "object" in resp, "缺少 object 字段"
     print(f"        [OK] OpenAI 标准格式完全兼容")
-    
+
     print("\n    [总结] CNLLM 输出与 LangChain 完全兼容!")
-    
+
 except ImportError:
     print("    [WARN] LangChain 未安装，跳过 LangChain 函数兼容性测试")
 except AssertionError as e:

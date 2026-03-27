@@ -40,17 +40,39 @@ class CNLLM:
             )
         raise ValueError(f"暂不支持模型: {self.model}\n支持的模型: {', '.join(self.SUPPORTED_MODELS)}")
 
+    def _prompt_to_messages(self, prompt: str) -> list[Dict[str, str]]:
+        return [{"role": "user", "content": prompt}]
+
     def create_chat_completion(
         self,
-        messages: list[Dict[str, str]],
+        messages: list[Dict[str, str]] = None,
+        prompt: str = None,
         temperature: float = 0.1,
         stream: bool = False,
         model: str = None
     ) -> Dict[str, Any]:
+        if messages is None and prompt is None:
+            raise ValueError("必须提供 messages 或 prompt 参数之一")
+
+        if messages is None:
+            messages = self._prompt_to_messages(prompt)
+
         return self.adapter.create_completion(
             messages=messages,
             temperature=temperature,
             stream=stream,
+            model=model
+        )
+
+    def __call__(
+        self,
+        prompt: str,
+        temperature: float = 0.1,
+        model: str = None
+    ) -> Dict[str, Any]:
+        return self.create_chat_completion(
+            prompt=prompt,
+            temperature=temperature,
             model=model
         )
 
@@ -60,13 +82,15 @@ class CNLLM:
 
         def create(
             self,
-            messages: list[Dict[str, str]],
+            messages: list[Dict[str, str]] = None,
+            prompt: str = None,
             temperature: float = 0.1,
             stream: bool = False,
             model: str = None
         ):
             return self.parent.create_chat_completion(
                 messages=messages,
+                prompt=prompt,
                 temperature=temperature,
                 stream=stream,
                 model=model

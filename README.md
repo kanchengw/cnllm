@@ -10,30 +10,30 @@
 
 ---
 
-统一的中文大模型适配库，将各种国产大模型（如 MiniMax、字节豆包、Kimi 等）的 API 输出转换为统一的 OpenAI 格式，零成本接入 LangChain、AutoGen 等主流 AI 框架。
+统一的中文大模型适配库，将各种国产大模型（如 MiniMax、字节豆包、Kimi 等）的 API 输出转换为统一的 OpenAI 格式，零成本接入 LangChain 等主流 AI 框架。
+
+## 更新日志
+
+### v0.2.0 (2026-03-27)
+- ✨ **新增 `__call__` 方法**：支持 `client("提示词")` 极简调用
+- ✨ **新增 prompt 参数**：支持直接传入字符串，无需手动构建 messages
+- ✨ **模型覆盖机制**：支持调用时指定 API 可通用的其他模型
+- ✨ **LangChain 兼容性测试**：13 个函数兼容性验证
+- 📝 **README 重构**：精简结构，添加 API 参数说明、调用方式示例
 
 ## 特性
 
-- **OpenAI 兼容** - 所有输出完全对齐 OpenAI API 标准格式
-- **LangChain 原生支持** - 可直接使用 LangChain 的消息类型和工具函数
+- **OpenAI 兼容** - 所有输出完全对齐 OpenAI API 标准格式，可直接接入 LangChain、LlamaIndex 等主流框架
 - **统一接口** - 一套代码，无缝切换不同大模型
+- **模型覆盖** - 支持调用时指定 API 可通用的其他模型
+- **简洁调用** - 支持多种调用方式，最简只需一行代码
 - **流式输出** - 支持流式响应（规划中）
 - **重试机制** - 内置超时和自动重试
-- **详细日志** - 清晰的错误信息和调试支持
 
 ## 支持的模型
 
-### 已验证
-- [x] MiniMax-M2.7
-- [x] MiniMax-M2.5
-
-### 开发中
-- [ ] 字节豆包 (Doubao)
-- [ ] Kimi (Moonshot)
-- [ ] 阶跃星辰 (StepFun)
-- [ ] 百度文心一言 (ERNIE)
-- [ ] 阿里通义千问 (Qwen)
-- [ ] 智谱 GLM (ChatGLM)
+- **已验证**：MiniMax-M2.7、MiniMax-M2.5
+- **更多厂商、模型支持正在开发中**
 
 ## 安装
 
@@ -44,92 +44,87 @@ pip install cnllm
 或从源码安装：
 
 ```bash
-git clone https://github.com/yourusername/cnllm.git
+git clone https://github.com/kanchengw/cnllm.git
 cd cnllm
 pip install -e .
 ```
 
 ## 快速开始
 
-### 基础使用
+### 三种调用方式
+
+**1. 极简调用 `client("提示词")`**
 
 ```python
 from cnllm import CNLLM, MINIMAX_API_KEY
 
-# 初始化客户端
-client = CNLLM(
-    model="minimax-m2.7",  # 或 "minimax-m2.5"
-    api_key=MINIMAX_API_KEY
-)
+client = CNLLM(model="minimax-m2.7", api_key=MINIMAX_API_KEY)
+resp = client("用一句话介绍自己")
+print(resp["choices"][0]["message"]["content"])
+```
 
-# 发送消息
+**2. 标准调用 `client.chat.create(prompt="提示词")`**
+
+```python
+resp = client.chat.create(prompt="用一句话介绍自己")
+print(resp["choices"][0]["message"]["content"])
+```
+
+**3. 完整调用 `client.chat.create(messages=[...])`**
+
+```python
 resp = client.chat.create(
     messages=[
         {"role": "user", "content": "用一句话介绍自己"}
     ]
 )
-
-# 获取回复
 print(resp["choices"][0]["message"]["content"])
 ```
 
-### 环境变量配置
+### 模型覆盖
 
-创建 `.env` 文件：
-
-```env
-MINIMAX_API_KEY=your_api_key_here
-```
-
-### 在 LangChain 中使用
-
-```python
-from langchain_core.messages import HumanMessage, AIMessage
-from cnllm import CNLLM, MINIMAX_API_KEY
-
-client = CNLLM(model="minimax-m2.7", api_key=MINIMAX_API_KEY)
-
-# CNLLM 的输出可以直接被 LangChain 使用
-resp = client.chat.create(
-    messages=[{"role": "user", "content": "你好"}]
-)
-
-# 转换为 LangChain 消息
-ai_msg = AIMessage(content=resp["choices"][0]["message"]["content"])
-print(ai_msg.content)
-```
-
-## API 参考
-
-### CNLLM 客户端
-
-```python
-from cnllm import CNLLM
-
-client = CNLLM(
-    model="minimax-m2.7",      # 模型名称
-    api_key="your_api_key",    # API 密钥
-    timeout=30,                # 请求超时（秒）
-    max_retries=3,             # 最大重试次数
-    retry_delay=1.0             # 重试延迟（秒）
-)
-```
-
-### chat.create()
+支持调用时覆盖默认模型（适用于同一 API 可访问的多个模型）：
 
 ```python
 resp = client.chat.create(
-    messages=[
-        {"role": "system", "content": "你是一个有帮助的助手"},
-        {"role": "user", "content": "你好"}
-    ],
-    temperature=0.7,           # 温度参数
-    stream=False,              # 是否流式输出
-    model="minimax-m2.7"      # 可覆盖默认模型
+    prompt="用一句话介绍自己",
+    model="minimax-m2.5"  # 覆盖初始化时的模型
 )
 ```
 
-### 返回格式（OpenAI 标准）
+## API 参数
+
+### CNLLM 客户端初始化
+
+| 参数 | 类型 | 必填 | 默认值 | 说明 |
+|------|------|------|--------|------|
+| `model` | str | ✅ | - | 模型名称：`minimax-m2.7`、`minimax-m2.5` |
+| `api_key` | str | ✅ | - | API 密钥 |
+| `timeout` | int | - | 30 | 请求超时（秒） |
+| `max_retries` | int | - | 3 | 最大重试次数 |
+| `retry_delay` | float | - | 1.0 | 重试延迟（秒） |
+
+### chat.create() 参数
+
+| 参数 | 类型 | 必填 | 默认值 | 说明 |
+|------|------|------|--------|------|
+| `messages` | list[dict] | ⚠️ | - | OpenAI 格式消息列表（与 prompt 二选一） |
+| `prompt` | str | ⚠️ | - | 简写参数，会自动转为 messages（与 messages 二选一） |
+| `temperature` | float | - | 0.1 | 生成随机性，0-2 |
+| `stream` | bool | - | False | 流式响应（规划中） |
+| `model` | str | - | None | 覆盖默认模型 |
+
+### __call__ 简写参数
+
+| 参数 | 类型 | 必填 | 默认值 | 说明 |
+|------|------|------|--------|------|
+| `prompt` | str | ✅ | - | 提示词 |
+| `temperature` | float | - | 0.1 | 生成随机性 |
+| `model` | str | - | None | 覆盖默认模型 |
+
+## 返回格式
+
+所有 API 返回均为 OpenAI 标准格式：
 
 ```python
 {
@@ -137,81 +132,82 @@ resp = client.chat.create(
     "object": "chat.completion",
     "created": 1234567890,
     "model": "minimax-m2.7",
-    "choices": [
-        {
-            "index": 0,
-            "message": {
-                "role": "assistant",
-                "content": "你好！有什么可以帮助你的吗？"
-            },
-            "finish_reason": "stop"
-        }
-    ],
+    "choices": [{
+        "index": 0,
+        "message": {
+            "role": "assistant",
+            "content": "我是 MiniMax-M2.7..."
+        },
+        "finish_reason": "stop"
+    }],
     "usage": {
-        "prompt_tokens": 20,
-        "completion_tokens": 15,
-        "total_tokens": 35
+        "prompt_tokens": 10,
+        "completion_tokens": 20,
+        "total_tokens": 30
     }
 }
 ```
 
-## 项目结构
+## LangChain 兼容函数
 
-```
-cnllm/
-├── adapters/              # 适配器层
-│   └── minimax/          # MiniMax 适配器
-│       └── chat.py
-├── core/                  # 核心组件
-│   ├── base.py          # HTTP 客户端
-│   ├── config.py        # 配置管理
-│   ├── exceptions.py    # 异常定义
-│   └── types.py         # 类型定义
-├── utils/                # 工具类
-│   └── cleaner.py       # 输出清理
-├── client.py             # 统一客户端入口
-└── __init__.py
-```
+| 函数/类 | 状态 | 说明 |
+|---------|------|------|
+| `HumanMessage` | ✅ | 人类消息类型 |
+| `AIMessage` | ✅ | AI 消息类型 |
+| `SystemMessage` | ✅ | 系统消息类型 |
+| `BaseMessage` | ✅ | 消息基类 |
+| `ChatPromptTemplate` | ✅ | 聊天提示模板 |
+| `StrOutputParser` | ✅ | 字符串输出解析器 |
+| `message_to_dict` | ✅ | 消息转字典 |
+| `messages_to_dict` | ✅ | 批量消息转字典 |
+| `AIMessageChunk` | ✅ | AI 消息块 |
+| `ChatMessage` | ✅ | 聊天消息 |
+| `FunctionMessage` | ✅ | 函数消息 |
+| `ToolMessage` | ✅ | 工具消息 |
 
-## 错误处理
+## 在 LangChain 中使用
+
+CNLLM 返回标准 OpenAI 格式，可直接被 LangChain 函数使用：
 
 ```python
-from cnllm import CNLLM
-from cnllm.core.exceptions import ModelAPIError, ParseError
+from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
+from langchain_core.messages import message_to_dict, messages_to_dict
+from cnllm import CNLLM, MINIMAX_API_KEY
 
-try:
-    client = CNLLM(model="minimax-m2.7", api_key="invalid_key")
-    resp = client.chat.create(messages=[{"role": "user", "content": "你好"}])
-except ModelAPIError as e:
-    print(f"API 错误: {e}")
-except ParseError as e:
-    print(f"解析错误: {e}")
-except ValueError as e:
-    print(f"参数错误: {e}")
+client = CNLLM(model="minimax-m2.7", api_key=MINIMAX_API_KEY)
+
+# 调用 CNLLM 获取响应
+resp = client.chat.create(messages=[{"role": "user", "content": "你好"}])
+print(resp["choices"][0]["message"]["content"])
+
+# CNLLM 返回格式符合 OpenAI 标准，可直接被 LangChain 使用
+ai_msg = AIMessage(content=resp["choices"][0]["message"]["content"])
+print(f"Role: {ai_msg.type}")  # "ai"
+print(f"Content: {ai_msg.content}")
+
+# 转换为 LangChain 字典格式
+msg_dict = message_to_dict(ai_msg)
+print(msg_dict)
+# {'type': 'ai', 'data': {'content': '...', ...}}
+
+# 批量转换
+msgs = [
+    HumanMessage(content="Hello"),
+    AIMessage(content="Hi there!")
+]
+msgs_dict = messages_to_dict(msgs)
+print(msgs_dict)
 ```
 
-## 开发
+## 其他兼容框架
 
-### 运行测试
+CNLLM 输出兼容所有使用 OpenAI 格式的 Python 库：
 
-```bash
-# 安装开发依赖
-pip install -e .[dev]
-
-# 运行所有测试
-python test_CNLLM.py
-```
-
-### 添加新的模型适配器
-
-1. 在 `adapters/` 下创建新的适配器目录
-2. 实现 `create_completion()` 方法
-3. 实现 `_to_openai_format()` 转换方法
-4. 在 `client.py` 中注册适配器
-
-## 贡献
-
-欢迎提交 Issue 和 Pull Request！
+- **LangChain** - 消息类型、链式调用
+- **LlamaIndex** - 索引和查询
+- **AutoGen** - 多代理协作（规划中）
+- **CrewAI** - 多代理工作流
+- **Dify** - 平台集成
 
 ## 许可证
 
@@ -219,5 +215,4 @@ MIT License - 详见 [LICENSE](LICENSE) 文件
 
 ## 联系方式
 
-- GitHub Issues: [https://github.com/yourusername/cnllm/issues](https://github.com/yourusername/cnllm/issues)
-- Email: your.email@example.com
+- GitHub Issues: [https://github.com/kanchengw/cnllm/issues](https://github.com/kanchengw/cnllm/issues)
