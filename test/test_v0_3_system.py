@@ -4,6 +4,7 @@ CNLLM v0.3.0 系统测试
 测试完整数据链传递
 """
 import os
+import pytest
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -12,8 +13,7 @@ from cnllm import CNLLM
 
 API_KEY = os.getenv("MINIMAX_API_KEY") or os.getenv("MINIMAX_API_KEY")
 if not API_KEY:
-    print("请设置 MINIMAX_API_KEY 环境变量")
-    exit(1)
+    pytest.skip("MINIMAX_API_KEY 环境变量未设置")
 
 
 def safe_print(text):

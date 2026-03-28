@@ -3,7 +3,7 @@ CNLLM Fallback 测试
 测试各种 fallback 场景
 """
 import os
-import warnings
+import pytest
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -14,8 +14,7 @@ from cnllm.utils.exceptions import ModelNotSupportedError
 
 VALID_API_KEY = os.getenv("MINIMAX_API_KEY")
 if not VALID_API_KEY:
-    print("请设置 MINIMAX_API_KEY 环境变量")
-    exit(1)
+    pytest.skip("MINIMAX_API_KEY 环境变量未设置")
 
 
 def test_1_primary_success_no_fallback():

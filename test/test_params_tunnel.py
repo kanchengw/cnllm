@@ -4,6 +4,7 @@
 import os
 import sys
 import logging
+import pytest
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -14,8 +15,7 @@ from cnllm import CNLLM
 
 API_KEY = os.getenv("MINIMAX_API_KEY")
 if not API_KEY:
-    print("请设置 MINIMAX_API_KEY 环境变量")
-    sys.exit(1)
+    pytest.skip("MINIMAX_API_KEY 环境变量未设置")
 
 
 def test_1_missing_required():
