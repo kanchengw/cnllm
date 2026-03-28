@@ -7,6 +7,13 @@ from cnllm import CNLLM
 from cnllm.utils.exceptions import ModelNotSupportedError, FallbackError
 
 api_key = os.getenv('MINIMAX_API_KEY')
+if not api_key:
+    if "__pytest__" in sys.modules or "pytest" in sys.modules:
+        import pytest
+        pytest.skip("MINIMAX_API_KEY 环境变量未设置", allow_module_level=True)
+    else:
+        print("请设置 MINIMAX_API_KEY 环境变量")
+        sys.exit(1)
 
 print('='*60)
 print('验证：调用入口不传模型，走主模型的场景')

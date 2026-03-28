@@ -1,6 +1,17 @@
+import os
 import sys
 from unittest.mock import MagicMock
 from cnllm import CNLLM
+
+TEST_API_KEY = os.getenv("MINIMAX_API_KEY")
+
+if not TEST_API_KEY:
+    if "__pytest__" in sys.modules or "pytest" in sys.modules:
+        import pytest
+        pytest.skip("MINIMAX_API_KEY 环境变量未设置", allow_module_level=True)
+    else:
+        print("请设置 MINIMAX_API_KEY 环境变量")
+        sys.exit(1)
 
 
 def safe_print(text):
@@ -46,9 +57,9 @@ def test_client_init():
     print("\n" + "=" * 60)
     print("test_client_init")
     print("=" * 60)
-    client = CNLLM(model="minimax-m2.7", api_key="test_key")
+    client = CNLLM(model="minimax-m2.7", api_key=TEST_API_KEY)
     assert client.model == "minimax-m2.7"
-    assert client.api_key == "test_key"
+    assert client.api_key == TEST_API_KEY
     print(f"model: {client.model}, api_key: {client.api_key}")
     print("[PASS]")
 
@@ -57,7 +68,7 @@ def test_client_adapter():
     print("\n" + "=" * 60)
     print("test_client_adapter")
     print("=" * 60)
-    client = CNLLM(model="minimax-m2.7", api_key="test_key")
+    client = CNLLM(model="minimax-m2.7", api_key=TEST_API_KEY)
     client.adapter = MagicMock()
     client.adapter.create_completion = MockResponse.create_completion
 
@@ -71,7 +82,7 @@ def test_missing_required_params():
     print("\n" + "=" * 60)
     print("test_missing_required_params")
     print("=" * 60)
-    client = CNLLM(model="minimax-m2.7", api_key="test_key")
+    client = CNLLM(model="minimax-m2.7", api_key=TEST_API_KEY)
     client.adapter = MagicMock()
     client.adapter.create_completion = MockResponse.create_completion
 
