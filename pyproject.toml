@@ -48,7 +48,6 @@ Issues = "https://github.com/kanchengw/cnllm/issues"
 
 [tool.pytest.ini_options]
 console_output_style = "classic"
-disable_test_idempotency = true
 
 [tool.setuptools.packages.find]
 where = ["."]
