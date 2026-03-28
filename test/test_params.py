@@ -1,4 +1,4 @@
-from cnllm.params import get_provider_name, PROVIDER_PARAMS
+from cnllm.core.params import get_provider_name, PROVIDER_PARAMS
 
 
 def test_get_provider_name():
@@ -41,13 +41,13 @@ def test_minimax_config():
     print("=" * 60)
     minimax = PROVIDER_PARAMS["minimax"]
     print(f"minimax.create.supported: {minimax['create'].get('supported', {})}")
-    print(f"minimax.create.ignored: {minimax['create'].get('ignored', {})}")
-    print(f"minimax.create.provider_specific: {minimax['create'].get('provider_specific', {})}")
     assert "init" in minimax
     assert "create" in minimax
-    assert "group_id" in minimax["create"]["provider_specific"]
-    assert "ignored" in minimax["create"]
-    assert "supported" in minimax["create"]
+    assert "group_id" in minimax["create"]["supported"]
+    assert "temperature" in minimax["create"]["supported"]
+    assert "messages" in minimax["create"]["supported"]
+    assert "max_tokens" in minimax["create"]["supported"]
+    assert "stream" in minimax["create"]["supported"]
     print("[PASS]")
 
 

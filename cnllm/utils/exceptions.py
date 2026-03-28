@@ -249,8 +249,38 @@ class TokenLimitError(CNLLMError):
             status_code=431,
             provider=provider,
             details=details,
-            suggestion="请减少输入内容，或增加 max_tokens 参数"
+            suggestion="请减少输入文本长度，或增加 max_tokens 限制"
         )
 
 
-ModelAPIError = ServerError
+class ModelAPIError(CNLLMError):
+    def __init__(
+        self,
+        message: str = "模型 API 调用失败",
+        provider: str = "unknown",
+        details: Optional[Dict[str, Any]] = None
+    ):
+        super().__init__(
+            message=message,
+            error_code=ErrorCode.SERVER_ERROR,
+            status_code=500,
+            provider=provider,
+            details=details,
+            suggestion="请稍后重试，或联系 API 提供商"
+        )
+
+
+class FallbackError(CNLLMError):
+    def __init__(
+        self,
+        message: str = "所有模型均失败",
+        details: Optional[Dict[str, Any]] = None
+    ):
+        super().__init__(
+            message=message,
+            error_code=ErrorCode.SERVER_ERROR,
+            status_code=500,
+            provider="unknown",
+            details=details,
+            suggestion="请检查网络连接，或稍后重试"
+        )

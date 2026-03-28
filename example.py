@@ -42,18 +42,17 @@ def example_2_chat_create():
     print(f"模型输出: {response['choices'][0]['message']['content']}")
 
 
-def example_3_with_extra_config():
+def example_3_with_group_id():
     print("\n" + "=" * 50)
-    print("示例3: 厂商特有参数 - extra_config")
+    print("示例3: 厂商特有参数 - group_id")
     print("=" * 50)
 
-    client = CNLLM(
-        model="minimax-m2.7",
-        api_key=API_KEY,
-        extra_config={"group_id": os.getenv("MINIMAX_GROUP_ID", "")}
-    )
+    client = CNLLM(model="minimax-m2.7", api_key=API_KEY)
 
-    response = client("你好")
+    response = client.chat.create(
+        messages=[{"role": "user", "content": "你好"}],
+        group_id=os.getenv("MINIMAX_GROUP_ID", "")
+    )
     print(f"模型输出: {response['choices'][0]['message']['content']}")
 
 
@@ -132,7 +131,7 @@ def example_7_langchain_integration():
 if __name__ == "__main__":
     example_1_simple_call()
     example_2_chat_create()
-    example_3_with_extra_config()
+    example_3_with_group_id()
     example_4_streaming()
     example_5_async_streaming()
     example_6_batch()

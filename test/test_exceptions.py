@@ -1,4 +1,4 @@
-from cnllm.core.exceptions import (
+from cnllm.utils.exceptions import (
     CNLLMError,
     AuthenticationError,
     RateLimitError,
