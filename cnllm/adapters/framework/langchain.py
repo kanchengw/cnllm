@@ -40,33 +40,26 @@ class LangChainRunnable(Runnable):
 
     def invoke(self, input: Any, config=None, **kwargs) -> AIMessage:
         messages = self._convert_input(input)
-        filtered_kwargs = self._filter_unsupported_kwargs(kwargs)
-        result = self.client.chat.create(messages=messages, **filtered_kwargs)
+        result = self.client.chat.create(messages=messages, **kwargs)
         return AIMessage(content=result["choices"][0]["message"]["content"])
-
-    def _filter_unsupported_kwargs(self, kwargs: dict) -> dict:
-        supported = {"temperature", "max_tokens", "stream", "model", "extra_config"}
-        return {k: v for k, v in kwargs.items() if k in supported}
 
     def batch(self, inputs: List[Any], config=None, **kwargs) -> List[AIMessage]:
         return [self.invoke(input, **kwargs) for input in inputs]
 
     def stream(self, input: Any, config=None, **kwargs) -> Iterator[str]:
         messages = self._convert_input(input)
-        filtered_kwargs = self._filter_unsupported_kwargs(kwargs)
-        filtered_kwargs["stream"] = True
+        kwargs["stream"] = True
 
-        for chunk in self.client.adapter.create_completion(messages=messages, **filtered_kwargs):
+        for chunk in self.client.adapter.create_completion(messages=messages, **kwargs):
             content = chunk["choices"][0].get("delta", {}).get("content", "")
             if content:
                 yield content
 
     async def astream(self, input: Any, config=None, **kwargs) -> AsyncIterator[str]:
         messages = self._convert_input(input)
-        filtered_kwargs = self._filter_unsupported_kwargs(kwargs)
-        filtered_kwargs["stream"] = True
+        kwargs["stream"] = True
 
-        async for chunk in self.client.adapter.astream(messages=messages, **filtered_kwargs):
+        async for chunk in self.client.adapter.astream(messages=messages, **kwargs):
             content = chunk["choices"][0].get("delta", {}).get("content", "")
             if content:
                 yield content

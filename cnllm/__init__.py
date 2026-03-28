@@ -1,6 +1,5 @@
-from .client import CNLLM
-from .core.config import MINIMAX_API_KEY
-from .core.exceptions import (
+from .core.client import CNLLM
+from .utils.exceptions import (
     CNLLMError,
     AuthenticationError,
     RateLimitError,
@@ -13,13 +12,13 @@ from .core.exceptions import (
     MissingParameterError,
     ContentFilteredError,
     TokenLimitError,
+    FallbackError,
     ErrorCode
 )
 
 __version__ = "0.3.0"
 __all__ = [
     "CNLLM",
-    "MINIMAX_API_KEY",
     "CNLLMError",
     "AuthenticationError",
     "RateLimitError",
@@ -32,5 +31,6 @@ __all__ = [
     "MissingParameterError",
     "ContentFilteredError",
     "TokenLimitError",
+    "FallbackError",
     "ErrorCode"
 ]

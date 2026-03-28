@@ -1,4 +1,4 @@
-# Byte-compiled / optimized / DLL files
+docs/
 __pycache__/
 *.py[cod]
 *$py.class
@@ -15,8 +15,8 @@ DECISIONS.md
 # Distribution / packaging
 .Python
 build/
-develop-eggs/
 dist/
+develop-eggs/
 downloads/
 eggs/
 .eggs/

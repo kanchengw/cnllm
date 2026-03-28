@@ -1,9 +1,7 @@
 import time
-import asyncio
-import aiohttp
 import requests
-from typing import Dict, Any, Iterator, AsyncIterator
-from .exceptions import ModelAPIError
+from typing import Dict, Any, Iterator
+from ..utils.exceptions import ModelAPIError
 
 
 class BaseHttpClient:
@@ -26,7 +24,7 @@ class BaseHttpClient:
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json; charset=utf-8"
         }
-        
+
         last_error = None
         for attempt in range(self.max_retries):
             try:
@@ -36,29 +34,29 @@ class BaseHttpClient:
                     json=payload,
                     timeout=self.timeout
                 )
-                
+
                 if response.status_code == 429:
                     wait_time = self.retry_delay * (2 ** attempt)
                     raise ModelAPIError(
                         f"请求被限流 (429)。\n"
                         f"等待 {wait_time:.1f} 秒后重试... (尝试 {attempt + 1}/{self.max_retries})"
                     )
-                
+
                 response.raise_for_status()
                 return response.json()
-                
+
             except requests.exceptions.Timeout:
                 last_error = f"请求超时 (timeout={self.timeout}s)"
                 if attempt < self.max_retries - 1:
                     time.sleep(self.retry_delay)
                     continue
-                    
+
             except requests.exceptions.ConnectionError as e:
                 last_error = f"连接失败: {str(e)}"
                 if attempt < self.max_retries - 1:
                     time.sleep(self.retry_delay)
                     continue
-                    
+
             except requests.exceptions.HTTPError as e:
                 status_code = e.response.status_code
                 if status_code == 429:
@@ -86,7 +84,7 @@ class BaseHttpClient:
                     )
             except Exception as e:
                 raise ModelAPIError(f"API 请求失败: {str(e)}")
-        
+
         raise ModelAPIError(f"重试 {self.max_retries} 次后仍然失败。最后错误: {last_error}")
 
     def post_stream(self, path: str, payload: Dict[str, Any]) -> Iterator[Dict[str, Any]]:
@@ -94,7 +92,7 @@ class BaseHttpClient:
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json; charset=utf-8"
         }
-        
+
         last_error = None
         for attempt in range(self.max_retries):
             try:
@@ -105,16 +103,16 @@ class BaseHttpClient:
                     timeout=self.timeout,
                     stream=True
                 )
-                
+
                 if response.status_code == 429:
                     wait_time = self.retry_delay * (2 ** attempt)
                     raise ModelAPIError(
                         f"请求被限流 (429)。\n"
                         f"等待 {wait_time:.1f} 秒后重试... (尝试 {attempt + 1}/{self.max_retries})"
                     )
-                
+
                 response.raise_for_status()
-                
+
                 for line in response.iter_lines():
                     if line:
                         line = line.decode('utf-8')
@@ -127,21 +125,21 @@ class BaseHttpClient:
                                 yield json.loads(data)
                             except json.JSONDecodeError:
                                 continue
-                
+
                 return
-                
+
             except requests.exceptions.Timeout:
                 last_error = f"请求超时 (timeout={self.timeout}s)"
                 if attempt < self.max_retries - 1:
                     time.sleep(self.retry_delay)
                     continue
-                    
+
             except requests.exceptions.ConnectionError as e:
                 last_error = f"连接失败: {str(e)}"
                 if attempt < self.max_retries - 1:
                     time.sleep(self.retry_delay)
                     continue
-                    
+
             except requests.exceptions.HTTPError as e:
                 status_code = e.response.status_code
                 if status_code >= 500:
@@ -154,65 +152,5 @@ class BaseHttpClient:
                 )
             except Exception as e:
                 raise ModelAPIError(f"流式请求失败: {str(e)}")
-
-        raise ModelAPIError(f"重试 {self.max_retries} 次后仍然失败。最后错误: {last_error}")
-
-    async def apost_stream(self, path: str, payload: Dict[str, Any]) -> AsyncIterator[Dict[str, Any]]:
-        headers = {
-            "Authorization": f"Bearer {self.api_key}",
-            "Content-Type": "application/json; charset=utf-8"
-        }
-
-        last_error = None
-        for attempt in range(self.max_retries):
-            try:
-                async with aiohttp.ClientSession() as session:
-                    async with session.post(
-                        url=f"{self.base_url}{path}",
-                        headers=headers,
-                        json=payload,
-                        timeout=aiohttp.ClientTimeout(total=self.timeout)
-                    ) as response:
-                        if response.status == 429:
-                            wait_time = self.retry_delay * (2 ** attempt)
-                            raise ModelAPIError(
-                                f"请求被限流 (429)。\n"
-                                f"等待 {wait_time:.1f} 秒后重试... (尝试 {attempt + 1}/{self.max_retries})"
-                            )
-
-                        response.raise_for_status()
-
-                        async for line in response.content:
-                            if line:
-                                line = line.decode('utf-8')
-                                if line.startswith('data: '):
-                                    data = line[6:]
-                                    if data.strip() == '[DONE]':
-                                        return
-                                    try:
-                                        import json
-                                        yield json.loads(data)
-                                    except json.JSONDecodeError:
-                                        continue
-
-                        return
-
-            except aiohttp.ServerTimeoutError:
-                last_error = f"请求超时 (timeout={self.timeout}s)"
-                if attempt < self.max_retries - 1:
-                    await asyncio.sleep(self.retry_delay)
-                    continue
-
-            except aiohttp.ClientError as e:
-                last_error = f"连接失败: {str(e)}"
-                if attempt < self.max_retries - 1:
-                    await asyncio.sleep(self.retry_delay)
-                    continue
-
-            except ModelAPIError:
-                raise
-
-            except Exception as e:
-                raise ModelAPIError(f"异步流式请求失败: {str(e)}")
 
         raise ModelAPIError(f"重试 {self.max_retries} 次后仍然失败。最后错误: {last_error}")
