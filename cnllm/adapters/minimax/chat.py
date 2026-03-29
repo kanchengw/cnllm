@@ -67,6 +67,7 @@ class MiniMaxAdapter:
                 return self._handle_stream_response(payload, use_model)
             else:
                 raw_resp = self.client.post("/v1/text/chatcompletion_v2", payload)
+                self._raw_response = raw_resp
                 return self._to_openai_format(raw_resp, use_model)
         except RuntimeError as e:
             raise ModelAPIError(f"MiniMax API 请求失败: {e}")
@@ -97,46 +98,22 @@ class MiniMaxAdapter:
 
     def _to_openai_format(self, raw: Dict[str, Any], model: str) -> Dict[str, Any]:
         base_resp = raw.get("base_resp", {})
-        if base_resp.get("status_code") and base_resp["status_code"] != 0:
-            raise ModelAPIError(
-                f"MiniMax API 错误: {base_resp.get('status_msg', '未知错误')}\n"
-                f"状态码: {base_resp.get('status_code')}"
+        status_code = base_resp.get("status_code")
+        if status_code and status_code != 0:
+            if status_code == 1004:
+                from ...utils.exceptions import AuthenticationError
+                raise AuthenticationError(
+                    message=f"MiniMax 认证失败: {base_resp.get('status_msg', '未知错误')}",
+                    provider="minimax"
+                )
+            from ...utils.exceptions import ModelBusinessError
+            raise ModelBusinessError(
+                message=f"MiniMax 业务错误: {base_resp.get('status_msg', '未知错误')}",
+                business_code=status_code,
+                provider="minimax"
             )
 
-        try:
-            raw_content = raw["choices"][0]["message"]["content"]
-            finish_reason = raw["choices"][0].get("finish_reason", "stop")
-        except (KeyError, IndexError) as e:
-            raise ParseError(f"解析响应失败: 缺少必要字段 {e}\n原始响应: {raw}")
-
-        cleaned = self.cleaner.clean(raw_content)
-
-        usage = raw.get("usage", {})
-        prompt_tokens = usage.get("prompt_tokens", 0)
-        completion_tokens = usage.get("completion_tokens", 0)
-        total_tokens = usage.get("total_tokens", 0)
-
-        return {
-            "id": f"chatcmpl-{uuid.uuid4().hex[:24]}",
-            "object": "chat.completion",
-            "created": int(time.time()),
-            "model": model,
-            "choices": [
-                {
-                    "index": 0,
-                    "message": {
-                        "role": "assistant",
-                        "content": cleaned
-                    },
-                    "finish_reason": finish_reason
-                }
-            ],
-            "usage": {
-                "prompt_tokens": prompt_tokens,
-                "completion_tokens": completion_tokens,
-                "total_tokens": total_tokens
-            }
-        }
+        return self.cleaner.to_openai_format(raw=raw, model=model)
 
     def _to_openai_stream_format(self, raw: Dict[str, Any], model: str) -> Dict[str, Any]:
         if not raw:

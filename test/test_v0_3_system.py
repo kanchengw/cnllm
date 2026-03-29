@@ -1,5 +1,5 @@
 """
-CNLLM v0.3.0 系统测试
+CNLLM v0.3.1 系统测试
 使用真实 API 调用
 测试完整数据链传递
 """
@@ -209,6 +209,122 @@ def test_runnable_full_chain():
     print("[PASS]")
 
 
+def test_chat_still():
+    """测试 client.chat.still 纯净文本获取"""
+    print("\n" + "=" * 60)
+    print("test_chat_still")
+    print("=" * 60)
+
+    client = CNLLM(model="minimax-m2.7", api_key=API_KEY)
+    resp = client.chat.create(messages=[{"role": "user", "content": "你好"}])
+
+    still_text = client.chat.still
+    assert isinstance(still_text, str)
+    assert len(still_text) > 0
+    assert still_text == resp["choices"][0]["message"]["content"]
+
+    safe_print(f"still: {still_text}")
+    print("[PASS]")
+
+
+def test_chat_raw():
+    """测试 client.chat.raw 完整原始响应"""
+    print("\n" + "=" * 60)
+    print("test_chat_raw")
+    print("=" * 60)
+
+    client = CNLLM(model="minimax-m2.7", api_key=API_KEY)
+    resp = client.chat.create(messages=[{"role": "user", "content": "你好"}])
+
+    raw = client.chat.raw
+    assert isinstance(raw, dict)
+    assert len(raw) > 0
+    assert "base_resp" in raw
+    assert "status_code" in raw["base_resp"]
+
+    print(f"raw keys: {list(raw.keys())}")
+    print(f"base_resp: {raw['base_resp']}")
+    print("[PASS]")
+
+
+def test_api_key_override():
+    """测试调用入口 api_key 参数覆盖"""
+    print("\n" + "=" * 60)
+    print("test_api_key_override")
+    print("=" * 60)
+
+    client = CNLLM(model="minimax-m2.7", api_key=API_KEY)
+    resp = client.chat.create(
+        messages=[{"role": "user", "content": "你是哪个模型？"}],
+        model="minimax-m2.5",
+        api_key=API_KEY
+    )
+    assert resp["model"] == "minimax-m2.5"
+
+    content = resp["choices"][0]["message"]["content"]
+    safe_print(f"回复: {content}")
+    print("[PASS]")
+
+
+def test_model_required():
+    """测试客户端入口 model 必填"""
+    print("\n" + "=" * 60)
+    print("test_model_required")
+    print("=" * 60)
+
+    try:
+        client = CNLLM(api_key=API_KEY)
+        print("[FAIL] 应该抛出 TypeError")
+        assert False
+    except TypeError as e:
+        print(f"[PASS] 正确抛出 TypeError: {e}")
+
+
+def test_fallback_success():
+    """测试 Fallback 机制成功切换"""
+    print("\n" + "=" * 60)
+    print("test_fallback_success")
+    print("=" * 60)
+
+    client = CNLLM(
+        model="minimax-m2.7",
+        api_key=API_KEY,
+        fallback_models={
+            "minimax-m2.5": None
+        }
+    )
+    resp = client.chat.create(messages=[{"role": "user", "content": "你好"}])
+    assert "choices" in resp
+    content = resp["choices"][0]["message"]["content"]
+    assert len(content) > 0
+
+    safe_print(f"回复: {content}")
+    print("[PASS]")
+
+
+def test_raw_with_fallback():
+    """测试 fallback 后 raw 仍可访问"""
+    print("\n" + "=" * 60)
+    print("test_raw_with_fallback")
+    print("=" * 60)
+
+    client = CNLLM(
+        model="nonexistent-model",
+        api_key=API_KEY,
+        fallback_models={
+            "minimax-m2.7": None
+        }
+    )
+    resp = client.chat.create(messages=[{"role": "user", "content": "你好"}])
+
+    raw = client.chat.raw
+    assert isinstance(raw, dict)
+    assert "base_resp" in raw
+
+    print(f"raw base_resp: {raw['base_resp']}")
+    print("[PASS]")
+
+
 if __name__ == "__main__":
     test_full_chain_prompt_to_response()
     test_chain_with_messages()
@@ -218,6 +334,12 @@ if __name__ == "__main__":
     test_usage_stats()
     test_stream_output()
     test_runnable_full_chain()
+    test_chat_still()
+    test_chat_raw()
+    test_api_key_override()
+    test_model_required()
+    test_fallback_success()
+    test_raw_with_fallback()
     print("\n" + "=" * 60)
     print("全部测试完成！")
     print("=" * 60)
