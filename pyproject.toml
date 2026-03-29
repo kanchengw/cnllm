@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "cnllm"
 version = "0.3.1"
-description = "将中文大模型 API 输出封装为 OpenAI 格式，无缝接入生态内Langchain、LlamaIndex、Pydantic等机器学习库"
+description = "中文大模型适配库，将模型 API返回封装为 OpenAI 格式，无缝协作langchain、LlamaIndex、Pydantic等机器学习库"
 readme = "README.md"
 license = {text = "MIT"}
 authors = [
