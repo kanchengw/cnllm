@@ -30,6 +30,7 @@ class FallbackManager:
         self.max_retries = max_retries
         self.retry_delay = retry_delay
         self.base_url = base_url
+        self._last_adapter = None
 
     def _default_fallback_handler(self, from_model: str, to_model: str, error: Exception):
         msg = f"模型 {from_model} 失败: {error} -> 切换到 {to_model}"
@@ -87,6 +88,7 @@ class FallbackManager:
                     self.timeout, self.max_retries, self.retry_delay,
                     self.base_url
                 )
+                self._last_adapter = adapter
                 return adapter.create_completion(
                     messages=messages,
                     temperature=temperature,

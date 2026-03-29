@@ -82,6 +82,15 @@ try:
 except Exception as e:
     print(f'结果：失败 {type(e).__name__}')
 
+print('\n【场景8】显式传model，跳过fb')
+print('预期：显式传model时，即使配置了fb也直接使用所传model')
+try:
+    client = CNLLM(model='minimax-m2.7', api_key=api_key, fallback_models={'minimax-m2.5': api_key})
+    result = client.chat.create(messages=[{'role': 'user', 'content': 'hi'}], model='minimax-m2.5')
+    print(f'结果：成功, model={result.get("model")}')
+except Exception as e:
+    print(f'结果：失败 {type(e).__name__}')
+
 print('\n' + '='*60)
 print('验证完成')
 print('='*60)

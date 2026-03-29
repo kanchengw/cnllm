@@ -127,6 +127,39 @@ def test_mixed_params():
         print(f"[FAIL] 错误: {e}")
 
 
+def test_api_key_override():
+    """测试调用入口 api_key 参数覆盖"""
+    print("\n" + "=" * 50)
+    print("7. 测试调用入口 api_key 参数覆盖")
+    print("=" * 50)
+    client = CNLLM(model="minimax-m2.7", api_key=API_KEY)
+    try:
+        result = client.chat.create(
+            messages=[{"role": "user", "content": "你是哪个模型？"}],
+            model="minimax-m2.5",
+            api_key=API_KEY
+        )
+        content = result["choices"][0]["message"]["content"]
+        print(f"回复: {content}")
+        print("[PASS] api_key 参数覆盖正常")
+    except Exception as e:
+        print(f"[FAIL] 错误: {e}")
+
+
+def test_model_required():
+    """测试客户端入口 model 必填"""
+    print("\n" + "=" * 50)
+    print("8. 测试客户端入口 model 必填")
+    print("=" * 50)
+    try:
+        client = CNLLM(api_key=API_KEY)
+        print("[FAIL] 应该抛出 TypeError")
+    except TypeError as e:
+        print(f"[PASS] 正确抛出 TypeError: {e}")
+    except Exception as e:
+        print(f"[FAIL] 抛出错误类型的异常: {e}")
+
+
 if __name__ == "__main__":
     test_1_missing_required()
     test_2_supported_param()
@@ -134,6 +167,8 @@ if __name__ == "__main__":
     test_4_unknown_param()
     test_simple_interface()
     test_mixed_params()
+    test_api_key_override()
+    test_model_required()
     print("\n" + "=" * 50)
     print("全部测试完成！")
     print("=" * 50)

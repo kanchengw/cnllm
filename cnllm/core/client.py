@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 class CNLLM:
     def __init__(
         self,
-        model: Optional[str] = None,
+        model: str,
         api_key: Optional[str] = None,
         base_url: str = None,
         timeout: int = 30,
@@ -18,7 +18,7 @@ class CNLLM:
         retry_delay: float = 1.0,
         fallback_models: Optional[Dict[str, Optional[str]]] = None
     ):
-        self.model = self._normalize_model(model) if model else None
+        self.model = self._normalize_model(model)
         self.api_key = api_key
         self.base_url = base_url
         self.timeout = timeout
@@ -76,12 +76,27 @@ class CNLLM:
     class ChatNamespace:
         def __init__(self, parent):
             self.parent = parent
+            self._last_response = None
+
+        @property
+        def still(self) -> str:
+            if self._last_response is None:
+                return None
+            return self._last_response["choices"][0]["message"]["content"]
+
+        @property
+        def raw(self) -> Dict[str, Any]:
+            adapter = getattr(self.parent, "_last_adapter", None)
+            if adapter is None:
+                return {}
+            return getattr(adapter, "_raw_response", {})
 
         def create(
             self,
             messages: list[Dict[str, str]] = None,
             prompt: str = None,
             model: str = None,
+            api_key: Optional[str] = None,
             temperature: float = 0.7,
             max_tokens: Optional[int] = None,
             stream: bool = False,
@@ -95,8 +110,10 @@ class CNLLM:
 
             if model is not None:
                 validate_model(model)
-                adapter = self.parent._get_adapter(model, self.parent.api_key)
-                return adapter.create_completion(
+                actual_api_key = api_key if api_key is not None else self.parent.api_key
+                adapter = self.parent._get_adapter(model, actual_api_key)
+                self.parent._last_adapter = adapter
+                resp = adapter.create_completion(
                     messages=messages,
                     temperature=temperature,
                     max_tokens=max_tokens,
@@ -104,9 +121,8 @@ class CNLLM:
                     model=model,
                     **kwargs
                 )
-
-            if self.parent.model is None and not self.parent.fallback_models:
-                raise MissingParameterError(parameter="model")
+                self._last_response = resp
+                return resp
 
             from ..utils.fallback import FallbackManager
             fb_manager = FallbackManager(
@@ -121,7 +137,7 @@ class CNLLM:
                 retry_delay=self.parent.retry_delay,
                 base_url=self.parent.base_url
             )
-            return fb_manager.execute_with_fallback(
+            resp = fb_manager.execute_with_fallback(
                 primary_model=self.parent.model,
                 primary_api_key=self.parent.api_key,
                 messages=messages,
@@ -130,3 +146,6 @@ class CNLLM:
                 stream=stream,
                 **kwargs
             )
+            self.parent._last_adapter = fb_manager._last_adapter
+            self._last_response = resp
+            return resp

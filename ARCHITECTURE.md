@@ -1,15 +1,5 @@
 # CNLLM 架构与设计文档
 
-***
-
-## 设计原则
-
-1. **OpenAI标准输出** - 输出格式对齐 OpenAI API 标准格式
-2. **编程友好** - 统一客户端入口和调用入口
-3. **兼容友好** - 不支持的模型参数警告但不阻断
-
-***
-
 ## 1. 架构设计
 
 ### 1.1 整体架构
@@ -19,50 +9,72 @@
 │                        CNLLM Client                         │
 │                     (cnllm/core/client.py)                  │
 ├─────────────────────────────────────────────────────────────┤
-│  三种调用入口：                                             │
-│  - 极简入口: client("prompt")                              │
-│  - 标准入口: client.chat.create(prompt="...")               │
-│  - 完整入口: client.chat.create(messages=[...])             │
+│  三种调用入口：                                                │
+│  - 极简入口: client("prompt")                                 │
+│  - 标准入口: client.chat.create(prompt="...")                 │
+│  - 完整入口: client.chat.create(messages=[...])               │
+│                                                             │
+│  响应入口：                                                   │
+│  - client.chat.still  → 纯净文本                             │
+│  - client.chat.raw   → 原始响应（含平台特有字段）               │
 └─────────────────────────────────────────────────────────────┘
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────┐
-│                    模型适配层 (Model Adapter)               │
-│              (cnllm/adapters/{厂商}/chat.py)                │
+│                    模型适配层 (Model Adapter)                 │
+│              (cnllm/adapters/{厂商}/chat.py)                 │
 ├─────────────────────────────────────────────────────────────┤
-│  厂商适配层 (协议转换 + 参数验证)                            │
-│  - MiniMaxAdapter                                          │
-│  - 更多模型适配开发中                                       │
-└─────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│                   框架适配层 (Framework Adapter)            │
-│              (cnllm/adapters/framework/*.py)                │
-├─────────────────────────────────────────────────────────────┤
-│  框架集成层 (统一输出格式)                                   │
-│  - LangChainRunnable                                       │
-│  - 更多框架深度适配开发中                                    │
+│  - 厂商协议转换                                               │
+│  - 参数验证                                                  │
+│  - 存储 raw 响应到 adapter._raw_response                      │
+│  - 返回 OpenAI 格式响应                                       │
+│                                                             │
+│  如：MiniMaxAdapter                                          │
 └─────────────────────────────────────────────────────────────┘
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────┐
 │                    BaseHttpClient                           │
-│                     (cnllm/core/base.py)                     │
+│                     (cnllm/core/base.py)                    │
 ├─────────────────────────────────────────────────────────────┤
-│  HTTP 基础层 (请求发送 / 重试机制 / 错误处理)               │
+│  - HTTP 请求发送                                             │
+│  - 重试机制                                                  │
+│  - 错误处理                                                  │
 └─────────────────────────────────────────────────────────────┘
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────┐
-│                    输出清洗层 (Output Cleaner)              │
-│                     (cnllm/utils/cleaner.py)                  │
+│                       [外部 API]                             │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│                    输出清洗层 (Output Cleaner)                │
+│                     (cnllm/utils/cleaner.py)                │
 ├─────────────────────────────────────────────────────────────┤
-│  统一输出格式 (对齐 OpenAI API 标准格式)                    │
+│  - 清洗 Markdown 标记                                        │
+│  - 提取 OpenAI 标准字段，将响应转换为标准格式                     │
 └─────────────────────────────────────────────────────────────┘
 ```
 
-### 1.2 模块职责
+### 1.2 框架适配（LangChain 集成）
+
+```
+LangChain Chain
+      │
+      ▼
+┌─────────────────────────────────────────────────────────────┐
+│               LangChainRunnable (包装 CNLLM Client)         │
+│              (cnllm/adapters/framework/langchain.py)        │
+├─────────────────────────────────────────────────────────────┤
+│  提供标准 LangChain 接口：                                    │
+│  - invoke()    → 单次调用                                    │
+│  - stream()    → 同步流式                                    │
+│  - astream()   → 异步流式                                    │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### 1.3 模块职责
 
 | 模块           | 文件                                         | 职责                               |
 | ------------ | ------------------------------------------ | -------------------------------- |
@@ -90,80 +102,33 @@
 **调用链说明**：
 
 - `client("prompt")` 通过 `__call__` 方法调用 `chat.create(prompt=prompt)`
-- `client.chat.create()` 是实际的分发中心，根据参数决定路由到 adapter 或 fallback manager
-- 当 `model` 参数被指定时，跳过 fallback 机制直接调用对应 adapter
-- 当 `model` 参数未指定时，进入 Fallback Manager（由其判断是否有 FB 配置）
 
 ***
 
-## 3. 参数体系
+## 3. Fallback 流程
 
-### 3.1 参数分类 (params.py)
-
-| 分类            | 定义   | 处理方式               |
-| ------------- | ---- | ------------------ |
-| **required**  | 必填参数 | Python 签名验证 + 类型检查 |
-| **supported** | 可选参数 | ✅ 传递给 API          |
-| **其他**        | 未知参数 | ⚠️ 警告 + 忽略后继续运行    |
-
-未识别的参数统一警告+忽略后继续运行，简化逻辑同时提高兼容性。
-
-### 3.2 params.py 注册表结构
-
-```python
-PROVIDER_PARAMS = {
-    "minimax": {
-        "init": {
-            "required": ["api_key", "model"],
-            "supported": ["base_url", "timeout", "max_retries", "retry_delay"],
-        },
-        "create": {
-            "required": [],
-            "supported": ["messages", "temperature", "max_tokens", "stream", "tools", "tool_choice", "group_id"],
-        }
-    }
-}
-```
-
-***
-
-## 4. Fallback 流程
+### 3.1 调用决策流程
 
 ```
-用户调用 (极简/标准/完整入口)
+chat.create(messages, model, api_key, ...)
         │
         ▼
-┌─────────────────────────────────────┐
-│ chat.create()                        │
-│ 1. 检查必填字段 (messages/prompt)     │
-│ 2. model 参数指定?                    │
-│    - 是 → 直接调用对应 adapter        │
-│    - 否 → 继续                        │
-└─────────────────────────────────────┘
-        │
-        ▼
-┌─────────────────────────────────────┐
-│ 无 fallback_models?                   │
-│    - 是 → 直接调用 adapter            │
-│    - 否 → 进入 Fallback 流程          │
-└─────────────────────────────────────┘
-        │
-        ▼
-┌─────────────────────────────────────┐
-│ FallbackManager.execute_with_fallback │
-│ 1. 主模型 → _get_adapter_for_model() │
-│    - 验证是否在 SUPPORTED_MODELS     │
-│    - 通过映射找到对应 Adapter          │
-│ 2. 主模型失败 → warn → 尝试 fallback  │
-│ 3. FB 模型 → _get_adapter_for_model()│
-│    - 验证是否在 SUPPORTED_MODELS     │
-│    - 通过映射找到对应 Adapter          │
-│ 4. FB 失败 → warn → 继续尝试下一个 FB │
-│ 5. 所有模型失败 → FallbackError       │
-└─────────────────────────────────────┘
+    model 指定?
+    ├── 是 → 直接调用 adapter（跳过 fallback）
+    │
+    └── 否 → 调用 FallbackManager
+                    │
+                    ▼
+            主模型可用?
+            ├── 是 → 主模型成功
+            │
+            └── 否 → 按顺序尝试 fallback_models
+                        │
+                        ├── 全部失败 → FallbackError
+                        └── 任一成功 → 该模型成功
 ```
 
-### 4.1 模型与 Adapter 匹配
+### 3.2 模型与 Adapter 映射
 
 ```
 SUPPORTED_MODELS = {
@@ -180,6 +145,46 @@ ADAPTER_MAP = {
 2. 通过映射获取 adapter_name
 3. 通过 adapter_name 在 ADAPTER_MAP 获取 Adapter 类
 4. 创建 Adapter 实例
+```
+
+### 3.3 raw 响应追踪
+
+每次调用成功后，最后使用的 adapter 实例会保存到 `client._last_adapter`，可通过 `client.chat.raw` 访问原始响应：
+
+```python
+client.chat.create(messages=[...])
+raw = client.chat.raw  # 原始 API 响应（含 base_resp 等平台字段）
+```
+
+***
+
+## 4. 参数体系
+
+### 4.1 参数分类 (params.py)
+
+| 分类            | 定义   | 处理方式               |
+| ------------- | ---- | ------------------ |
+| **required**  | 必填参数 | Python 签名验证 + 类型检查 |
+| **supported** | 可选参数 | ✅ 传递给 API          |
+| **其他**        | 未知参数 | ⚠️ 警告 + 忽略后继续运行    |
+
+未识别的参数统一警告+忽略后继续运行，简化逻辑同时提高兼容性。
+
+### 4.2 params.py 注册表结构
+
+```python
+PROVIDER_PARAMS = {
+    "minimax": {
+        "init": {
+            "required": ["api_key", "model"],
+            "supported": ["base_url", "timeout", "max_retries", "retry_delay"],
+        },
+        "create": {
+            "required": [],
+            "supported": ["messages", "temperature", "max_tokens", "stream", "tools", "tool_choice", "group_id"],
+        }
+    }
+}
 ```
 
 ***
@@ -246,7 +251,7 @@ cnllm/
 
 ## 7. 版本规划
 
-### v0.3.0 ✅ 已完成 (2026-03-28)
+### v0.3.1 ✅ 已完成 (2026-03-29)
 
 - [x] 结构化错误体系
 - [x] 三种调用入口
@@ -255,6 +260,7 @@ cnllm/
 - [x] LangChain Runnable 适配器
 - [x] Fallback 机制
 - [x] 模型兼容性验证工具
+- [x] `client.chat.still` / `client.chat.raw` 响应入口
 
 ### v0.4.0 (规划中)
 
