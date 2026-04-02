@@ -6,9 +6,6 @@ __pycache__/
 # IDE / Editor
 .trae/
 
-# 个人决策记录
-DECISIONS.md
-
 # C extensions
 *.so
 

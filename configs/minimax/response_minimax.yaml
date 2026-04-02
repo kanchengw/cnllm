@@ -1,0 +1,31 @@
+fields:
+  id: "id"
+  created: "created"
+  model: "model"
+  content: "choices[0].message.content"
+  prompt_tokens: "usage.prompt_tokens"
+  completion_tokens: "usage.completion_tokens"
+  total_tokens: "usage.total_tokens"
+  reasoning_tokens: "usage.completion_tokens_details.reasoning_tokens"
+
+defaults:
+  object: "chat.completion"
+  index: 0
+  role: "assistant"
+  logprobs: null
+  finish_reason: "stop"
+  system_fingerprint: null
+
+usage_details:
+  prompt_tokens_details:
+    cached_tokens: 0
+  completion_tokens_details:
+    reasoning_tokens: 0
+
+stream_fields:
+  id_prefix: "chatcmpl-"
+  object: "chat.completion.chunk"
+  index: 0
+  role: "assistant"
+  finish_reason: null
+  content_path: "choices[0].delta.content"

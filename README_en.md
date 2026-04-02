@@ -2,51 +2,45 @@
 
 [English](README_en.md) | [中文](README.md)
 
-![PyPI Version](https://img.shields.io/pypi/v/cnllm null)
-![Python Versions](https://img.shields.io/pypi/pyversions/cnllm null)
-![License](https://img.shields.io/github/license/kanchengw/cnllm null)
+[![PyPI Version](https://img.shields.io/pypi/v/cnllm)](https://pypi.org/project/cnllm/)
+[![Python Versions](https://img.shields.io/pypi/pyversions/cnllm)](https://pypi.org/project/cnllm/)
+[![License](https://img.shields.io/github/license/kanchengw/cnllm)](LICENSE)
 
 ***
 
-A unified adapter library for Chinese large language models (LLMs). It converts API outputs from various Chinese LLMs into the unified OpenAI format, enabling zero-cost integration with LangChain and other mainstream AI frameworks.
+Adapter Library for Chinese Large Language Models (LLMs), converts model API responses to OpenAI format, seamlessly integrates with LangChain, LlamaIndex, Pydantic and other major ML frameworks.
 
 ## Changelog
 
-### v0.4.0 (Planned)
+### v0.3.2 (2026-04-01) ✨
 
-- 🔧 Model adapter development (e.g., Doubao, Kimi, etc.)
-- 🔧 Framework adapter validation and deep integration (LlamaIndex, Pydantic, LiteLLM, Instructor)
+- ✨ **Unified Parameters** - Client init parameters unified with call entry parameters, call entry flexibly overrides
+- ✨ **Architecture Optimization** - Core logic abstraction, BaseAdapter and Responder handle common logic
+- ✨ **Extensibility** - Adding new provider only requires configuring corresponding YAML file, automatically implements request and response field mapping, error code mapping, no need to modify other upper-level components
+- ✨ **YAML Function Integration** - Related field mapping, model support validation, required param validation, param support validation, vendor error code mapping logic
+- ✨ **MiniMax Support Optimization** - Supports all MiniMax native interface parameters, such as `top_p`, `tools`, `thinking`, etc.
 
-### v0.3.0 (2026-03-28) ✨
+### v0.3.1 (2026-03-29) ✨
 
 - ✨ **Deep LangChain Integration**
-  - Runnable adapter as core feature, one function to integrate with LangChain chain
+  - Runnable adapter as core feature, one function integrates with LangChain chain
   - Runnable streaming output, batch calls, async calls support
 - ✨ **chat.create() Streaming Output** - `stream=True` parameter support
-- ✨ **Fallback Mechanism** - Automatic switch to backup model when primary fails
-- ✨ **Simplified Parameter Validation** - Unified to required/supported parameter categories
-- 🔧 **Adapter Refactoring** - Dual-layer architecture with model adapters (Chinese LLMs like MiniMax) + framework adapters (LangChain, etc.)
-
-### v0.2.0 (2026-03-27)
-
-- ✨ __call__ Ultra Simple Calling, prompt parameter, model override mechanism
-
-### v0.4.0 (Planned)
-
-- 🔧 Model adapter development (e.g., Doubao, Kimi, etc.)
-- 🔧 Framework adapter validation and deep integration (LlamaIndex, Pydantic, LiteLLM, Instructor)
+- ✨ **Fallback Mechanism** - Automatically switch to backup model when primary fails
+- ✨ **Response Entry** - `client.chat.still` easily gets clean chat response, `client.chat.raw` gets full response
+- 🔧 **Adapter Refactoring** - Model adapters (Chinese LLMs like MiniMax) + framework adapters (LangChain, etc.) dual-layer architecture
 
 ## Features
 
-- **OpenAI Compatible** - All outputs fully align with OpenAI API standard format
+- **OpenAI Compatible** - Model output aligned with OpenAI API standard format
 - **Framework Integration** - Compatible with LangChain, LlamaIndex and other major ML frameworks
-- **Unified Interface** - One codebase, seamless switching between different LLMs
-- **Simple API** - Multiple calling styles, as simple as one line of code
+- **Unified Interface** - One codebase, seamless switching between different Chinese LLMs
+- **Simple API** - Multiple calling styles, simplest only needs one line of code
 
 ## Supported Models
 
-- **Verified**: MiniMax-M2.7, MiniMax-M2.5, MiniMax-M2.1, MiniMax-M2
-- **More models and providers in development**
+- **Verified**: MiniMax-M2.7、MiniMax-M2.5、MiniMax-M2.1、MiniMax-M2
+- **More providers and models in development**
 
 ## Installation
 
@@ -64,20 +58,18 @@ from cnllm import CNLLM, MINIMAX_API_KEY
 client = CNLLM(model="minimax-m2.7", api_key=MINIMAX_API_KEY)
 ```
 
-### Three Calling Styles
+### Three Entry Points
 
 **1. Simple Call** **`client("prompt")`**
 
 ```python
-resp = client("Introduce yourself in one sentence")
-print(resp["choices"][0]["message"]["content"])
+resp = client("Introduce yourself in one sentence")  # Simple call does not accept other parameters
 ```
 
 **2. Standard Call** **`client.chat.create(prompt="prompt")`**
 
 ```python
 resp = client.chat.create(prompt="Introduce yourself in one sentence")
-print(resp["choices"][0]["message"]["content"])
 ```
 
 **3. Full Call** **`client.chat.create(messages=[...])`**
@@ -88,55 +80,75 @@ resp = client.chat.create(
         {"role": "user", "content": "Introduce yourself in one sentence"}
     ]
 )
-print(resp["choices"][0]["message"]["content"])
 ```
 
-### Model Override
-
-Support overriding default model at call time:
+### Quick Model Switching at Call:
 
 ```python
 resp = client.chat.create(
     prompt="Introduce yourself",
-    model="minimax-m2.5"
+    model="minimax-m2.5",  # Optional, override model
+    api_key="your_other_api_key"  # Optional, override API Key, if not filled, defaults to key at client entry
 )
+```
+
+### Response Entry
+
+**1. Get Clean Chat Response**
+
+```python
+# Traditional way
+print(resp["choices"][0]["message"]["content"])
+
+# Using still attribute (recommended)
+print(client.chat.still)
+```
+
+**2. Get Full Response**
+
+```python
+print(client.chat.raw)  # Raw response from the model
 ```
 
 ## Unified Interface Parameters
 
-### CNLLM Client Interface
+| Parameter            | Type          | Required | Default      | Client Init | Call Entry | Description                                           |
+| ------------------- | ------------- | -------- | ------------ | :---------: | :--------: | ----------------------------------------------------- |
+| `model`             | str           | ✅        | -            |     ✅      |     ✅     | Such as minimax-m2.7 or MiniMax-m2.7                 |
+| `api_key`           | str           | ✅        | -            |     ✅      |     ✅     | API key                                               |
+| `messages`          | list\[dict]   | ⚠️       | -            |     ❌      |     ✅     | OpenAI format message list (mutually exclusive with prompt) |
+| `prompt`            | str           | ⚠️       | -            |     ❌      |     ✅     | Short form (mutually exclusive with messages)          |
+| `fallback_models`   | dict          | -        | {}           |     ✅      |     ❌     | Backup model configuration                            |
+| `base_url`          | str           | -        | API default  |     ✅      |     ✅     | Custom API address                                    |
+| `timeout`           | int           | -        | 60           |     ✅      |     ✅     | Request timeout (seconds)                            |
+| `max_retries`       | int           | -        | 3            |     ✅      |     ✅     | Maximum retry count                                   |
+| `retry_delay`       | float         | -        | 1.0          |     ✅      |     ✅     | Retry delay (seconds)                                 |
+| `temperature`       | float         | -        | 0.7          |     ✅      |     ✅     | Generation randomness, 0-2                            |
+| `max_tokens`        | int           | -        | None         |     ✅      |     ✅     | Maximum generation token count                        |
+| `stream`            | bool          | -        | False        |     ✅      |     ✅     | Streaming response                                    |
+| `top_p`             | float         | -        | 0.95         |     ✅      |     ✅     | Nucleus sampling threshold                            |
+| `top_k`             | int           | -        | -            |     ✅      |     ✅     | Top-K sampling                                        |
+| `tools`             | list          | -        | -            |     ✅      |     ✅     | Function tools definition                             |
+| `tool_choice`       | str           | -        | -            |     ✅      |     ✅     | Tool choice mode: none / auto                         |
+| `thinking`          | bool          | -        | -            |     ✅      |     ✅     | Thinking mode (MiniMax-M1)                           |
+| `presence_penalty`  | float         | -        | -            |     ✅      |     ✅     | Presence penalty                                      |
+| `frequency_penalty` | float         | -        | -            |     ✅      |     ✅     | Frequency penalty                                     |
+| `stop`              | str/list      | -        | -            |     ✅      |     ✅     | Stop sequences                                        |
+| `user`              | str           | -        | -            |     ✅      |     ✅     | User identifier                                       |
+| `organization`      | str           | -        | -            |     ✅      |     ✅     | When using MiniMax, automatically maps to MiniMax standard field group_id |
 
-| Parameter | Type | Required | Default | Description |
-| --- | --- | --- | --- | --- |
-| `model` | str | ✅ | - | Model name: minimax-m2.7, minimax-m2.5 |
-| `api_key` | str | ✅ | - | API key |
-| `base_url` | str | - | API default | Custom API address |
-| `timeout` | int | - | 30 | Request timeout in seconds |
-| `max_retries` | int | - | 3 | Maximum retry attempts |
-| `retry_delay` | float | - | 1.0 | Retry delay in seconds |
-| `fallback_models` | dict | - | {} | Fallback model config, format: `{"fallback_model": "api_key", ...}`, api_key None means sharing API key with primary |
+**Notes**:
 
-### Two Calling Interfaces
+- Call entry parameters take priority, recommend passing common parameters via client init, can flexibly override and pass more parameters at single call.
+- Required parameters only need to ensure not empty when making request, i.e., either client init or call entry should have the parameter.
 
 #### Simple Call client()
 
 Directly pass prompt string, no extra parameters.
 
-#### client.chat.create() Parameters
-
-| Parameter | Type | Required | Default | Description |
-| --- | --- | --- | --- | --- |
-| `messages` | list\[dict] | ⚠️ | - | OpenAI format message list (mutually exclusive with prompt) |
-| `prompt` | str | ⚠️ | - | Short form (mutually exclusive with messages) |
-| `model` | str | - | None | Override default model |
-| `temperature` | float | - | 0.7 | Generation randomness, 0-2 |
-| `max_tokens` | int | - | None | Maximum generation tokens |
-| `stream` | bool | - | False | Streaming response |
-| Other params | Any | - | - | Other supported params (like group_id) are passed to API directly, unsupported params are warned and ignored |
-
 ## Response Format
 
-All API responses follow OpenAI standard format:
+Through any API call style in the quick start, the model's response will be converted to OpenAI standard format:
 
 ```python
 {
@@ -160,13 +172,13 @@ All API responses follow OpenAI standard format:
 }
 ```
 
-输出适配 LangChain 库（已验证，并深度集成Runnable组件），其他库如 Pydantic、LlamaIndex、Instructor 等可直接使用（未验证）。
+OpenAI standard response structure compatible with LangChain library (deep integration with Runnable component), other libraries like Pydantic, LlamaIndex, Instructor that support OpenAI standard structure should work directly (not verified).
 
 ## LangChainRunnable Implementation
 
 ```python
 from cnllm import CNLLM
-from cnllm.adapters.framework import LangChainRunnable
+from cnllm.core.framework import LangChainRunnable
 from langchain_core.prompts import ChatPromptTemplate
 import asyncio
 
@@ -176,7 +188,7 @@ client = CNLLM(model="minimax-m2.7", api_key="your_key")
 runnable = LangChainRunnable(client)
 
 prompt = ChatPromptTemplate.from_messages([
-    ("system", "You are a helpful assistant."),("human", "{input}")])
+    ("system", "You are a helpful assistant"),("human", "{input}")])
 
 # Build LangChain chain
 chain = prompt | runnable
@@ -199,3 +211,11 @@ results = runnable.batch(["Hello", "How are you?"])
 for r in results:
     print(r.content)
 ```
+
+## License
+
+MIT License - See [LICENSE](LICENSE) file for details
+
+## Contact
+
+- GitHub Issues: <https://github.com/kanchengw/cnllm/issues>

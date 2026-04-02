@@ -9,6 +9,7 @@ class ErrorCode(Enum):
     TIMEOUT = "timeout"
     NETWORK_ERROR = "network_error"
     SERVER_ERROR = "server_error"
+    BUSINESS_ERROR = "business_error"
     INVALID_REQUEST = "invalid_request"
     PARSE_ERROR = "parse_error"
     MODEL_NOT_SUPPORTED = "model_not_supported"
@@ -87,7 +88,8 @@ class RateLimitError(CNLLMError):
         self,
         message: str = "请求频率超限，请稍后重试",
         provider: str = "unknown",
-        details: Optional[Dict[str, Any]] = None
+        details: Optional[Dict[str, Any]] = None,
+        suggestion: str = None
     ):
         super().__init__(
             message=message,
@@ -95,7 +97,7 @@ class RateLimitError(CNLLMError):
             status_code=429,
             provider=provider,
             details=details,
-            suggestion="请降低请求频率，或联系厂商提升配额"
+            suggestion=suggestion or "请降低请求频率，或联系厂商提升配额"
         )
 
 
@@ -138,7 +140,8 @@ class ServerError(CNLLMError):
         self,
         message: str = "服务器错误",
         provider: str = "unknown",
-        details: Optional[Dict[str, Any]] = None
+        details: Optional[Dict[str, Any]] = None,
+        suggestion: str = None
     ):
         super().__init__(
             message=message,
@@ -146,7 +149,7 @@ class ServerError(CNLLMError):
             status_code=500,
             provider=provider,
             details=details,
-            suggestion="服务器暂时不可用，请稍后重试"
+            suggestion=suggestion or "服务器暂时不可用，请稍后重试"
         )
 
 
@@ -155,7 +158,8 @@ class InvalidRequestError(CNLLMError):
         self,
         message: str = "无效的请求",
         provider: str = "unknown",
-        details: Optional[Dict[str, Any]] = None
+        details: Optional[Dict[str, Any]] = None,
+        suggestion: str = None
     ):
         super().__init__(
             message=message,
@@ -163,7 +167,7 @@ class InvalidRequestError(CNLLMError):
             status_code=400,
             provider=provider,
             details=details,
-            suggestion="请检查请求参数是否正确"
+            suggestion=suggestion or "请检查请求参数是否正确"
         )
 
 
@@ -267,6 +271,25 @@ class ModelAPIError(CNLLMError):
             provider=provider,
             details=details,
             suggestion="请稍后重试，或联系 API 提供商"
+        )
+
+
+class ModelBusinessError(CNLLMError):
+    def __init__(
+        self,
+        message: str = "模型业务处理失败",
+        business_code: int = None,
+        provider: str = "unknown",
+        details: Optional[Dict[str, Any]] = None,
+        suggestion: str = None
+    ):
+        super().__init__(
+            message=message,
+            error_code=ErrorCode.BUSINESS_ERROR,
+            status_code=business_code,
+            provider=provider,
+            details=details,
+            suggestion=suggestion or "请检查输入是否合法，或稍后重试"
         )
 
 
