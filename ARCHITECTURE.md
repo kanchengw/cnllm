@@ -57,7 +57,28 @@
 └─────────────────────────────────────────────────────────────┘
 ```
 
+<<<<<<< HEAD
 ### 1.2 分层架构原则
+=======
+### 1.2 框架适配（LangChain 集成）
+
+```
+LangChain Chain
+      │
+      ▼
+┌─────────────────────────────────────────────────────────────┐
+│               LangChainRunnable (包装 CNLLM Client)         │
+│              (cnllm/adapters/framework/langchain.py)        │
+├─────────────────────────────────────────────────────────────┤
+│  提供标准 LangChain 接口：                                    │
+│  - invoke()    → 单次调用                                    │
+│  - stream()    → 同步流式                                    │
+│  - astream()   → 异步流式                                    │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### 1.3 模块职责
+>>>>>>> origin/main
 
 **通用抽象层**包含多个组件，各司其职：
 
@@ -115,6 +136,70 @@ chat.create(messages, model, api_key, ...)
                         └── 任一成功 → 该模型成功
 ```
 
+<<<<<<< HEAD
+=======
+### 3.2 模型与 Adapter 映射
+
+```
+SUPPORTED_MODELS = {
+    "minimax-m2.7": "minimax",
+    "minimax-m2.5": "minimax",
+}
+
+ADAPTER_MAP = {
+    "minimax": MiniMaxAdapter,
+}
+
+模型验证流程:
+1. 检查模型名是否在 SUPPORTED_MODELS
+2. 通过映射获取 adapter_name
+3. 通过 adapter_name 在 ADAPTER_MAP 获取 Adapter 类
+4. 创建 Adapter 实例
+```
+
+### 3.3 raw 响应追踪
+
+每次调用成功后，最后使用的 adapter 实例会保存到 `client._last_adapter`，可通过 `client.chat.raw` 访问原始响应：
+
+```python
+client.chat.create(messages=[...])
+raw = client.chat.raw  # 原始 API 响应（含 base_resp 等平台字段）
+```
+
+***
+
+## 4. 参数体系
+
+### 4.1 参数分类 (params.py)
+
+| 分类            | 定义   | 处理方式               |
+| ------------- | ---- | ------------------ |
+| **required**  | 必填参数 | Python 签名验证 + 类型检查 |
+| **supported** | 可选参数 | ✅ 传递给 API          |
+| **其他**        | 未知参数 | ⚠️ 警告 + 忽略后继续运行    |
+
+未识别的参数统一警告+忽略后继续运行，简化逻辑同时提高兼容性。
+
+### 4.2 params.py 注册表结构
+
+```python
+PROVIDER_PARAMS = {
+    "minimax": {
+        "init": {
+            "required": ["api_key", "model"],
+            "supported": ["base_url", "timeout", "max_retries", "retry_delay"],
+        },
+        "create": {
+            "required": [],
+            "supported": ["messages", "temperature", "max_tokens", "stream", "tools", "tool_choice", "group_id"],
+        }
+    }
+}
+```
+
+***
+
+>>>>>>> origin/main
 ## 5. 异常体系
 
 ### 5.1 异常类型
@@ -186,6 +271,7 @@ configs/
 
 ## 7. YAML 厂商配置文件  
 
+<<<<<<< HEAD
 ### 7.1 request_minimax.yaml
 
 ```yaml
@@ -303,6 +389,8 @@ stream_fields:
 
 ## 10. 版本规划
 
+=======
+>>>>>>> origin/main
 ### v0.3.1 ✅ 已完成 (2026-03-29)
 
 - [x] 结构化错误体系

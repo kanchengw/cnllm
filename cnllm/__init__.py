@@ -19,6 +19,7 @@ from .utils.exceptions import (
 from .core import vendor
 
 __version__ = "0.3.2"
+
 __all__ = [
     "CNLLM",
     "CNLLMError",
