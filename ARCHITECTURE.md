@@ -57,9 +57,6 @@
 └─────────────────────────────────────────────────────────────┘
 ```
 
-<<<<<<< HEAD
-### 1.2 分层架构原则
-=======
 ### 1.2 框架适配（LangChain 集成）
 
 ```
@@ -78,7 +75,6 @@ LangChain Chain
 ```
 
 ### 1.3 模块职责
->>>>>>> origin/main
 
 **通用抽象层**包含多个组件，各司其职：
 
@@ -136,8 +132,6 @@ chat.create(messages, model, api_key, ...)
                         └── 任一成功 → 该模型成功
 ```
 
-<<<<<<< HEAD
-=======
 ### 3.2 模型与 Adapter 映射
 
 ```
@@ -199,7 +193,6 @@ PROVIDER_PARAMS = {
 
 ***
 
->>>>>>> origin/main
 ## 5. 异常体系
 
 ### 5.1 异常类型
@@ -271,7 +264,6 @@ configs/
 
 ## 7. YAML 厂商配置文件  
 
-<<<<<<< HEAD
 ### 7.1 request_minimax.yaml
 
 ```yaml
@@ -389,20 +381,15 @@ stream_fields:
 
 ## 10. 版本规划
 
-=======
->>>>>>> origin/main
-### v0.3.1 ✅ 已完成 (2026-03-29)
+### v0.3.2 (2026-04-01) ✨
 
-- [x] 结构化错误体系
-- [x] 三种调用入口
-- [x] stream 流式输出 (`stream=True`)
-- [x] 简化参数验证（required/supported 两类）
-- [x] LangChain Runnable 适配器
-- [x] Fallback 机制
-- [x] 模型兼容性验证工具
-- [x] `client.chat.still` / `client.chat.raw` 响应入口
+- ✨ **参数统一** - 客户端初始化参数与调用入口参数统一化，调用入口灵活覆写
+- ✨ **架构优化** - 核心逻辑抽象，模型适配器BaseAdapter和响应转换器Responder处理通用逻辑
+- ✨ **可扩展性** - 接入新厂商只需配置相应 YAML 文件，自动实现请求和响应双端字段映射、错误码映射，无需修改其他上层组件
+- ✨ **YAML 功能集成** - 关联字段映射、模型支持验证、必填项验证、参数支持验证、厂商错误码映射逻辑
+- ✨ **MiniMax 支持优化** - 支持 MiniMax 原生接口所有参数，如 `top_p`、`tools`、`thinking` 等
 
 ### v0.4.0 (规划中)
 
 - [ ] 模型适配开发（如豆包、Kimi 等）
-- [ ] 框架适配验证和深度集成（LlamaIndex、Pydantic、LiteLLM、Instructor）
+- [ ] 框架适配验证和深度集成（LlamaIndex、Pydantic、LiteLLM、Instructor等）
