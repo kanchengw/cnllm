@@ -32,6 +32,7 @@ jobs:
       name: release
       url: https://pypi.org/project/cnllm/
     permissions:
+      contents: read
       id-token: write
     steps:
       - name: Download dists
