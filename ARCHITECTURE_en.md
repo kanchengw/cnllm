@@ -10,7 +10,6 @@
 │                     (cnllm/core/client.py)                 │
 ├─────────────────────────────────────────────────────────────┤
 │  Three Entry Points:                                        │
-<<<<<<< HEAD
 │  - Simple: client("prompt")                                │
 │  - Standard: client.chat.create(prompt="...")               │
 │  - Full: client.chat.create(messages=[...])                │
@@ -18,15 +17,6 @@
 │  Response Accessors:                                        │
 │  - client.chat.still  → Plain text                         │
 │  - client.chat.raw   → Raw response (with platform-specific fields) │
-=======
-│  - Simple: client("prompt")                                 │
-│  - Standard: client.chat.create(prompt="...")               │
-│  - Full: client.chat.create(messages=[...])                 │
-│                                                             │
-│  Response Accessors:                                        │
-│  - client.chat.still  → Plain text                          │
-│  - client.chat.raw   → Raw response (with vendor-specific fields) │
->>>>>>> origin/main
 └─────────────────────────────────────────────────────────────┘
                               │
                               ▼
@@ -35,7 +25,6 @@
 │              (cnllm/adapters/{vendor}/chat.py)              │
 ├─────────────────────────────────────────────────────────────┤
 │  - Vendor protocol conversion                               │
-<<<<<<< HEAD
 │  - Parameter validation                                    │
 │  - Store raw response in adapter._raw_response             │
 │  - Return OpenAI format response                           │
@@ -50,32 +39,7 @@
 ├─────────────────────────────────────────────────────────────┤
 │  - HTTP request sending                                    │
 │  - Retry mechanism                                         │
-│  - Error handling                                          │
-=======
-│  - Parameter validation                                     │
-│  - Store raw response in adapter._raw_response              │
-│  - Return OpenAI format response                            │
-│                                                             │
-│  Example: MiniMaxAdapter                                    │
->>>>>>> origin/main
-└─────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-<<<<<<< HEAD
-=======
-│                    BaseHttpClient                           │
-│                     (cnllm/core/base.py)                    │
-├─────────────────────────────────────────────────────────────┤
-│  - HTTP request sending                                     │
-│  - Retry mechanism                                          │
-│  - Error handling                                           │
-└─────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
->>>>>>> origin/main
-│                       [External API]                        │
+│  - Error handling                                         │
 └─────────────────────────────────────────────────────────────┘
                               │
                               ▼
@@ -83,16 +47,8 @@
 │                    Output Cleaner Layer                     │
 │                     (cnllm/utils/cleaner.py)                │
 ├─────────────────────────────────────────────────────────────┤
-<<<<<<< HEAD
 │  - Clean Markdown markers                                  │
 │  - Extract OpenAI standard fields, convert response to standard format │
-└─────────────────────────────────────────────────────────────┘
-```
-
-### 1.2 Layered Architecture Principles
-=======
-│  - Clean Markdown markers                                   │
-│  - Extract OpenAI standard fields, convert to standard format │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -113,8 +69,7 @@ LangChain Chain
 └─────────────────────────────────────────────────────────────┘
 ```
 
-### 1.3 Module Responsibilities
->>>>>>> origin/main
+### 1.3 Module responsibilities
 
 **Common abstraction layer** contains multiple components, each with its own responsibility:
 
@@ -145,11 +100,7 @@ LangChain Chain
 
 **Call Chain Description**:
 
-<<<<<<< HEAD
 - `client("prompt")` calls `chat.create(prompt=prompt)` via `__call__` method
-=======
-- `client("prompt")` calls `chat.create(prompt=prompt)` via `__call__`
->>>>>>> origin/main
 
 ***
 
@@ -176,8 +127,6 @@ chat.create(messages, model, api_key, ...)
                         └── Any succeeds → That model succeeds
 ```
 
-<<<<<<< HEAD
-=======
 ### 3.2 Model and Adapter Mapping
 
 ```
@@ -239,7 +188,6 @@ PROVIDER_PARAMS = {
 
 ***
 
->>>>>>> origin/main
 ## 5. Exception System
 
 ### 5.1 Exception Types
@@ -279,7 +227,6 @@ class CNLLMError(Exception):
 
 ```
 cnllm/
-<<<<<<< HEAD
 ├── entry/                    # Entry Layer - Client init and call entry
 │   ├── __init__.py
 │   ├── client.py             # CNLLM main client class
@@ -306,32 +253,12 @@ configs/
 └── minimax/
     ├── request_minimax.yaml  # Request config
     └── response_minimax.yaml # Response config
-=======
-├── __init__.py              # Package entry, exports CNLLM and exception classes
-├── adapters/
-│   ├── minimax/
-│   │   └── chat.py         # MiniMax adapter
-│   └── framework/
-│       └── langchain.py     # LangChain Runnable adapter
-├── core/
-│   ├── client.py            # Client (three entry points)
-│   ├── models.py            # Model mapping (SUPPORTED_MODELS, ADAPTER_MAP)
-│   ├── params.py            # Parameter registry
-│   └── base.py              # HTTP base layer
-└── utils/
-    ├── config.py            # Environment configuration
-    ├── exceptions.py        # Exception definitions
-    ├── fallback.py          # Fallback mechanism
-    ├── validate_model_compatible.py  # Model compatibility validation
-    └── cleaner.py           # Output cleaning
->>>>>>> origin/main
 ```
 
 ***
 
 ## 7. YAML Vendor Configuration Files
 
-<<<<<<< HEAD
 ### 7.1 request_minimax.yaml
 
 ```yaml
@@ -447,22 +374,17 @@ stream_fields:
 
 ***
 
-## 10. Version Plan
+## 10. Version Planning
 
-=======
->>>>>>> origin/main
-### v0.3.1 ✅ Completed (2026-03-29)
+### v0.3.2 (2026-04-01) ✨
 
-- [x] Structured error system
-- [x] Three entry points
-- [x] Stream streaming output (`stream=True`)
-- [x] Simplified parameter validation (required/supported two categories)
-- [x] LangChain Runnable adapter
-- [x] Fallback mechanism
-- [x] Model compatibility validation tool
-- [x] `client.chat.still` / `client.chat.raw` response accessors
+- ✨ **Unified Parameters** - Client init parameters unified with call entry parameters, call entry flexibly overrides
+- ✨ **Architecture Optimization** - Core logic abstraction, BaseAdapter and Responder handle common logic
+- ✨ **Extensibility** - Adding new provider only requires configuring corresponding YAML file, automatically implements request and response field mapping, error code mapping, no need to modify other upper-level components
+- ✨ **YAML Function Integration** - Related field mapping, model support validation, required param validation, param support validation, vendor error code mapping logic
+- ✨ **MiniMax Support Optimization** - Supports all MiniMax native interface parameters, such as `top_p`, `tools`, `thinking`, etc.
 
 ### v0.4.0 (Planned)
 
-- [ ] Model adapter development (such as Doubao, Kimi, etc.)
-- [ ] Framework adapter validation and deep integration (LlamaIndex, Pydantic, LiteLLM, Instructor)
+- [ ] Model adaptation development (e.g., Doubao, Kimi, etc.)
+- [ ] Framework adaptation validation and deep integration (LlamaIndex, Pydantic, LiteLLM, Instructor, etc.)
