@@ -1,4 +1,4 @@
-from .core.client import CNLLM
+from .entry.client import CNLLM
 from .utils.exceptions import (
     CNLLMError,
     AuthenticationError,
@@ -16,7 +16,10 @@ from .utils.exceptions import (
     ErrorCode
 )
 
-__version__ = "0.3.1"
+from .core import vendor
+
+__version__ = "0.3.2"
+
 __all__ = [
     "CNLLM",
     "CNLLMError",

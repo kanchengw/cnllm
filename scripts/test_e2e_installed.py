@@ -1,9 +1,9 @@
 """
-CNLLM 端到端测试 (模拟生产环境)
-模拟用户 pip install cnllm 后的正常使用
-不引用项目本地模块，使用已安装的 cnllm 包
+CNLLM End-to-End Test (Simulating Production Environment)
+Simulates normal usage after user pip install cnllm
+Does not reference project local modules, uses installed cnllm package
 
-使用前设置环境变量:
+Before use, set environment variable:
   Windows: $env:MINIMAX_API_KEY="your_key"
   Linux/Mac: export MINIMAX_API_KEY=your_key
 """
@@ -44,18 +44,19 @@ def test_supported_models():
     print("Test 2: Supported Models Check")
     print("=" * 60)
 
-    from cnllm.core.models import SUPPORTED_MODELS, ADAPTER_MAP
+    from cnllm.core.adapter import BaseAdapter
 
-    print(f"SUPPORTED_MODELS ({len(SUPPORTED_MODELS)} models):")
-    for model, adapter in SUPPORTED_MODELS.items():
-        print(f"  - {model} -> {adapter}")
+    adapter_names = BaseAdapter.get_all_adapter_names()
+    print(f"Registered adapters ({len(adapter_names)}):")
+    for name in adapter_names:
+        adapter_class = BaseAdapter.get_adapter_class(name)
+        supported_models = adapter_class.get_supported_models() if adapter_class else []
+        print(f"  - {name} -> {adapter_class.__name__ if adapter_class else 'N/A'}")
+        for model in supported_models:
+            print(f"      - {model}")
 
-    print(f"\nADAPTER_MAP ({len(ADAPTER_MAP)} adapters):")
-    for name, cls in ADAPTER_MAP.items():
-        print(f"  - {name} -> {cls.__name__}")
-
-    print(f"\n[OK] Found {len(SUPPORTED_MODELS)} models and {len(ADAPTER_MAP)} adapters")
-    return len(SUPPORTED_MODELS) > 0 and len(ADAPTER_MAP) > 0
+    print(f"\n[OK] Found {len(adapter_names)} adapters")
+    return len(adapter_names) > 0
 
 
 def test_fallback_mechanism():
@@ -127,6 +128,7 @@ def test_model_not_supported():
             model="totally-unknown-model",
             api_key=api_key
         )
+        client.chat.create(prompt="Hello")
         print("[FAIL] Should have raised ModelNotSupportedError")
         return False
     except ModelNotSupportedError as e:
@@ -174,7 +176,7 @@ def test_streaming():
 
     print("[INFO] Collecting stream chunks...")
     chunks = []
-    for chunk in client("Count to 5", stream=True):
+    for chunk in client.chat.create("Count to 5", stream=True):
         if "choices" in chunk and len(chunk["choices"]) > 0:
             delta = chunk["choices"][0].get("delta", {})
             if "content" in delta:

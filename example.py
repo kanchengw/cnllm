@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from cnllm import CNLLM
-from cnllm.adapters.framework import LangChainRunnable
+from cnllm.core.framework import LangChainRunnable
 
 API_KEY = os.getenv("MINIMAX_API_KEY")
 if not API_KEY:

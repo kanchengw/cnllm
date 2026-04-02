@@ -57,6 +57,9 @@
 └─────────────────────────────────────────────────────────────┘
 ```
 
+<<<<<<< HEAD
+### 1.2 分层架构原则
+=======
 ### 1.2 框架适配（LangChain 集成）
 
 ```
@@ -75,19 +78,24 @@ LangChain Chain
 ```
 
 ### 1.3 模块职责
+>>>>>>> origin/main
 
-| 模块           | 文件                                         | 职责                               |
-| ------------ | ------------------------------------------ | -------------------------------- |
-| **客户端入口**    | `cnllm/core/client.py`                     | 三种调用入口，参数透传，路由分发                 |
-| **模型适配层**    | `cnllm/adapters/{厂商}/chat.py`              | 厂商协议转换 + 参数验证                    |
-| **框架适配层**    | `cnllm/adapters/framework/*.py`            | 框架集成（LangChain 等）统一输出            |
-| **模型映射**     | `cnllm/core/models.py`                     | SUPPORTED\_MODELS + ADAPTER\_MAP |
-| **HTTP 基础**  | `cnllm/core/base.py`                       | 网络请求，重试                          |
-| **异常定义**     | `cnllm/utils/exceptions.py`                | 统一异常体系                           |
-| **参数注册**     | `cnllm/core/params.py`                     | 参数分类配置                           |
-| **Fallback** | `cnllm/utils/fallback.py`                  | 降级机制                             |
-| **输出清洗**     | `cnllm/utils/cleaner.py`                   | 统一模型输出格式                         |
-| **模型验证**     | `cnllm/utils/validate_model_compatible.py` | 模型兼容性验证                          |
+**通用抽象层**包含多个组件，各司其职：
+
+| 层级 | 组件 | 职责 | 示例 |
+|------|------|------|------|
+| **前端入口** | `CNLLM` (entry/client.py) | 统一入口、模型验证、参数标准化 | `CNLLM(model='minimax-m2.7')` |
+| **请求预处理** | `BaseAdapter` (core/adapter.py) | 参数校验、Payload构建、厂商模型映射 | `_build_payload()`, `validate_model()` |
+| **HTTP执行** | `BaseHttpClient` (entry/http.py) | 通用HTTP请求/重试 | `post_stream()`, `post()` |
+| **响应后处理** | `Responder` (core/responder.py) | 统一OpenAI格式转换 | `to_openai_stream_format()` |
+| **厂商特定层** | 各厂商 Adapter (core/vendor/) | 厂商特殊响应处理 | MiniMax 的 `reasoning_content` |
+
+**原则**：
+- **前端入口层** (`CNLLM`)：最早接收用户参数，统一做模型名小写转换和初步验证
+- **预处理层** (`BaseAdapter`)：参数校验、过滤、Payload组装、调用HttpClient
+- **HTTP层** (`BaseHttpClient`)：通用HTTP逻辑，不感知厂商差异
+- **后处理层** (`Responder`)：将厂商原始响应转为OpenAI标准格式，所有厂商通用
+- **厂商特定层**：厂商特有的响应字段（如MiniMax的`reasoning_content`）必须在厂商Adapter层处理
 
 ***
 
@@ -128,6 +136,8 @@ chat.create(messages, model, api_key, ...)
                         └── 任一成功 → 该模型成功
 ```
 
+<<<<<<< HEAD
+=======
 ### 3.2 模型与 Adapter 映射
 
 ```
@@ -189,6 +199,7 @@ PROVIDER_PARAMS = {
 
 ***
 
+>>>>>>> origin/main
 ## 5. 异常体系
 
 ### 5.1 异常类型
@@ -228,29 +239,158 @@ class CNLLMError(Exception):
 
 ```
 cnllm/
-├── __init__.py              # 包入口，导出 CNLLM 和异常类
-├── adapters/
-│   ├── minimax/
-│   │   └── chat.py         # MiniMax 适配器
-│   └── framework/
-│       └── langchain.py     # LangChain Runnable 适配器
-├── core/
-│   ├── client.py            # 客户端 (三种调用入口)
-│   ├── models.py            # 模型映射 (SUPPORTED_MODELS, ADAPTER_MAP)
-│   ├── params.py            # 参数注册表
-│   └── base.py              # HTTP 基础层
-└── utils/
-    ├── config.py            # 环境配置
-    ├── exceptions.py        # 异常定义
-    ├── fallback.py          # Fallback 机制
-    ├── validate_model_compatible.py  # 模型兼容性验证，用于引入新的模型支持
-    └── cleaner.py           # 输出清洗
+├── entry/                    # 入口层 - 客户端初始化和调用入口
+│   ├── __init__.py
+│   ├── client.py             # CNLLM 主客户端类
+│   └── http.py               # HTTP 请求客户端
+├── core/                     # 核心层 - 适配器抽象和厂商实现
+│   ├── __init__.py
+│   ├── adapter.py            # BaseAdapter 基础适配器
+│   ├── responder.py          # Responder 响应格式转换框架
+│   ├── framework/
+│   │   ├── __init__.py
+│   │   └── langchain.py      # LangChain 集成
+│   └── vendor/               # 厂商实现
+│       ├── __init__.py
+│       └── minimax.py        # MiniMax 厂商适配器
+└── utils/                    # 工具层 - 通用工具
+    ├── __init__.py
+    ├── exceptions.py         # 异常定义
+    ├── fallback.py           # Fallback 管理器
+    ├── stream.py             # 流式处理工具
+    ├── validator.py          # 参数验证器
+    └── vendor_error.py       # 厂商错误处理
+
+configs/
+└── minimax/
+    ├── request_minimax.yaml  # 请求配置
+    └── response_minimax.yaml # 响应配置
 ```
 
 ***
 
-## 7. 版本规划
+## 7. YAML 厂商配置文件  
 
+<<<<<<< HEAD
+### 7.1 request_minimax.yaml
+
+```yaml
+request:
+  method: "POST"
+  url: "/text/chatcompletion_v2"
+  base_url: "https://api.minimaxi.com/v1"
+  headers:
+    Content-Type: "application/json"
+    Authorization: "Bearer ${api_key}"
+
+required_fields:
+  api_key: ""
+  model: ""
+
+one_of:
+  messages_or_prompt:
+    messages: ""
+    prompt: ""
+
+optional_fields:
+  fallback_models: ""
+  # ... 更多可选参数
+
+model_mapping:
+  minimax-m2: "MiniMax-M2"
+  # ... 更多模型映射关系
+
+error_check:
+  code_path: "base_resp.status_code"
+  message_path: "base_resp.status_msg"
+  success_code: 0
+  error_codes:
+    1001: { type: "timeout", message: "请求超时", suggestion: "请检查网络连接" }
+    1002: { type: "rate_limit", message: "触发RPM限流", suggestion: "请降低请求频率" }
+    # ... 更多错误码映射
+```
+
+### 7.2 response_minimax.yaml
+
+```yaml
+fields:
+  id: "id"
+  created: "created"
+  model: "model"
+  content: "choices[0].message.content"
+  # ...
+
+defaults:
+  object: "chat.completion"
+  # ...
+
+stream_fields:
+  # ...
+```
+
+### 7.3 YAML 功能集成
+
+| 用途 | 访问点 | YAML 路径 |
+|------|--------|-----------|
+| 获取默认值 | `defaults`, `timeout`, `max_retries`, `retry_delay` | `default_values` |
+| 厂商请求字段映射 | `build_payload` | `body_mapping` (在 request 中) |
+| OpenAI响应字段映射 | `responder` | `fields` |
+| 必填参数校验 | `validate_required_params` | `required_fields` |
+| 参数支持校验 | `filter_supported_params` | `optional_fields` |
+| 互斥参数校验 | `validate_one_of` | `one_of` |
+| API配置 | `get_base_url`, `get_api_path` | `request.base_url`, `request.url` |
+| 模型名映射 | `model_mapping` | `model_mapping` |
+
+***
+
+## 8. 异常处理系统
+
+### 8.1 架构分层
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  Layer 1: Vendor Error (cnllm/core/vendor/)                 │
+│  MiniMaxVendorError.from_response()                         │
+│  职责：解析厂商原始响应 → code, message                      │
+└─────────────────────────┬───────────────────────────────────┘
+                          │ Registry.create_vendor_error()
+                          ▼
+┌─────────────────────────────────────────────────────────────┐
+│  Layer 2: Error Translator (cnllm/utils/vendor_error.py)   │
+│  ErrorTranslator.translate()                               │
+│  职责：查 YAML → type → CNLLM Error                        │
+└─────────────────────────┬───────────────────────────────────┘
+                          │ raise CNLLM Error
+                          ▼
+┌─────────────────────────────────────────────────────────────┐
+│  Layer 3: CNLLM Error (cnllm/utils/exceptions.py)          │
+│  RateLimitError, ServerError, AuthenticationError...        │
+│  职责：统一异常类型，与厂商无关                              │
+└─────────────────────────────────────────────────────────────┘
+                          │
+                          ▼
+┌─────────────────────────────────────────────────────────────┐
+│  Layer 4: User Code (用户应用层)                            │
+│  try: ... except CNLLMError: ...                           │
+│  职责：用户捕获并处理异常                                    │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### 8.2 核心组件
+
+| 组件 | 文件 | 职责 |
+|------|------|------|
+| `VendorError` | `utils/vendor_error.py` | 数据类：code, message, vendor, raw_response |
+| `VendorErrorRegistry` | `utils/vendor_error.py` | 注册厂商错误类，创建 VendorError 实例 |
+| `ErrorTranslator` | `utils/vendor_error.py` | 查 YAML 翻译为 CNLLM Error |
+| `MiniMaxVendorError` | `core/vendor/minimax.py` | MiniMax 特有响应解析逻辑 |
+
+***
+
+## 10. 版本规划
+
+=======
+>>>>>>> origin/main
 ### v0.3.1 ✅ 已完成 (2026-03-29)
 
 - [x] 结构化错误体系

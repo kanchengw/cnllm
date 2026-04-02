@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "cnllm"
-version = "0.3.1"
-description = "中文大模型适配库，将模型 API返回封装为 OpenAI 格式，无缝协作langchain、LlamaIndex、Pydantic等机器学习库"
+version = "0.3.2"
+description = "将中文大模型 API 响应封装为 OpenAI 格式，无缝接入生态内Langchain、LlamaIndex、Pydantic等机器学习库"
 readme = "README.md"
 license = {text = "MIT"}
 authors = [
@@ -29,6 +29,7 @@ dependencies = [
     "requests>=2.25.0",
     "python-dotenv>=0.19.0",
     "langchain-core>=0.3.0",
+    "pyyaml>=6.0",
 ]
 
 [project.optional-dependencies]

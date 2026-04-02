@@ -88,7 +88,8 @@ class RateLimitError(CNLLMError):
         self,
         message: str = "请求频率超限，请稍后重试",
         provider: str = "unknown",
-        details: Optional[Dict[str, Any]] = None
+        details: Optional[Dict[str, Any]] = None,
+        suggestion: str = None
     ):
         super().__init__(
             message=message,
@@ -96,7 +97,7 @@ class RateLimitError(CNLLMError):
             status_code=429,
             provider=provider,
             details=details,
-            suggestion="请降低请求频率，或联系厂商提升配额"
+            suggestion=suggestion or "请降低请求频率，或联系厂商提升配额"
         )
 
 
@@ -139,7 +140,8 @@ class ServerError(CNLLMError):
         self,
         message: str = "服务器错误",
         provider: str = "unknown",
-        details: Optional[Dict[str, Any]] = None
+        details: Optional[Dict[str, Any]] = None,
+        suggestion: str = None
     ):
         super().__init__(
             message=message,
@@ -147,7 +149,7 @@ class ServerError(CNLLMError):
             status_code=500,
             provider=provider,
             details=details,
-            suggestion="服务器暂时不可用，请稍后重试"
+            suggestion=suggestion or "服务器暂时不可用，请稍后重试"
         )
 
 
@@ -156,7 +158,8 @@ class InvalidRequestError(CNLLMError):
         self,
         message: str = "无效的请求",
         provider: str = "unknown",
-        details: Optional[Dict[str, Any]] = None
+        details: Optional[Dict[str, Any]] = None,
+        suggestion: str = None
     ):
         super().__init__(
             message=message,
@@ -164,7 +167,7 @@ class InvalidRequestError(CNLLMError):
             status_code=400,
             provider=provider,
             details=details,
-            suggestion="请检查请求参数是否正确"
+            suggestion=suggestion or "请检查请求参数是否正确"
         )
 
 
@@ -277,7 +280,8 @@ class ModelBusinessError(CNLLMError):
         message: str = "模型业务处理失败",
         business_code: int = None,
         provider: str = "unknown",
-        details: Optional[Dict[str, Any]] = None
+        details: Optional[Dict[str, Any]] = None,
+        suggestion: str = None
     ):
         super().__init__(
             message=message,
@@ -285,7 +289,7 @@ class ModelBusinessError(CNLLMError):
             status_code=business_code,
             provider=provider,
             details=details,
-            suggestion="请检查输入是否合法，或稍后重试"
+            suggestion=suggestion or "请检查输入是否合法，或稍后重试"
         )
 
 

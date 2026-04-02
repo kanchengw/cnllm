@@ -1,6 +1,6 @@
 """
-新模型与 Adapter 兼容性验证
-验证新模型是否能被现有 adapter 正确适配
+Model and Adapter Compatibility Validation
+Validates whether new models can be correctly adapted by existing adapters
 """
 import os
 import time
@@ -11,7 +11,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from cnllm.core.models import SUPPORTED_MODELS, ADAPTER_MAP, disable_validation, enable_validation
+from cnllm.core.adapter import BaseAdapter
 from cnllm.utils.exceptions import ModelAPIError, ParseError
 
 logger = logging.getLogger(__name__)
@@ -66,11 +66,8 @@ class ModelValidator:
         print(f"Notes: {notes}")
         print(f"{'-' * 50}")
 
-        if model not in SUPPORTED_MODELS:
-            disable_validation()
-
         try:
-            adapter_class = ADAPTER_MAP.get(adapter_name)
+            adapter_class = BaseAdapter.get_adapter_class(adapter_name)
             if not adapter_class:
                 return ValidationResult(
                     case=case,
@@ -79,7 +76,7 @@ class ModelValidator:
                     error=f"Adapter '{adapter_name}' not found"
                 )
 
-            adapter = adapter_class(api_key=self.api_key)
+            adapter = adapter_class(api_key=self.api_key, model=model)
             start_time = time.time()
             response = adapter.create_completion(
                 messages=TEST_MESSAGES,
@@ -115,9 +112,6 @@ class ModelValidator:
                 status="error",
                 error=f"{type(e).__name__}: {e}"
             )
-        finally:
-            if model not in SUPPORTED_MODELS:
-                enable_validation()
 
     def _validate_response(self, response: Any, case: Dict, elapsed: float) -> ValidationResult:
         details = {}
@@ -173,7 +167,7 @@ class ModelValidator:
                 case=case,
                 passed=False,
                 status="suspicious_response_time",
-                error=f"Response too fast ({elapsed:.3f}s),可能是mock响应",
+                error=f"Response too fast ({elapsed:.3f}s), possibly mock response",
                 content=content,
                 response_time=elapsed
             )
@@ -209,71 +203,32 @@ class ModelValidator:
             results.append(result)
         return results
 
-    def filter_new_models(self, results: List[ValidationResult]) -> List[Tuple[str, str]]:
-        new_models = []
-        for r in results:
-            if r.passed and r.case["model"] not in SUPPORTED_MODELS:
-                new_models.append((r.case["model"], r.case["adapter"]))
-        return new_models
-
-
-def update_models_file(new_models: List[Tuple[str, str]]) -> bool:
-    if not new_models:
-        print("\n没有新模型需要添加")
-        return False
-
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    models_py_path = os.path.join(script_dir, "..", "core", "models.py")
-
-    with open(models_py_path, "r", encoding="utf-8") as f:
-        content = f.read()
-
-    for model, adapter_name in new_models:
-        if model not in SUPPORTED_MODELS:
-            supported_match = re.search(
-                r'(SUPPORTED_MODELS\s*:\s*Dict\[str,\s*str\]\s*=\s*\{[^}]*\})',
-                content,
-                re.DOTALL
-            )
-            if supported_match:
-                old_block = supported_match.group(1)
-                new_entry = f'    "{model}": "{adapter_name}",\n'
-                new_block = old_block.rstrip().rstrip("}")
-                if not new_block.endswith("{"):
-                    new_block += "\n"
-                new_block += new_entry + "}"
-                content = content.replace(old_block, new_block)
-                print(f"[ADD] {model} -> SUPPORTED_MODELS")
-
-            if adapter_name not in ADAPTER_MAP:
-                print(f"[WARN] {adapter_name} not in ADAPTER_MAP")
-
-    with open(models_py_path, "w", encoding="utf-8") as f:
-        f.write(content)
-
-    print(f"\n已更新 {models_py_path}")
-    return True
-
 
 def get_default_test_cases() -> List[Dict]:
     test_cases = []
+    adapter_names = BaseAdapter.get_all_adapter_names()
 
-    for model, adapter_name in SUPPORTED_MODELS.items():
-        test_cases.append({
-            "model": model,
-            "adapter": adapter_name,
-            "expected": True,
-            "notes": "SUPPORTED_MODELS 中已有的模型"
-        })
+    for adapter_name in adapter_names:
+        adapter_class = BaseAdapter.get_adapter_class(adapter_name)
+        if adapter_class:
+            supported_models = adapter_class.get_supported_models()
+            for model in supported_models:
+                test_cases.append({
+                    "model": model,
+                    "adapter": adapter_name,
+                    "expected": True,
+                    "notes": "Existing supported model"
+                })
 
     potential_models = [
-        ("minimax-m2.1", "minimax", "M2.1 与 M2.7 同系列，可能兼容"),
-        ("minimax-m2", "minimax", "M2 与 M2.7 同系列，可能兼容"),
-        ("minimax-m1", "minimax", "M1 可能兼容"),
+        ("minimax-m2.1", "minimax", "M2.1 may be compatible with M2.7 series"),
+        ("minimax-m2", "minimax", "M2 may be compatible with M2.7 series"),
+        ("minimax-m1", "minimax", "M1 may be compatible"),
     ]
 
     for model, adapter_name, notes in potential_models:
-        if model not in SUPPORTED_MODELS:
+        exists = any(c["model"] == model for c in test_cases)
+        if not exists:
             test_cases.append({
                 "model": model,
                 "adapter": adapter_name,
@@ -339,15 +294,16 @@ def validate_runnable() -> Tuple[bool, str]:
 
     try:
         from langchain_core.messages import HumanMessage
-        from cnllm.adapters.framework.langchain import ChatMiniMax
+        from cnllm.core.framework import LangChainRunnable
 
         api_key = os.getenv("MINIMAX_API_KEY")
         if not api_key:
             print("[SKIP] MINIMAX_API_KEY not set")
             return True, "SKIPPED"
 
-        llm = ChatMiniMax(api_key=api_key)
-        response = llm.invoke([HumanMessage(content="Hello")])
+        client = CNLLM(model="minimax-m2.7", api_key=api_key)
+        runnable = LangChainRunnable(client)
+        response = runnable.invoke([HumanMessage(content="Hello")])
         print(f"[PASS] Runnable worked! Response: {str(response)[:50]}...")
         return True, "Runnable OK"
     except ImportError as e:
@@ -360,7 +316,7 @@ def validate_runnable() -> Tuple[bool, str]:
 
 def run_validation(
     test_cases: List[Dict] = None,
-    auto_update: bool = True
+    auto_update: bool = False
 ) -> Tuple[List[ValidationResult], Dict]:
     api_key = os.getenv("MINIMAX_API_KEY")
     if not api_key:
@@ -374,34 +330,24 @@ def run_validation(
     results = validator.validate_multiple(test_cases)
 
     print("\n" + "=" * 60)
-    print("模型兼容性验证结果")
+    print("Model Compatibility Validation Results")
     print("=" * 60)
 
     passed = sum(1 for r in results if r.passed)
     failed = len(results) - passed
 
-    print(f"\n通过: {passed}/{len(results)}")
-    print(f"失败: {failed}/{len(results)}")
+    print(f"\nPassed: {passed}/{len(results)}")
+    print(f"Failed: {failed}/{len(results)}")
 
-    print("\n详细结果:")
+    print("\nDetailed results:")
     for r in results:
         status_icon = "[PASS]" if r.passed else "[FAIL]"
         print(f"  {status_icon} {r.case['model']} ({r.case['adapter']}) - {r.status}")
 
-    if auto_update:
-        new_models = validator.filter_new_models(results)
-        if new_models:
-            print("\n" + "=" * 60)
-            print("自动添加到 SUPPORTED_MODELS")
-            print("=" * 60)
-            update_models_file(new_models)
-        else:
-            print("\n没有新模型需要添加")
-
     extra_results = {}
 
     print("\n" + "=" * 60)
-    print("额外功能验证")
+    print("Additional Feature Validation")
     print("=" * 60)
 
     if api_key:
@@ -423,10 +369,10 @@ def run_validation(
         extra_results["runnable"] = (runnable_passed, runnable_msg)
 
     print("\n" + "=" * 60)
-    print("最终结果汇总")
+    print("Final Results Summary")
     print("=" * 60)
 
-    print(f"\n模型兼容: {passed}/{len(results)} 通过")
+    print(f"\nModel compatibility: {passed}/{len(results)} passed")
     print(f"Stream: {'PASS' if extra_results.get('stream', (False, ''))[0] else 'FAIL'}")
     print(f"Fallback: {'PASS' if extra_results.get('fallback', (False, ''))[0] else 'FAIL'}")
     print(f"Runnable: {'PASS' if extra_results.get('runnable', (False, ''))[0] else 'FAIL'}")
