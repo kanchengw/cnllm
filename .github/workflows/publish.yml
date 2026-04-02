@@ -28,9 +28,6 @@ jobs:
   pypi-publish:
     needs: build
     runs-on: ubuntu-latest
-    environment:
-      name: release
-      url: https://pypi.org/project/cnllm/
     permissions:
       contents: read
       id-token: write
