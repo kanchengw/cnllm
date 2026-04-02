@@ -17,7 +17,7 @@ Adapter Library for Chinese Large Language Models (LLMs), converts model API res
 - [ ] Model adaptation development (e.g., Doubao, Kimi, etc.)
 - [ ] Framework adaptation validation and deep integration (LlamaIndex, Pydantic, LiteLLM, Instructor, etc.)
 
-### v0.3.2 (2026-04-01) ✨
+### v0.3.3 (2026-04-02) ✨
 
 - ✨ **Unified Parameters** - Client init parameters unified with call entry parameters, call entry flexibly overrides
 - ✨ **Architecture Optimization** - Core logic abstraction, BaseAdapter and Responder handle common logic
