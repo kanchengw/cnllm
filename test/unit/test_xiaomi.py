@@ -8,6 +8,10 @@ sys.stdout.reconfigure(encoding='utf-8')
 
 from cnllm import CNLLM
 
+if not os.getenv("XIAOMI_API_KEY"):
+    import pytest
+    pytest.skip("XIAOMI_API_KEY not set", allow_module_level=True)
+
 print("=" * 60)
 print("测试 Xiaomi MiMo 适配 - 基础功能")
 print("=" * 60)

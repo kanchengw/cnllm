@@ -6,6 +6,10 @@ sys.stdout.reconfigure(encoding='utf-8')
 
 from cnllm import CNLLM
 
+if not os.getenv("MINIMAX_API_KEY"):
+    import pytest
+    pytest.skip("MINIMAX_API_KEY not set", allow_module_level=True)
+
 def get_weather(location: str):
     """获取天气"""
     return f"{location}的天气是晴天"

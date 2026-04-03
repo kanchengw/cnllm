@@ -6,6 +6,10 @@ sys.stdout.reconfigure(encoding='utf-8')
 
 from cnllm import CNLLM
 
+if not os.getenv("XIAOMI_API_KEY"):
+    import pytest
+    pytest.skip("XIAOMI_API_KEY not set", allow_module_level=True)
+
 print("=== Xiaomi 测试 ===")
 xiaomi = CNLLM(
     model="mimo-v2-flash",
