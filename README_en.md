@@ -120,36 +120,34 @@ resp = client.chat.create(
 **1. Get Clean Chat Response**
 
 ```python
+client = CNLLM(model="minimax-m2.7", api_key=MINIMAX_API_KEY)
+resp = client.chat.create(prompt="Introduce yourself in one sentence", ...)
+
+# Traditional way
 print(resp["choices"][0]["message"]["content"])
 
-print(client.chat.still)
+# Using still property (recommended)
+print(client.chat.still)     # Returns: Hello, I'm minimax-m2.7 model...
+
+# Get raw original response
+print(client.chat.raw)     # Returns: {vendor native response JSON string}
 ```
 
-**2. Get Full Response**
-
-```python
-print(client.chat.raw)
-```
-
-**3. Get Model Thinking Process (reasoning_content)**
-
-```python
-resp = client.chat.create(
-    messages=[{"role": "user", "content": "Explain why sky is blue"}],
-    thinking=True
-)
-print(client.chat.think)
-```
-
-**4. Get Tool Calls (tool_calls)**
+**2. Get Model Thinking Process (reasoning_content)**
 
 ```python
 tools = [{"type": "function", "function": {"name": "get_weather", "parameters": {...}}}]
-resp = client.chat.create(
-    messages=[{"role": "user", "content": "How's the weather in Beijing?"}],
-    tools=tools
-)
-print(client.chat.tools)
+resp = client.chat.create(thinking=True, tools=tools)
+
+print(client.chat.think)     # Returns: Let me think about this, user asked me to ...
+```
+
+**3. Get Tool Calls (tool_calls)**
+
+```python
+tools = [{"type": "function", "function": {"name": "get_weather", "parameters": {...}}}]
+resp = client.chat.create(tools=tools, ...)
+print(client.chat.tools)     # Returns: {tool call message dict}
 ```
 
 ## Unified Interface Parameters
@@ -223,24 +221,29 @@ import asyncio
 
 client = CNLLM(model="minimax-m2.7", api_key="your_key")
 
+# Wrap client with LangChainRunnable
 runnable = LangChainRunnable(client)
 
 prompt = ChatPromptTemplate.from_messages([
     ("system", "You are a helpful assistant"),("human", "{input}")])
 
+# Build LangChain chain
 chain = prompt | runnable
 result = chain.invoke({"input": "What is 2+2?"})
 print(result.content)
 
+# Synchronous streaming output
 for chunk in runnable.stream("Count to 5"):
     print(chunk, end="", flush=True)
 
+# Asynchronous streaming output
 async def async_stream_test():
     async for chunk in runnable.astream("Count to 3"):
         print(chunk, end="", flush=True)
 
 asyncio.run(async_stream_test())
 
+# Batch calls
 results = runnable.batch(["Hello", "How are you?"])
 for r in results:
     print(r.content)

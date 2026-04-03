@@ -120,32 +120,34 @@ resp = client.chat.create(
 **1. 获取纯净会话响应**
 
 ```python
+client = CNLLM(model="minimax-m2.7", api_key=MINIMAX_API_KEY)
+resp = client.chat.create(prompt="用一句话介绍自己", ...)
+
 # 传统方式
 print(resp["choices"][0]["message"]["content"])
 
 # 使用 still 属性（推荐）
-print(client.chat.still)
+print(client.chat.still)     # 返回：你好，我是minimax-m2.7模型...
+
+# 获取 raw 原始响应
+print(client.chat.raw)     # 返回：{厂商原生响应的 JSON 字符串}
 ```
 
-**2. 获取厂商原生完整响应**
+**2. 获取模型思考过程（reasoning_content）**
 
 ```python
-print(client.chat.raw)
+tools = [{"type": "function", "function": {"name": "get_weather", "parameters": {...}}}]
+resp = client.chat.create(thinking=True, tools=tools)
+
+print(client.chat.think)     # 返回：Let me think about this, user asked me to ...
 ```
 
-**3. 获取模型思考过程（reasoning_content）**
-
-```python
-resp = client.chat.create(thinking=True, ...)
-print(client.chat.think) 
-```
-
-**4. 获取工具调用信息（tool_calls）**
+**3. 获取工具调用消息（tool_calls）**
 
 ```python
 tools = [{"type": "function", "function": {"name": "get_weather", "parameters": {...}}}]
 resp = client.chat.create(tools=tools, ...)
-print(client.chat.tools) 
+print(client.chat.tools)     # 返回：{工具调用消息字典}
 ```
 
 ## 统一接口参数

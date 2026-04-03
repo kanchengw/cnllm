@@ -230,7 +230,8 @@ class BaseAdapter:
         except ModelBusinessError:
             raise
         except Exception as e:
-            raise ModelAPIError(f"{self.ADAPTER_NAME} API 请求失败: {e}")
+            error_msg = getattr(e, 'message', str(e))
+            raise ModelAPIError(f"{self.ADAPTER_NAME} API 请求失败: {error_msg}")
 
     def _handle_stream(self, client: BaseHttpClient, api_path: str, payload: Dict[str, Any], model: str) -> Iterator[Dict[str, Any]]:
         self._raw_response = {}
