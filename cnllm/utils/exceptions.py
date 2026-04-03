@@ -307,3 +307,6 @@ class FallbackError(CNLLMError):
             details=details,
             suggestion="请检查网络连接，或稍后重试"
         )
+
+    def _format_message(self) -> str:
+        return self.message
