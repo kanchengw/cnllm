@@ -7,10 +7,11 @@ sys.stdout.reconfigure(encoding='utf-8')
 from cnllm import CNLLM
 
 XIAOMI_API_KEY = os.getenv("XIAOMI_API_KEY")
+MINIMAX_API_KEY = os.getenv("MINIMAX_API_KEY")
 
-if not XIAOMI_API_KEY:
+if not XIAOMI_API_KEY or not MINIMAX_API_KEY:
     import pytest
-    pytest.skip("XIAOMI_API_KEY not set", allow_module_level=True)
+    pytest.skip("XIAOMI_API_KEY and MINIMAX_API_KEY both required", allow_module_level=True)
 
 def print_structure(data, indent=0):
     if isinstance(data, dict):

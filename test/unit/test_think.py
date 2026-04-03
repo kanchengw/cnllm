@@ -8,6 +8,9 @@ sys.stdout.reconfigure(encoding='utf-8')
 
 from cnllm import CNLLM
 
+if not os.getenv("MINIMAX_API_KEY"):
+    pytest.skip("MINIMAX_API_KEY not set", allow_module_level=True)
+
 
 class TestThinkProperty:
     """测试 .think 属性"""
@@ -32,6 +35,7 @@ class TestThinkProperty:
         print(f"think type: {type(think)}")
         print(f"think: {think[:50] if think else None}...")
         print(f"still: {client.chat.still}")
+        print(f"raw: {client.chat.raw}")
 
         assert think is not None, "think should not be None when thinking=True"
 
