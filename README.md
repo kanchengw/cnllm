@@ -10,12 +10,29 @@
 
 中文大模型适配库，将模型 API 响应封装为 OpenAI 格式，无缝协作langchain、LlamaIndex、Pydantic等机器学习库
 
+CNLLM 正在积极开发中，欢迎贡献者参与！
+
+我们寻求以下帮助：
+- 🌐 **新厂商适配** - 为更多大模型厂商开发适配器（如智谱、豆包、Kimi等）
+- 🔗 **机器学习框架深度适配** - LlamaIndex、LiteLLM 等框架的适配验证
+- 🐛 **能力扩展** - 开发Embedding、多模态的适配框架
+- 📖 **文档完善** - 改进文档、添加示例
+- 💡 **功能建议** - 提出新功能想法
+
+快速入门：[贡献者指南](docs/CONTRIBUTOR.md)
+详细架构：[系统架构](docs/ARCHITECTURE.md)
+
+
 ## 更新日志
 
-### v0.4.0 (规划中)
+### v0.4.0（2026-04-03）
 
-- [ ] 模型适配开发（如豆包、Kimi 等）
-- [ ] 框架适配验证和深度集成（LlamaIndex、Pydantic、LiteLLM、Instructor等）
+- ✨ **mimo适配** - 小米mimo模型适配开发，支持"mimo-v2-pro"、"mimo-v2-omni"、"mimo-v2-flash"
+- ✨ **架构重构** - BaseAdapter + Responder + VendorError 三层架构分离，职责清晰
+- ✨ **.think 属性** - `client.chat.think` 获取 reasoning_content，支持流式累积
+- ✨ **.tools 属性** - `client.chat.tools` 获取 tool_calls，支持流式累积
+- ✨ **流式累积** - `.think`、`.still`、`.tools` 支持在流式响应中实时滚动积累
+
 
 ### v0.3.3 (2026-04-02) ✨
 
@@ -25,7 +42,7 @@
 - ✨ **YAML 功能集成** - 关联字段映射、模型支持验证、必填项验证、参数支持验证、厂商错误码映射逻辑
 - ✨ **MiniMax 支持优化** - 支持 MiniMax 原生接口所有参数，如 `top_p`、`tools`、`thinking` 等
 
-### v0.3.1 (2026-03-29) ✨
+### v0.3.2 (2026-03-29) ✨
 
 - ✨ **LangChain深度适配**
   - Runnable 适配器作为核心功能，一个函数接入Langchain chain
@@ -44,7 +61,8 @@
 
 ## 支持的模型
 
-- **已验证**：MiniMax-M2.7、MiniMax-M2.5、MiniMax-M2.1、MiniMax-M2
+- **小米mimo**：mimo-v2-pro、mimo-v2-flash、mimo-v2-omni
+- **MiniMax**：MiniMax-M2.7、MiniMax-M2.5、MiniMax-M2.1、MiniMax-M2
 - **更多厂商、模型支持正在开发中**
 
 ## 安装
@@ -109,10 +127,25 @@ print(resp["choices"][0]["message"]["content"])
 print(client.chat.still)
 ```
 
-**2. 获取完整响应**
+**2. 获取厂商原生完整响应**
 
 ```python
-print(client.chat.raw)  # 模型返回的原始响应
+print(client.chat.raw)
+```
+
+**3. 获取模型思考过程（reasoning_content）**
+
+```python
+resp = client.chat.create(thinking=True, ...)
+print(client.chat.think) 
+```
+
+**4. 获取工具调用信息（tool_calls）**
+
+```python
+tools = [{"type": "function", "function": {"name": "get_weather", "parameters": {...}}}]
+resp = client.chat.create(tools=tools, ...)
+print(client.chat.tools) 
 ```
 
 ## 统一接口参数
@@ -172,7 +205,13 @@ print(client.chat.raw)  # 模型返回的原始响应
     "usage": {
         "prompt_tokens": 10,
         "completion_tokens": 20,
-        "total_tokens": 30
+        "total_tokens": 30,
+        "prompt_tokens_details": {
+            "cached_tokens": 0
+        },
+        "completion_tokens_details": {
+            "reasoning_tokens": 0
+        }
     }
 }
 ```

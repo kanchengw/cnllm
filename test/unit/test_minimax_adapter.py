@@ -326,12 +326,13 @@ class TestMiniMaxFullParameters:
 
         client = self._create_client()
 
-        print(f"  [参数] stream=True, messages=[user:count to 3]")
+        print(f"  [参数] stream=True, messages=[user:say hello], thinking=True")
 
         response = client.chat.create(
-            messages=[{"role": "user", "content": "count to 3"}],
+            messages=[{"role": "user", "content": "say hello and introduce yourself in one sentence"}],
             stream=True,
-            max_tokens=50
+            thinking=True,
+            max_tokens=100
         )
 
         print(f"\n  [响应类型] {type(response)}")

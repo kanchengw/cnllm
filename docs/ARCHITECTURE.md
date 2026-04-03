@@ -7,7 +7,7 @@
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                        CNLLM Client                         │
-│                     (cnllm/core/client.py)                  │
+│                     (cnllm/entry/client.py)                 │
 ├─────────────────────────────────────────────────────────────┤
 │  三种调用入口：                                                │
 │  - 极简入口: client("prompt")                                 │
@@ -16,26 +16,49 @@
 │                                                             │
 │  响应入口：                                                   │
 │  - client.chat.still  → 纯净文本                             │
+│  - client.chat.think → 思考过程（reasoning_content）          │
+│  - client.chat.tools → 工具调用（tool_calls）                 │
 │  - client.chat.raw   → 原始响应（含平台特有字段）               │
 └─────────────────────────────────────────────────────────────┘
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────┐
-│                    模型适配层 (Model Adapter)                 │
-│              (cnllm/adapters/{厂商}/chat.py)                 │
+│                    BaseAdapter                             │
+│              (cnllm/core/adapter.py)                        │
 ├─────────────────────────────────────────────────────────────┤
-│  - 厂商协议转换                                               │
-│  - 参数验证                                                  │
-│  - 存储 raw 响应到 adapter._raw_response                      │
-│  - 返回 OpenAI 格式响应                                       │
-│                                                             │
-│  如：MiniMaxAdapter                                          │
+│  - 参数验证（YAML 配置驱动）                                  │
+│  - Payload 构建                                              │
+│  - HTTP 请求发送                                             │
+│  - 厂商模型映射                                              │
+│  - 委托 Responder 处理响应转换                               │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│                    Responder                                │
+│              (cnllm/core/responder.py)                      │
+├─────────────────────────────────────────────────────────────┤
+│  - 响应格式转换（厂商 → OpenAI 标准）                         │
+│  - reasoning_content 提取与累积                              │
+│  - tool_calls 提取与累积                                     │
+│  - usage 信息处理                                           │
+│  - 敏感内容检测（input_sensitive_type / output_sensitive）    │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│                    VendorError                              │
+│              (cnllm/utils/vendor_error.py)                  │
+├─────────────────────────────────────────────────────────────┤
+│  - 厂商错误解析（code → CNLLM Error）                        │
+│  - 错误码映射（YAML 配置驱动）                                │
+│  - 敏感内容检测触发                                          │
 └─────────────────────────────────────────────────────────────┘
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────┐
 │                    BaseHttpClient                           │
-│                     (cnllm/core/base.py)                    │
+│                     (cnllm/entry/http.py)                   │
 ├─────────────────────────────────────────────────────────────┤
 │  - HTTP 请求发送                                             │
 │  - 重试机制                                                  │
@@ -46,37 +69,17 @@
 ┌─────────────────────────────────────────────────────────────┐
 │                       [外部 API]                             │
 └─────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│                    输出清洗层 (Output Cleaner)                │
-│                     (cnllm/utils/cleaner.py)                │
-├─────────────────────────────────────────────────────────────┤
-│  - 清洗 Markdown 标记                                        │
-│  - 提取 OpenAI 标准字段，将响应转换为标准格式                     │
-└─────────────────────────────────────────────────────────────┘
 ```
 
-### 1.2 框架适配（LangChain 集成）
+### 1.2 三层架构组件
 
-```
-LangChain Chain
-      │
-      ▼
-┌─────────────────────────────────────────────────────────────┐
-│               LangChainRunnable (包装 CNLLM Client)         │
-│              (cnllm/adapters/framework/langchain.py)        │
-├─────────────────────────────────────────────────────────────┤
-│  提供标准 LangChain 接口：                                    │
-│  - invoke()    → 单次调用                                    │
-│  - stream()    → 同步流式                                    │
-│  - astream()   → 异步流式                                    │
-└─────────────────────────────────────────────────────────────┘
-```
+| 组件 | 文件 | 职责 |
+|------|------|------|
+| **BaseAdapter** | `core/adapter.py` | 核心适配逻辑：参数校验、Payload构建、请求发送 |
+| **Responder** | `core/responder.py` | 响应转换：厂商格式 → OpenAI 标准格式 |
+| **VendorError** | `utils/vendor_error.py` | 错误处理：厂商错误码 → CNLLM 统一异常 |
 
-### 1.3 模块职责
-
-**通用抽象层**包含多个组件，各司其职：
+### 1.3 分层架构原则
 
 | 层级 | 组件 | 职责 | 示例 |
 |------|------|------|------|
@@ -95,23 +98,45 @@ LangChain Chain
 
 ***
 
-## 2. 三种调用入口
+## 2. 目录结构
 
-| 入口       | 调用方式                                                                |
-| -------- | ------------------------------------------------------------------- |
-| **极简入口** | `client("prompt")`                                                  |
-| **标准入口** | `client.chat.create(prompt="prompt")`                               |
-| **完整入口** | `client.chat.create(messages=[{"role": "user", "content": "..."}])` |
+```
+cnllm/
+├── entry/                    # 入口层 - 客户端初始化和调用入口
+│   ├── __init__.py
+│   ├── client.py             # CNLLM 主客户端类
+│   └── http.py               # HTTP 请求客户端
+├── core/                     # 核心层 - 适配器抽象和厂商实现
+│   ├── __init__.py
+│   ├── adapter.py            # BaseAdapter 基础适配器
+│   ├── responder.py          # Responder 响应格式转换框架
+│   ├── framework/
+│   │   ├── __init__.py
+│   │   └── langchain.py      # LangChain 集成
+│   └── vendor/               # 厂商实现
+│       ├── __init__.py
+│       ├── minimax.py        # MiniMax 厂商适配器
+│       └── xiaomi.py         # Xiaomi 厂商适配器
+└── utils/                    # 工具层 - 通用工具
+    ├── __init__.py
+    ├── exceptions.py         # 异常定义
+    ├── fallback.py           # Fallback 管理器
+    ├── stream.py             # 流式处理工具
+    ├── validator.py          # 参数验证器
+    └── vendor_error.py       # 厂商错误处理
 
-**调用链说明**：
-
-- `client("prompt")` 通过 `__call__` 方法调用 `chat.create(prompt=prompt)`
+configs/
+├── minimax/
+│   ├── request_minimax.yaml  # 请求配置
+│   └── response_minimax.yaml # 响应配置
+└── xiaomi/
+    ├── request_xiaomi.yaml   # 请求配置
+    └── response_xiaomi.yaml  # 响应配置
+```
 
 ***
 
-## 3. Fallback 流程
-
-### 3.1 调用决策流程
+## 3. 模型选择流程
 
 ```
 chat.create(messages, model, api_key, ...)
@@ -132,145 +157,28 @@ chat.create(messages, model, api_key, ...)
                         └── 任一成功 → 该模型成功
 ```
 
-### 3.2 模型与 Adapter 映射
+## 4. YAML 厂商配置文件
 
-```
-SUPPORTED_MODELS = {
-    "minimax-m2.7": "minimax",
-    "minimax-m2.5": "minimax",
-}
+### 4.1 YAML 逻辑实现
 
-ADAPTER_MAP = {
-    "minimax": MiniMaxAdapter,
-}
+| 用途 | 访问点 | YAML 路径 | YAML 表名 |
+|------|--------|-----------|------|  
+| 获取默认值 | `timeout`, `max_retries`... | `default_values` | request_{vendor}.yaml |
+| 厂商请求字段映射 | `build_payload` | `body_mapping` (在 request 中) | request_{vendor}.yaml |
+| 必填参数校验 | `validate_required_params` | `required_fields` | request_{vendor}.yaml |
+| 参数支持校验 | `filter_supported_params` | `optional_fields` | request_{vendor}.yaml |
+| 互斥参数校验 | `validate_one_of` | `one_of` | request_{vendor}.yaml |
+| API配置 | `get_base_url`, `get_api_path` | `request.base_url`, `request.url` | request_{vendor}.yaml |
+| 模型名映射 | `model_mapping` | `model_mapping` | request_{vendor}.yaml |
+| OpenAI响应字段映射 | `responder` | `fields` | response_{vendor}.yaml |
 
-模型验证流程:
-1. 检查模型名是否在 SUPPORTED_MODELS
-2. 通过映射获取 adapter_name
-3. 通过 adapter_name 在 ADAPTER_MAP 获取 Adapter 类
-4. 创建 Adapter 实例
-```
-
-### 3.3 raw 响应追踪
-
-每次调用成功后，最后使用的 adapter 实例会保存到 `client._last_adapter`，可通过 `client.chat.raw` 访问原始响应：
-
-```python
-client.chat.create(messages=[...])
-raw = client.chat.raw  # 原始 API 响应（含 base_resp 等平台字段）
-```
-
-***
-
-## 4. 参数体系
-
-### 4.1 参数分类 (params.py)
-
-| 分类            | 定义   | 处理方式               |
-| ------------- | ---- | ------------------ |
-| **required**  | 必填参数 | Python 签名验证 + 类型检查 |
-| **supported** | 可选参数 | ✅ 传递给 API          |
-| **其他**        | 未知参数 | ⚠️ 警告 + 忽略后继续运行    |
-
-未识别的参数统一警告+忽略后继续运行，简化逻辑同时提高兼容性。
-
-### 4.2 params.py 注册表结构
-
-```python
-PROVIDER_PARAMS = {
-    "minimax": {
-        "init": {
-            "required": ["api_key", "model"],
-            "supported": ["base_url", "timeout", "max_retries", "retry_delay"],
-        },
-        "create": {
-            "required": [],
-            "supported": ["messages", "temperature", "max_tokens", "stream", "tools", "tool_choice", "group_id"],
-        }
-    }
-}
-```
-
-***
-
-## 5. 异常体系
-
-### 5.1 异常类型
-
-```
-CNLLMError (基类)
-├── AuthenticationError      # 认证失败 (401)
-├── RateLimitError           # 限流 (429)
-├── TimeoutError            # 超时 (408)
-├── NetworkError            # 网络错误
-├── ServerError             # 服务器错误 (5xx)
-├── InvalidRequestError     # 请求错误 (400)
-├── ParseError              # 解析错误
-├── ModelNotSupportedError  # 模型不支持
-├── MissingParameterError   # 缺少参数
-├── ContentFilteredError    # 内容过滤 (403)
-├── TokenLimitError        # Token 限制 (431)
-├── ModelAPIError          # 模型 API 调用失败
-└── FallbackError          # 所有模型均失败
-```
-
-### 5.2 异常属性
-
-```python
-class CNLLMError(Exception):
-    message: str           # 错误消息
-    error_code: ErrorCode  # 错误码枚举
-    status_code: int       # HTTP 状态码
-    provider: str          # 厂商标识
-    details: dict          # 详细诊断信息
-    suggestion: str        # 用户建议
-```
-
-***
-
-## 6. 目录结构
-
-```
-cnllm/
-├── entry/                    # 入口层 - 客户端初始化和调用入口
-│   ├── __init__.py
-│   ├── client.py             # CNLLM 主客户端类
-│   └── http.py               # HTTP 请求客户端
-├── core/                     # 核心层 - 适配器抽象和厂商实现
-│   ├── __init__.py
-│   ├── adapter.py            # BaseAdapter 基础适配器
-│   ├── responder.py          # Responder 响应格式转换框架
-│   ├── framework/
-│   │   ├── __init__.py
-│   │   └── langchain.py      # LangChain 集成
-│   └── vendor/               # 厂商实现
-│       ├── __init__.py
-│       └── minimax.py        # MiniMax 厂商适配器
-└── utils/                    # 工具层 - 通用工具
-    ├── __init__.py
-    ├── exceptions.py         # 异常定义
-    ├── fallback.py           # Fallback 管理器
-    ├── stream.py             # 流式处理工具
-    ├── validator.py          # 参数验证器
-    └── vendor_error.py       # 厂商错误处理
-
-configs/
-└── minimax/
-    ├── request_minimax.yaml  # 请求配置
-    └── response_minimax.yaml # 响应配置
-```
-
-***
-
-## 7. YAML 厂商配置文件  
-
-### 7.1 request_minimax.yaml
+### 4.2 request_{vendor}.yaml
 
 ```yaml
 request:
   method: "POST"
-  url: "/text/chatcompletion_v2"
-  base_url: "https://api.minimaxi.com/v1"
+  url: "/chat/completions"
+  base_url: "https://api.{vendor}.com/v1"
   headers:
     Content-Type: "application/json"
     Authorization: "Bearer ${api_key}"
@@ -286,10 +194,17 @@ one_of:
 
 optional_fields:
   fallback_models: ""
+  stream: ""
+  thinking:
+    path: "thinking"
+    transform:
+      true: {"type": "enabled"}
+      false: {"type": "disabled"}
   # ... 更多可选参数
 
 model_mapping:
   minimax-m2: "MiniMax-M2"
+  mimo-v2-flash: "mimo-v2-flash"
   # ... 更多模型映射关系
 
 error_check:
@@ -302,7 +217,7 @@ error_check:
     # ... 更多错误码映射
 ```
 
-### 7.2 response_minimax.yaml
+### 4.3 response_{vendor}.yaml
 
 ```yaml
 fields:
@@ -317,27 +232,25 @@ defaults:
   # ...
 
 stream_fields:
+  delta:
+    content: "delta.content"
+    reasoning_content: "delta.reasoning_content"
   # ...
+
+usage:
+  prompt_tokens: "usage.prompt_tokens"
+  completion_tokens: "usage.completion_tokens"
+  total_tokens: "usage.total_tokens"
+  prompt_tokens_details:
+    cached_tokens: "usage.prompt_tokens_details.cached_tokens"
+  ...
 ```
-
-### 7.3 YAML 功能集成
-
-| 用途 | 访问点 | YAML 路径 |
-|------|--------|-----------|
-| 获取默认值 | `defaults`, `timeout`, `max_retries`, `retry_delay` | `default_values` |
-| 厂商请求字段映射 | `build_payload` | `body_mapping` (在 request 中) |
-| OpenAI响应字段映射 | `responder` | `fields` |
-| 必填参数校验 | `validate_required_params` | `required_fields` |
-| 参数支持校验 | `filter_supported_params` | `optional_fields` |
-| 互斥参数校验 | `validate_one_of` | `one_of` |
-| API配置 | `get_base_url`, `get_api_path` | `request.base_url`, `request.url` |
-| 模型名映射 | `model_mapping` | `model_mapping` |
 
 ***
 
-## 8. 异常处理系统
+## 5. 异常处理系统
 
-### 8.1 架构分层
+### 5.1 架构分层
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -348,27 +261,27 @@ stream_fields:
                           │ Registry.create_vendor_error()
                           ▼
 ┌─────────────────────────────────────────────────────────────┐
-│  Layer 2: Error Translator (cnllm/utils/vendor_error.py)   │
-│  ErrorTranslator.translate()                               │
-│  职责：查 YAML → type → CNLLM Error                        │
+│  Layer 2: Error Translator (cnllm/utils/vendor_error.py)     │
+│  ErrorTranslator.translate()                                │
+│  职责：查 YAML → type → CNLLM Error                         │
 └─────────────────────────┬───────────────────────────────────┘
                           │ raise CNLLM Error
                           ▼
 ┌─────────────────────────────────────────────────────────────┐
-│  Layer 3: CNLLM Error (cnllm/utils/exceptions.py)          │
-│  RateLimitError, ServerError, AuthenticationError...        │
-│  职责：统一异常类型，与厂商无关                              │
+│  Layer 3: CNLLM Error (cnllm/utils/exceptions.py)           │
+│  RateLimitError, ServerError, AuthenticationError...       │
+│  职责：统一异常类型，与厂商无关                               │
 └─────────────────────────────────────────────────────────────┘
                           │
                           ▼
 ┌─────────────────────────────────────────────────────────────┐
-│  Layer 4: User Code (用户应用层)                            │
-│  try: ... except CNLLMError: ...                           │
-│  职责：用户捕获并处理异常                                    │
+│  Layer 4: User Code (用户应用层)                             │
+│  try: ... except CNLLMError: ...                            │
+│  职责：用户捕获并处理异常                                     │
 └─────────────────────────────────────────────────────────────┘
 ```
 
-### 8.2 核心组件
+### 5.2 核心组件
 
 | 组件 | 文件 | 职责 |
 |------|------|------|
@@ -379,7 +292,15 @@ stream_fields:
 
 ***
 
-## 10. 版本规划
+## 6. 版本更新
+
+### v0.4.0 ✅ 已完成 (2026-04-03)
+
+- ✨ **mimo适配** - 小米mimo模型适配开发，支持"mimo-v2-pro"、"mimo-v2-omni"、"mimo-v2-flash"
+- ✨ **架构重构** - BaseAdapter + Responder + VendorError 三层架构分离，职责清晰
+- ✨ **.think 属性** - `client.chat.think` 获取 reasoning_content，支持流式累积
+- ✨ **.tools 属性** - `client.chat.tools` 获取 tool_calls，支持流式累积
+- ✨ **流式累积** - `.think`、`.still`、`.tools` 支持在流式响应中实时滚动积累
 
 ### v0.3.3 (2026-04-02) ✨
 
@@ -389,7 +310,12 @@ stream_fields:
 - ✨ **YAML 功能集成** - 关联字段映射、模型支持验证、必填项验证、参数支持验证、厂商错误码映射逻辑
 - ✨ **MiniMax 支持优化** - 支持 MiniMax 原生接口所有参数，如 `top_p`、`tools`、`thinking` 等
 
-### v0.4.0 (规划中)
+### v0.3.2 (2026-03-29) ✨
 
-- [ ] 模型适配开发（如豆包、Kimi 等）
-- [ ] 框架适配验证和深度集成（LlamaIndex、Pydantic、LiteLLM、Instructor等）
+- ✨ **LangChain深度适配**
+  - Runnable 适配器作为核心功能，一个函数接入Langchain chain
+  - Runnable 流式输出、批量调用、异步调用支持
+- ✨ **chat.create() 流式输出** - `stream=True` 参数支持
+- ✨ **Fallback 机制** - 主模型失败时自动切换到备用模型
+- ✨ **响应入口** - `client.chat.still` 轻松获取纯净会话响应，`client.chat.raw` 获取完整响应
+- 🔧 **适配器重构** - 模型适配器（中文大模型 MiniMax 等）+ 框架适配器（LangChain 等）双层架构

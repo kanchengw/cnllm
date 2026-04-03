@@ -1,4 +1,5 @@
 import logging
+import os
 from typing import Dict, Any, List, Optional
 
 from .exceptions import (
@@ -57,6 +58,9 @@ class ParamValidator:
         return list(mapping.keys()) if isinstance(mapping, dict) else []
 
     def validate_model(self, model: str) -> bool:
+        if os.getenv("CNLLM_SKIP_MODEL_VALIDATION") == "true":
+            logger.warning(f"[测试模式] 跳过模型验证: {model}")
+            return True
         if model is None or model == '':
             raise MissingParameterError(parameter="model", provider=self.config_dir)
         supported = self.get_supported_models()

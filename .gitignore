@@ -1,7 +1,12 @@
-docs/
+files/
 __pycache__/
 *.py[cod]
 *$py.class
+test_venv/
+.venv_test/
+.venv_test2/
+.venv_test3/
+.venv_test4/
 
 # IDE / Editor
 .trae/

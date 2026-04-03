@@ -1,5 +1,6 @@
 from typing import Optional, Dict, Any, Iterator, List
 import logging
+import os
 
 from ..utils.exceptions import ModelNotSupportedError, MissingParameterError
 from ..utils.fallback import FallbackManager
@@ -61,6 +62,22 @@ class CNLLM:
         ):
             from ..core.adapter import BaseAdapter
 
+            if os.getenv("CNLLM_SKIP_MODEL_VALIDATION") == "true":
+                logger.warning(f"[测试模式] 跳过模型验证: {model}")
+                adapter_name = os.getenv("CNLLM_DEFAULT_ADAPTER", "minimax")
+                adapter_class = BaseAdapter.get_adapter_class(adapter_name)
+                if not adapter_class:
+                    adapter_name = BaseAdapter.get_all_adapter_names()[0]
+                    adapter_class = BaseAdapter.get_adapter_class(adapter_name)
+                return adapter_class(
+                    api_key=api_key,
+                    model=model,
+                    timeout=timeout,
+                    max_retries=max_retries,
+                    retry_delay=retry_delay,
+                    base_url=base_url
+                )
+
             adapter_name = BaseAdapter.get_adapter_name_for_model(model)
             if not adapter_name:
                 raise ModelNotSupportedError(
@@ -99,6 +116,9 @@ class CNLLM:
 
         @property
         def still(self) -> str:
+            raw = self.raw
+            if raw and "chunks" in raw:
+                return raw.get("_still")
             if self._last_response is None:
                 return None
             return self._last_response["choices"][0]["message"]["content"]
@@ -109,6 +129,24 @@ class CNLLM:
             if adapter is None:
                 return {}
             return getattr(adapter, "_raw_response", {})
+
+        @property
+        def think(self) -> str:
+            raw = self.raw
+            if not raw:
+                return None
+            return raw.get("_thinking")
+
+        @property
+        def tools(self) -> Optional[List[Dict[str, Any]]]:
+            raw = self.raw
+            if raw and "chunks" in raw:
+                if "_tools" not in raw:
+                    return None
+                return raw.get("_tools")
+            if self._last_response is None:
+                return None
+            return self._last_response["choices"][0]["message"].get("tool_calls")
 
         def create(
             self,
@@ -160,6 +198,9 @@ class CNLLM:
                     base_url=actual_base_url,
                     **merged_kwargs
                 )
+                if actual_stream and hasattr(resp, '__iter__') and not isinstance(resp, (list, dict, str)):
+                    from cnllm.utils.stream import StreamResultAccumulator
+                    return StreamResultAccumulator(resp, adapter)
                 self._last_response = resp
                 return resp
 
@@ -183,5 +224,8 @@ class CNLLM:
                 **merged_kwargs
             )
             self.parent._last_adapter = fb_manager._last_adapter
+            if actual_stream and hasattr(resp, '__iter__') and not isinstance(resp, (list, dict, str)):
+                from cnllm.utils.stream import StreamResultAccumulator
+                return StreamResultAccumulator(resp, fb_manager._last_adapter)
             self._last_response = resp
             return resp

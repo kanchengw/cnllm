@@ -50,16 +50,21 @@ class LangChainRunnable(Runnable):
         messages = self._convert_input(input)
         kwargs["stream"] = True
 
-        for chunk in self.client.adapter.create_completion(messages=messages, **kwargs):
+        for chunk in self.client.chat.create(messages=messages, **kwargs):
             content = chunk["choices"][0].get("delta", {}).get("content", "")
             if content:
                 yield content
 
     async def astream(self, input: Any, config=None, **kwargs) -> AsyncIterator[str]:
+        import asyncio
         messages = self._convert_input(input)
         kwargs["stream"] = True
 
-        async for chunk in self.client.adapter.astream(messages=messages, **kwargs):
-            content = chunk["choices"][0].get("delta", {}).get("content", "")
-            if content:
-                yield content
+        def sync_stream():
+            for chunk in self.client.chat.create(messages=messages, **kwargs):
+                content = chunk["choices"][0].get("delta", {}).get("content", "")
+                if content:
+                    yield content
+
+        for content in await asyncio.to_thread(list, sync_stream()):
+            yield content

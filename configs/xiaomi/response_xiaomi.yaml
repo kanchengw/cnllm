@@ -31,8 +31,3 @@ stream_fields:
   content_path: "choices[0].delta.content"
   tool_calls_path: "choices[0].delta.tool_calls"
   reasoning_content_path: "choices[0].delta.reasoning_content"
-
-error_check:
-  sensitive_check:
-    input_sensitive_type_path: "input_sensitive_type"
-    output_sensitive_type_path: "output_sensitive_type"
