@@ -1,0 +1,40 @@
+request:
+  method: "POST"
+  url: "/chat/completions"
+  base_url: "https://api.xiaomimimo.com/v1"
+  headers:
+    Content-Type: "application/json"
+    Authorization: "Bearer ${api_key}"
+
+required_fields:
+  api_key: ""
+  model: ""
+
+one_of:
+  messages_or_prompt:
+    messages: ""
+    prompt: ""
+
+optional_fields:
+  stream: ""
+  thinking:
+    path: "thinking"
+    transform:
+      true: {"type": "enabled"}
+      false: {"type": "disabled"}
+  tools:
+    path: "tools"
+    keep_array_structure: true
+  tool_choice: ""
+  temperature: ""
+  max_tokens: ""
+  top_p: ""
+  presence_penalty: ""
+  frequency_penalty: ""
+  stop: ""
+  user: ""
+
+model_mapping:
+  mimo-v2-pro: "mimo-v2-pro"
+  mimo-v2-omni: "mimo-v2-omni"
+  mimo-v2-flash: "mimo-v2-flash"

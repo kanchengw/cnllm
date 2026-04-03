@@ -39,7 +39,7 @@ class TestApiKeyValidation:
 
         adapter = MiniMaxAdapter(api_key='test-key', model='minimax-m2.7')
 
-        with patch.object(adapter, '_check_error'):
+        with patch.object(adapter, '_check_response_error'):
             with patch.object(adapter, '_to_openai_format', return_value={'choices': [{'message': {'content': 'ok'}}]}):
                 with patch('cnllm.entry.http.BaseHttpClient') as mock_http:
                     mock_client = MagicMock()
@@ -63,7 +63,7 @@ class TestModelValidation:
         adapter = MiniMaxAdapter(api_key='test', model='minimax-m2.7')
 
         with patch.object(adapter._validator, 'validate_model') as mock_validate:
-            with patch.object(adapter, '_check_error'):
+            with patch.object(adapter, '_check_response_error'):
                 with patch.object(adapter, '_to_openai_format', return_value={'choices': [{'message': {'content': 'ok'}}]}):
                     with patch('cnllm.entry.http.BaseHttpClient') as mock_http:
                         mock_client = MagicMock()
@@ -83,7 +83,7 @@ class TestModelValidation:
         adapter = MiniMaxAdapter(api_key='test', model='minimax-m2.7')
 
         with patch.object(adapter._validator, 'validate_model') as mock_validate:
-            with patch.object(adapter, '_check_error'):
+            with patch.object(adapter, '_check_response_error'):
                 with patch.object(adapter, '_to_openai_format', return_value={'choices': [{'message': {'content': 'ok'}}]}):
                     with patch('cnllm.entry.http.BaseHttpClient') as mock_http:
                         mock_client = MagicMock()
@@ -145,7 +145,7 @@ class TestMessagesValidation:
 
         adapter = MiniMaxAdapter(api_key='test', model='minimax-m2.7')
 
-        with patch.object(adapter, '_check_error'):
+        with patch.object(adapter, '_check_response_error'):
             with patch.object(adapter, '_to_openai_format', return_value={'choices': [{'message': {'content': 'ok'}}]}):
                 with patch('cnllm.entry.http.BaseHttpClient') as mock_http:
                     mock_client = MagicMock()
@@ -165,7 +165,7 @@ class TestMessagesValidation:
 
         adapter = MiniMaxAdapter(api_key='test', model='minimax-m2.7')
 
-        with patch.object(adapter, '_check_error'):
+        with patch.object(adapter, '_check_response_error'):
             with patch.object(adapter, '_to_openai_format', return_value={'choices': [{'message': {'content': 'ok'}}]}):
                 with patch('cnllm.entry.http.BaseHttpClient') as mock_http:
                     mock_client = MagicMock()

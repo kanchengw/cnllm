@@ -12,7 +12,6 @@ from ..utils.exceptions import (
 )
 from ..utils.stream import StreamHandler
 from ..utils.validator import ParamValidator
-from ..utils.vendor_error import VendorErrorRegistry, ErrorTranslator
 
 logger = logging.getLogger(__name__)
 
@@ -167,25 +166,6 @@ class BaseAdapter:
 
         return payload
 
-    def _check_error(self, raw_response: Dict[str, Any]) -> None:
-        self._check_sensitive(raw_response)
-
-        vendor_error = VendorErrorRegistry.create_vendor_error(
-            self.ADAPTER_NAME.lower(),
-            raw_response
-        )
-        if vendor_error is None:
-            return
-
-        success_code = self._get_config_value("error_check", "success_code", default=0)
-        auth_code = self._get_config_value("error_check", "auth_code", default=1004)
-
-        translator = ErrorTranslator(self.CONFIG_DIR)
-        translator.translate(vendor_error, success_code=success_code, auth_code=auth_code)
-
-    def _check_sensitive(self, raw_response: Dict[str, Any]) -> None:
-        pass
-
     def create_completion(
         self,
         messages: List[Dict[str, str]] = None,
@@ -237,8 +217,12 @@ class BaseAdapter:
             else:
                 raw_resp = client.post(api_path, payload)
                 self._raw_response = raw_resp
-                self._check_error(raw_resp)
-                return self._to_openai_format(raw_resp, model)
+                self._check_response_error(raw_resp)
+                result = self._to_openai_format(raw_resp, model)
+                thinking = result.pop("_thinking", None)
+                if thinking:
+                    self._raw_response["_thinking"] = thinking
+                return result
         except AuthenticationError:
             raise
         except ContentFilteredError:
@@ -249,6 +233,7 @@ class BaseAdapter:
             raise ModelAPIError(f"{self.ADAPTER_NAME} API 请求失败: {e}")
 
     def _handle_stream(self, client: BaseHttpClient, api_path: str, payload: Dict[str, Any], model: str) -> Iterator[Dict[str, Any]]:
+        self._raw_response = {}
         return StreamHandler.handle_stream(
             client, api_path, payload, self._to_openai_stream_format
         )
@@ -258,3 +243,38 @@ class BaseAdapter:
 
     def _to_openai_stream_format(self, raw: Dict[str, Any], model: str) -> Dict[str, Any]:
         raise NotImplementedError("子类必须实现 _to_openai_stream_format")
+
+    def _get_responder(self) -> Optional[Any]:
+        return None
+
+    def _check_response_error(self, raw_response: Dict[str, Any]) -> None:
+        responder = self._get_responder()
+        if responder:
+            responder.check_error(raw_response, self.ADAPTER_NAME)
+
+    def _collect_stream_result(self, result: Dict[str, Any]) -> None:
+        if self._raw_response is None:
+            self._raw_response = {}
+        responder = self._get_responder()
+        if responder:
+            responder.collect_stream_result(self._raw_response, result)
+        else:
+            if "chunks" not in self._raw_response:
+                self._raw_response["chunks"] = []
+            self._raw_response["chunks"].append(result)
+            reasoning_content = result.pop("_reasoning_content", None)
+            if reasoning_content:
+                if "_thinking" not in self._raw_response:
+                    self._raw_response["_thinking"] = ""
+                self._raw_response["_thinking"] += reasoning_content
+            delta = result.get("choices", [{}])[0].get("delta", {})
+            content = delta.get("content") or ""
+            if content:
+                if "_still" not in self._raw_response:
+                    self._raw_response["_still"] = ""
+                self._raw_response["_still"] += content
+            tool_calls = delta.get("tool_calls")
+            if tool_calls:
+                if "_tools" not in self._raw_response:
+                    self._raw_response["_tools"] = []
+                self._raw_response["_tools"].extend(tool_calls)

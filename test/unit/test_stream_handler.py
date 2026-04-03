@@ -175,13 +175,15 @@ class TestStreamHandlerIntegration:
             }]
         }
 
+        adapter = MiniMaxAdapter(api_key="test", model="abab6.5-chat")
         result = MiniMaxAdapter._to_openai_stream_format(
-            MiniMaxAdapter(api_key="test", model="abab6.5-chat"),
+            adapter,
             mock_raw_chunk,
             "abab6.5-chat"
         )
 
-        assert result["choices"][0]["delta"]["content"] == "Let me think..."
+        assert result["choices"][0]["delta"].get("content") == "", "reasoning_content 不应在 delta.content 中"
+        assert adapter._raw_response.get("_thinking") == "Let me think...", "reasoning_content 应存入 _thinking"
 
     def test_stream_handler_tool_calls_in_delta(self):
         from cnllm.core.vendor.minimax import MiniMaxAdapter

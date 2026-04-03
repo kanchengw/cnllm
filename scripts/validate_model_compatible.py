@@ -11,6 +11,8 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+os.environ["CNLLM_SKIP_MODEL_VALIDATION"] = "true"
+
 from cnllm.core.adapter import BaseAdapter
 from cnllm.utils.exceptions import ModelAPIError, ParseError
 
@@ -295,6 +297,7 @@ def validate_runnable() -> Tuple[bool, str]:
     try:
         from langchain_core.messages import HumanMessage
         from cnllm.core.framework import LangChainRunnable
+        from cnllm import CNLLM
 
         api_key = os.getenv("MINIMAX_API_KEY")
         if not api_key:

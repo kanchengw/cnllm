@@ -180,3 +180,163 @@ class TestStreamHandler:
 
         result = list(SSEDecoder.decode_stream(iter(lines)))
         assert len(result) == 1
+
+
+class TestChatNamespaceProperties:
+    """Chat 命名空间属性测试"""
+
+    def test_think_property_with_thinking_true(self, api_key_env):
+        """验证 .think 属性在 thinking=True 时获取 reasoning_content"""
+        from cnllm import CNLLM
+
+        client = CNLLM(model="mimo-v2-flash", api_key=api_key_env("XIAOMI_API_KEY"))
+        response = client.chat.create(
+            messages=[{"role": "user", "content": "1+1等于几"}],
+            thinking=True
+        )
+
+        think_content = client.chat.think
+        assert think_content is not None and len(think_content) > 0
+
+    def test_think_property_without_thinking(self, api_key_env):
+        """验证 .think 属性在不传 thinking 时为 None/空"""
+        from cnllm import CNLLM
+
+        client = CNLLM(model="mimo-v2-flash", api_key=api_key_env("XIAOMI_API_KEY"))
+        response = client.chat.create(
+            messages=[{"role": "user", "content": "1+1等于几"}]
+        )
+
+        think_content = client.chat.think
+        assert think_content is None or think_content == ""
+
+    def test_still_property(self, api_key_env):
+        """验证 .still 属性获取纯净输出"""
+        from cnllm import CNLLM
+
+        client = CNLLM(model="mimo-v2-flash", api_key=api_key_env("XIAOMI_API_KEY"))
+        response = client.chat.create(
+            messages=[{"role": "user", "content": "你好"}]
+        )
+
+        still_content = client.chat.still
+        assert still_content is not None
+        assert len(still_content) > 0
+
+    def test_tools_property(self, api_key_env):
+        """验证 .tools 属性获取 tool_calls"""
+        from cnllm import CNLLM
+
+        tools = [{
+            "type": "function",
+            "function": {
+                "name": "get_weather",
+                "description": "获取天气",
+                "parameters": {"type": "object", "properties": {"location": {"type": "string"}}}
+            }
+        }]
+
+        client = CNLLM(model="minimax-m2.7", api_key=api_key_env("MINIMAX_API_KEY"))
+        response = client.chat.create(
+            messages=[{"role": "user", "content": "北京天气怎么样"}],
+            tools=tools
+        )
+
+        tools_result = client.chat.tools
+        assert tools_result is not None
+        assert len(tools_result) > 0
+        assert tools_result[0]["function"]["name"] == "get_weather"
+
+
+class TestReasoningContentHandling:
+    """reasoning_content 处理测试"""
+
+    def test_reasoning_content_not_in_response(self, api_key_env):
+        """验证 reasoning_content 不出现在标准响应中"""
+        from cnllm import CNLLM
+
+        client = CNLLM(model="mimo-v2-flash", api_key=api_key_env("XIAOMI_API_KEY"))
+        response = client.chat.create(
+            messages=[{"role": "user", "content": "1+1等于几"}],
+            thinking=True
+        )
+
+        message = response["choices"][0]["message"]
+        assert "reasoning_content" not in message, "reasoning_content 不应出现在 resp message 中"
+
+    def test_reasoning_content_in_raw_not_resp(self, api_key_env):
+        """验证 reasoning_content 在 raw 中但不在 resp 中"""
+        from cnllm import CNLLM
+
+        client = CNLLM(model="mimo-v2-flash", api_key=api_key_env("XIAOMI_API_KEY"))
+        response = client.chat.create(
+            messages=[{"role": "user", "content": "1+1等于几"}],
+            thinking=True
+        )
+
+        raw = client.chat.raw
+        raw_message = raw.get("choices", [{}])[0].get("message", {})
+        resp_message = response["choices"][0]["message"]
+
+        raw_has_rc = "reasoning_content" in raw_message and raw_message.get("reasoning_content")
+        resp_has_rc = "reasoning_content" in resp_message
+
+        assert raw_has_rc, "raw 中应该有 reasoning_content"
+        assert not resp_has_rc, "resp 中不应有 reasoning_content"
+
+    def test_think_gets_raw_reasoning_content(self, api_key_env):
+        """验证 .think 能从 raw 获取 reasoning_content"""
+        from cnllm import CNLLM
+
+        client = CNLLM(model="mimo-v2-flash", api_key=api_key_env("XIAOMI_API_KEY"))
+        response = client.chat.create(
+            messages=[{"role": "user", "content": "1+1等于几"}],
+            thinking=True
+        )
+
+        think = client.chat.think
+        raw = client.chat.raw
+        raw_rc = raw.get("choices", [{}])[0].get("message", {}).get("reasoning_content")
+
+        assert think == raw_rc, ".think 应该返回 raw 中的 reasoning_content"
+
+
+class TestOpenAIFormatCompliance:
+    """OpenAI 格式合规性测试"""
+
+    def test_response_has_required_keys(self, api_key_env):
+        """验证响应包含必需字段"""
+        from cnllm import CNLLM
+
+        client = CNLLM(model="mimo-v2-flash", api_key=api_key_env("XIAOMI_API_KEY"))
+        response = client.chat.create(
+            messages=[{"role": "user", "content": "你好"}]
+        )
+
+        required_keys = {"id", "object", "created", "model", "choices", "usage"}
+        actual_keys = set(response.keys())
+
+        assert required_keys.issubset(actual_keys), f"缺少必需字段"
+
+    def test_no_extra_fields_in_response(self, api_key_env):
+        """验证响应中没有多余字段"""
+        from cnllm import CNLLM
+
+        client = CNLLM(model="mimo-v2-flash", api_key=api_key_env("XIAOMI_API_KEY"))
+        response = client.chat.create(
+            messages=[{"role": "user", "content": "你好"}]
+        )
+
+        allowed_top_keys = {"id", "object", "created", "model", "choices", "usage"}
+        actual_keys = set(response.keys())
+        extra_keys = actual_keys - allowed_top_keys
+
+        assert len(extra_keys) == 0, f"发现多余字段: {extra_keys}"
+
+
+@pytest.fixture
+def api_key_env():
+    """返回获取环境变量的函数"""
+    def get_key(key_name):
+        return os.getenv(key_name) or "test-key"
+    return get_key

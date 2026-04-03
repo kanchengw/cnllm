@@ -21,7 +21,7 @@ class TestSensitiveContentDetection:
         }
 
         try:
-            adapter._check_sensitive(raw_resp)
+            adapter.responder._check_sensitive(raw_resp, "minimax")
             print("  PASS: No exception raised for clean response")
         except ContentFilteredError as e:
             pytest.fail(f"Should not raise ContentFilteredError: {e}")
@@ -39,7 +39,7 @@ class TestSensitiveContentDetection:
         }
 
         with pytest.raises(ContentFilteredError) as exc_info:
-            adapter._check_sensitive(raw_resp)
+            adapter.responder._check_sensitive(raw_resp, "minimax")
 
         print(f"  Exception message: {exc_info.value.message}")
         assert "输入内容敏感" in exc_info.value.message
@@ -59,7 +59,7 @@ class TestSensitiveContentDetection:
         }
 
         with pytest.raises(ContentFilteredError) as exc_info:
-            adapter._check_sensitive(raw_resp)
+            adapter.responder._check_sensitive(raw_resp, "minimax")
 
         print(f"  Exception message: {exc_info.value.message}")
         assert "输出内容敏感" in exc_info.value.message
@@ -79,7 +79,7 @@ class TestSensitiveContentDetection:
         }
 
         with pytest.raises(ContentFilteredError) as exc_info:
-            adapter._check_sensitive(raw_resp)
+            adapter.responder._check_sensitive(raw_resp, "minimax")
 
         print(f"  Exception message: {exc_info.value.message}")
         assert "输入内容敏感" in exc_info.value.message
@@ -98,7 +98,7 @@ class TestSensitiveContentDetection:
         }
 
         try:
-            adapter._check_sensitive(raw_resp)
+            adapter.responder._check_sensitive(raw_resp, "minimax")
             print("  PASS: Null values are ignored")
         except ContentFilteredError as e:
             pytest.fail(f"Should not raise ContentFilteredError for null: {e}")
@@ -116,7 +116,7 @@ class TestSensitiveContentDetection:
         }
 
         try:
-            adapter._check_sensitive(raw_resp)
+            adapter.responder._check_sensitive(raw_resp, "minimax")
             print("  PASS: Zero values are ignored")
         except ContentFilteredError as e:
             pytest.fail(f"Should not raise ContentFilteredError for 0: {e}")
@@ -134,7 +134,7 @@ class TestSensitiveContentDetection:
         }
 
         try:
-            adapter._check_sensitive(raw_resp)
+            adapter.responder._check_sensitive(raw_resp, "minimax")
             print("  PASS: Empty string values are ignored")
         except ContentFilteredError as e:
             pytest.fail(f"Should not raise ContentFilteredError for empty string: {e}")
@@ -156,9 +156,7 @@ class TestSensitiveCheckIntegration:
         }
 
         with pytest.raises(ContentFilteredError) as exc_info:
-            with patch.object(adapter, '_check_error') as mock_check:
-                mock_check.side_effect = ContentFilteredError("test")
-                adapter._check_sensitive(raw_resp)
+            adapter.responder._check_sensitive(raw_resp, "minimax")
 
         print(f"  Exception raised: {type(exc_info.value).__name__}")
         print("  PASS: ContentFilteredError raised for sensitive input")
@@ -176,7 +174,7 @@ class TestSensitiveCheckIntegration:
         }
 
         with pytest.raises(ContentFilteredError) as exc_info:
-            adapter._check_sensitive(raw_resp)
+            adapter.responder._check_sensitive(raw_resp, "minimax")
 
         print(f"  Exception message: {exc_info.value.message}")
         print("  PASS: ContentFilteredError raised for sensitive output")

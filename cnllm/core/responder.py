@@ -4,6 +4,8 @@ import uuid
 import time
 import logging
 from typing import Dict, Any, Optional
+from ..utils.vendor_error import VendorErrorRegistry, ErrorTranslator
+from ..utils.exceptions import ContentFilteredError
 
 logger = logging.getLogger(__name__)
 
@@ -91,9 +93,7 @@ class Responder:
             "object": self._get_config_value("defaults", "object", default="chat.completion"),
             "index": self._get_config_value("defaults", "index", default=0),
             "role": self._get_config_value("defaults", "role", default="assistant"),
-            "logprobs": self._get_config_value("defaults", "logprobs"),
             "finish_reason": self._get_config_value("defaults", "finish_reason", default="stop"),
-            "system_fingerprint": self._get_config_value("defaults", "system_fingerprint"),
         }
 
     def to_openai_format(self, raw: Dict[str, Any], model: str) -> Dict[str, Any]:
@@ -103,6 +103,9 @@ class Responder:
         content = self._get_by_path(raw, fields.get("content", "choices[0].message.content"))
         if content is not None:
             content = self.cleaner.clean(content)
+
+        tool_calls = self._get_by_path(raw, fields.get("tool_calls", "choices[0].message.tool_calls"))
+        reasoning_content = self._get_by_path(raw, fields.get("reasoning_content", "choices[0].message.reasoning_content"))
 
         prompt_tokens = self._get_by_path(raw, fields.get("prompt_tokens", "usage.prompt_tokens"), 0)
         completion_tokens = self._get_by_path(raw, fields.get("completion_tokens", "usage.completion_tokens"), 0)
@@ -120,23 +123,41 @@ class Responder:
                 "reasoning_tokens": reasoning_tokens
             }
 
-        return {
+        cached_tokens = self._get_by_path(raw, fields.get("cached_tokens", "usage.prompt_tokens_details.cached_tokens"), None)
+        if cached_tokens is not None:
+            usage["prompt_tokens_details"] = {
+                "cached_tokens": cached_tokens
+            }
+
+        message = {
+            "role": defaults.get("role", "assistant"),
+            "content": content or ""
+        }
+
+        if tool_calls:
+            message["tool_calls"] = tool_calls
+            if message["content"] == "":
+                message["content"] = None
+
+        choice = {
+            "index": defaults.get("index", 0),
+            "message": message,
+            "finish_reason": self._get_by_path(raw, fields.get("finish_reason", "choices[0].finish_reason")) or defaults.get("finish_reason")
+        }
+
+        result = {
             "id": f"chatcmpl-{uuid.uuid4().hex[:24]}",
             "object": defaults.get("object", "chat.completion"),
             "created": int(time.time()),
             "model": model,
-            "choices": [
-                {
-                    "index": defaults.get("index", 0),
-                    "message": {
-                        "role": defaults.get("role", "assistant"),
-                        "content": content or ""
-                    },
-                    "finish_reason": self._get_by_path(raw, fields.get("finish_reason", "choices[0].finish_reason")) or defaults.get("finish_reason")
-                }
-            ],
+            "choices": [choice],
             "usage": usage
         }
+
+        if reasoning_content:
+            result["_thinking"] = reasoning_content
+
+        return result
 
     def to_openai_stream_format(self, raw: Dict[str, Any], model: str) -> Dict[str, Any]:
         if not raw:
@@ -156,6 +177,8 @@ class Responder:
 
         stream_fields = self._get_config_value("stream_fields", default={})
         content_path = stream_fields.get("content_path", "choices[0].delta.content")
+        tool_calls_path = stream_fields.get("tool_calls_path", "choices[0].delta.tool_calls")
+        reasoning_content_path = stream_fields.get("reasoning_content_path", "choices[0].delta.reasoning_content")
 
         try:
             choices = raw.get("choices")
@@ -168,7 +191,18 @@ class Responder:
             content = ""
             finish_reason = None
 
-        return {
+        tool_calls = self._get_by_path(raw, tool_calls_path)
+        reasoning_content = self._get_by_path(raw, reasoning_content_path)
+
+        delta_obj = {
+            "content": content,
+            "role": stream_fields.get("role", "assistant")
+        }
+
+        if tool_calls:
+            delta_obj["tool_calls"] = tool_calls
+
+        result = {
             "id": f"chatcmpl-{uuid.uuid4().hex[:24]}",
             "object": stream_fields.get("object", "chat.completion.chunk"),
             "created": int(time.time()),
@@ -176,11 +210,93 @@ class Responder:
             "choices": [
                 {
                     "index": stream_fields.get("index", 0),
-                    "delta": {
-                        "content": content,
-                        "role": stream_fields.get("role", "assistant")
-                    },
+                    "delta": delta_obj,
                     "finish_reason": finish_reason
                 }
             ]
         }
+
+        if reasoning_content:
+            result["_reasoning_content"] = reasoning_content
+
+        return result
+
+    def check_error(self, raw_response: Dict[str, Any], adapter_name: str = "") -> None:
+        self._check_sensitive(raw_response, adapter_name)
+
+        vendor_error = VendorErrorRegistry.create_vendor_error(
+            adapter_name.lower(),
+            raw_response
+        )
+        if vendor_error is None:
+            return
+
+        success_code = self._get_config_value("error_check", "success_code", default=0)
+        auth_code = self._get_config_value("error_check", "auth_code", default=1004)
+
+        translator = ErrorTranslator(self.config_dir)
+        translator.translate(vendor_error, success_code=success_code, auth_code=auth_code)
+
+    def _check_sensitive(self, raw_response: Dict[str, Any], adapter_name: str = "") -> None:
+        sensitive_check = self._get_config_value("error_check", "sensitive_check")
+        if not sensitive_check:
+            return
+
+        input_path = sensitive_check.get("input_sensitive_type_path", "").split(".")
+        output_path = sensitive_check.get("output_sensitive_type_path", "").split(".")
+
+        input_type = raw_response
+        for key in input_path:
+            if isinstance(input_type, dict):
+                input_type = input_type.get(key)
+            else:
+                input_type = None
+                break
+
+        if input_type is not None and input_type != "null" and input_type != "" and input_type != 0:
+            raise ContentFilteredError(
+                message=f"{adapter_name} 输入内容敏感: {input_type}",
+                provider=adapter_name
+            )
+
+        output_type = raw_response
+        for key in output_path:
+            if isinstance(output_type, dict):
+                output_type = output_type.get(key)
+            else:
+                output_type = None
+                break
+
+        if output_type is not None and output_type != "null" and output_type != "" and output_type != 0:
+            raise ContentFilteredError(
+                message=f"{adapter_name} 输出内容敏感: {output_type}",
+                provider=adapter_name
+            )
+
+    def collect_stream_result(self, raw_response: Dict[str, Any], result: Dict[str, Any]) -> None:
+        if raw_response is None:
+            return
+        if "chunks" not in raw_response:
+            raw_response["chunks"] = []
+        raw_response["chunks"].append(result)
+
+        reasoning_content = result.pop("_reasoning_content", None)
+        if reasoning_content:
+            if "_thinking" not in raw_response:
+                raw_response["_thinking"] = ""
+            raw_response["_thinking"] += reasoning_content
+
+        delta = result.get("choices", [{}])[0].get("delta", {})
+        content = delta.get("content") or ""
+        if content:
+            if "_still" not in raw_response:
+                raw_response["_still"] = ""
+            raw_response["_still"] += content
+
+        tool_calls = delta.get("tool_calls")
+        if tool_calls:
+            if "_tools" not in raw_response:
+                raw_response["_tools"] = []
+            raw_response["_tools"].extend(tool_calls)
+
+        return result

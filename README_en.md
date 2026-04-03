@@ -10,12 +10,29 @@
 
 Adapter Library for Chinese Large Language Models (LLMs), converts model API responses to OpenAI format, seamlessly integrates with LangChain, LlamaIndex, Pydantic and other major ML frameworks.
 
+## Contributors
+
+CNLLM is actively under development, contributors are welcome!
+
+We're looking for help with:
+- 🌐 **New Vendor Adapters** - Develop adapters for more LLM providers (GLM, doubao, Kimi, etc.)
+- 🔗 **ML Framework Deep Adaptation** - Adaptation verification for LlamaIndex, LiteLLM, etc.
+- 🐛 **Capability Expansion** - Develop adapters for Embedding, Multimodal
+- 📖 **Documentation** - Improve docs and add examples
+- 💡 **Feature Suggestions** - Propose new feature ideas
+
+Quick start: [Contributor Guide](docs/CONTRIBUTOR_en.md)
+Detailed architecture: [System Architecture](docs/ARCHITECTURE_en.md)
+
 ## Changelog
 
-### v0.4.0 (Planned)
+### v0.4.0 (2026-04-03)
 
-- [ ] Model adaptation development (e.g., Doubao, Kimi, etc.)
-- [ ] Framework adaptation validation and deep integration (LlamaIndex, Pydantic, LiteLLM, Instructor, etc.)
+- ✨ **mimo Adapter** - Xiaomi mimo model adapter, supports "mimo-v2-pro", "mimo-v2-omni", "mimo-v2-flash"
+- ✨ **Architecture Refactoring** - BaseAdapter + Responder + VendorError three-layer architecture separation, clear responsibilities
+- ✨ **.think Property** - `client.chat.think` retrieves reasoning_content, not included in resp
+- ✨ **.tools Property** - `client.chat.tools` retrieves tool_calls, supports streaming accumulation
+- ✨ **Streaming Accumulation** - `.think`, `.still`, `.tools` support real-time accumulation during streaming response
 
 ### v0.3.3 (2026-04-02) ✨
 
@@ -44,7 +61,8 @@ Adapter Library for Chinese Large Language Models (LLMs), converts model API res
 
 ## Supported Models
 
-- **Verified**: MiniMax-M2.7、MiniMax-M2.5、MiniMax-M2.1、MiniMax-M2
+- **Xiaomi mimo**: mimo-v2-pro, mimo-v2-flash, mimo-v2-omni
+- **MiniMax**: MiniMax-M2.7、MiniMax-M2.5、MiniMax-M2.1、MiniMax-M2
 - **More providers and models in development**
 
 ## Installation
@@ -58,9 +76,9 @@ pip install cnllm
 ### Initialization Interface
 
 ```python
-from cnllm import CNLLM, MINIMAX_API_KEY
+from cnllm import CNLLM
 
-client = CNLLM(model="minimax-m2.7", api_key=MINIMAX_API_KEY)
+client = CNLLM(model="minimax-m2.7", api_key="your_api_key")
 ```
 
 ### Three Entry Points
@@ -68,7 +86,7 @@ client = CNLLM(model="minimax-m2.7", api_key=MINIMAX_API_KEY)
 **1. Simple Call** **`client("prompt")`**
 
 ```python
-resp = client("Introduce yourself in one sentence")  # Simple call does not accept other parameters
+resp = client("Introduce yourself in one sentence")
 ```
 
 **2. Standard Call** **`client.chat.create(prompt="prompt")`**
@@ -92,8 +110,8 @@ resp = client.chat.create(
 ```python
 resp = client.chat.create(
     prompt="Introduce yourself",
-    model="minimax-m2.5",  # Optional, override model
-    api_key="your_other_api_key"  # Optional, override API Key, if not filled, defaults to key at client entry
+    model="minimax-m2.5",
+    api_key="your_other_api_key"
 )
 ```
 
@@ -102,17 +120,36 @@ resp = client.chat.create(
 **1. Get Clean Chat Response**
 
 ```python
-# Traditional way
 print(resp["choices"][0]["message"]["content"])
 
-# Using still attribute (recommended)
 print(client.chat.still)
 ```
 
 **2. Get Full Response**
 
 ```python
-print(client.chat.raw)  # Raw response from the model
+print(client.chat.raw)
+```
+
+**3. Get Model Thinking Process (reasoning_content)**
+
+```python
+resp = client.chat.create(
+    messages=[{"role": "user", "content": "Explain why sky is blue"}],
+    thinking=True
+)
+print(client.chat.think)
+```
+
+**4. Get Tool Calls (tool_calls)**
+
+```python
+tools = [{"type": "function", "function": {"name": "get_weather", "parameters": {...}}}]
+resp = client.chat.create(
+    messages=[{"role": "user", "content": "How's the weather in Beijing?"}],
+    tools=tools
+)
+print(client.chat.tools)
 ```
 
 ## Unified Interface Parameters
@@ -142,15 +179,6 @@ print(client.chat.raw)  # Raw response from the model
 | `user`              | str           | -        | -            |     ✅      |     ✅     | User identifier                                       |
 | `organization`      | str           | -        | -            |     ✅      |     ✅     | When using MiniMax, automatically maps to MiniMax standard field group_id |
 
-**Notes**:
-
-- Call entry parameters take priority, recommend passing common parameters via client init, can flexibly override and pass more parameters at single call.
-- Required parameters only need to ensure not empty when making request, i.e., either client init or call entry should have the parameter.
-
-#### Simple Call client()
-
-Directly pass prompt string, no extra parameters.
-
 ## Response Format
 
 Through any API call style in the quick start, the model's response will be converted to OpenAI standard format:
@@ -172,7 +200,13 @@ Through any API call style in the quick start, the model's response will be conv
     "usage": {
         "prompt_tokens": 10,
         "completion_tokens": 20,
-        "total_tokens": 30
+        "total_tokens": 30,
+        "prompt_tokens_details": {
+            "cached_tokens": 0
+        },
+        "completion_tokens_details": {
+            "reasoning_tokens": 0
+        }
     }
 }
 ```
@@ -189,29 +223,24 @@ import asyncio
 
 client = CNLLM(model="minimax-m2.7", api_key="your_key")
 
-# Wrap client with LangChainRunnable
 runnable = LangChainRunnable(client)
 
 prompt = ChatPromptTemplate.from_messages([
     ("system", "You are a helpful assistant"),("human", "{input}")])
 
-# Build LangChain chain
 chain = prompt | runnable
 result = chain.invoke({"input": "What is 2+2?"})
 print(result.content)
 
-# Sync streaming output
 for chunk in runnable.stream("Count to 5"):
     print(chunk, end="", flush=True)
 
-# Async streaming output
 async def async_stream_test():
     async for chunk in runnable.astream("Count to 3"):
         print(chunk, end="", flush=True)
 
 asyncio.run(async_stream_test())
 
-# Batch calls
 results = runnable.batch(["Hello", "How are you?"])
 for r in results:
     print(r.content)
