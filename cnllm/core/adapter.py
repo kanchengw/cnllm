@@ -136,10 +136,26 @@ class BaseAdapter:
         return mapping.get(model, model)
 
     def get_api_path(self) -> str:
+        base_url_config = self._get_config_value("optional_fields", "base_url", default={})
+        if isinstance(base_url_config, dict):
+            return base_url_config.get("text", "")
         return self._get_config_value("request", "url", default="")
 
     def get_base_url(self) -> str:
-        return self.base_url or self._get_config_value("request", "base_url", default="")
+        if self.base_url:
+            return self.base_url
+        base_url_config = self._get_config_value("optional_fields", "base_url", default={})
+        if isinstance(base_url_config, dict):
+            return base_url_config.get("default", "")
+        return self._get_config_value("request", "base_url", default="")
+
+    def get_header_mappings(self) -> Dict[str, str]:
+        mappings = {}
+        optional_fields = self._get_config_value("optional_fields", default={})
+        for field_name, field_config in optional_fields.items():
+            if isinstance(field_config, dict) and field_config.get("head"):
+                mappings[field_name] = field_config["head"]
+        return mappings
 
     def _build_payload(self, params: Dict[str, Any]) -> Dict[str, Any]:
         model = params.get("model") or self.model
@@ -151,17 +167,20 @@ class BaseAdapter:
 
         optional_fields = self._get_config_value("optional_fields", default={})
 
-        excluded = {"model", "api_key", "base_url", "timeout", "max_retries",
-                   "retry_delay", "fallback_models"}
-
         for key, value in params.items():
-            if key in excluded:
+            if key == "model":
                 continue
             if value is None:
                 continue
-            mapped_key = optional_fields.get(key, key)
-            if mapped_key == "":
-                mapped_key = key
+            field_config = optional_fields.get(key, key)
+            if isinstance(field_config, dict):
+                if field_config.get("body") == "__skip__":
+                    continue
+                mapped_key = field_config.get("body") or field_config.get("head", key)
+            else:
+                if field_config == "__skip__":
+                    continue
+                mapped_key = field_config if field_config else key
             payload[mapped_key] = value
 
         return payload
@@ -208,14 +227,20 @@ class BaseAdapter:
             timeout=self.timeout,
             max_retries=self.max_retries,
             retry_delay=self.retry_delay,
-            provider=self.ADAPTER_NAME
+            provider=self.ADAPTER_NAME,
+            header_mappings=self.get_header_mappings()
         )
+
+        extra_headers = {}
+        for user_key, header_key in self.get_header_mappings().items():
+            if user_key in params and params[user_key]:
+                extra_headers[header_key] = params[user_key]
 
         try:
             if stream:
-                return self._handle_stream(client, api_path, payload, model)
+                return self._handle_stream(client, api_path, payload, model, extra_headers)
             else:
-                raw_resp = client.post(api_path, payload)
+                raw_resp = client.post(api_path, payload, extra_headers)
                 self._raw_response = raw_resp
                 self._check_response_error(raw_resp)
                 result = self._to_openai_format(raw_resp, model)
@@ -231,12 +256,16 @@ class BaseAdapter:
             raise
         except Exception as e:
             error_msg = getattr(e, 'message', str(e))
-            raise ModelAPIError(f"{self.ADAPTER_NAME} API 请求失败: {error_msg}")
+            error_suggestion = getattr(e, 'suggestion', None)
+            raise ModelAPIError(
+                f"{self.ADAPTER_NAME} API 请求失败: {error_msg}",
+                suggestion=error_suggestion
+            )
 
-    def _handle_stream(self, client: BaseHttpClient, api_path: str, payload: Dict[str, Any], model: str) -> Iterator[Dict[str, Any]]:
+    def _handle_stream(self, client: BaseHttpClient, api_path: str, payload: Dict[str, Any], model: str, extra_headers: Dict[str, str] = None) -> Iterator[Dict[str, Any]]:
         self._raw_response = {}
         return StreamHandler.handle_stream(
-            client, api_path, payload, self._to_openai_stream_format
+            client, api_path, payload, self._to_openai_stream_format, extra_headers
         )
 
     def _to_openai_format(self, raw: Dict[str, Any], model: str) -> Dict[str, Any]:

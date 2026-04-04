@@ -262,7 +262,8 @@ class ModelAPIError(CNLLMError):
         self,
         message: str = "模型 API 调用失败",
         provider: str = "unknown",
-        details: Optional[Dict[str, Any]] = None
+        details: Optional[Dict[str, Any]] = None,
+        suggestion: str = None
     ):
         super().__init__(
             message=message,
@@ -270,7 +271,7 @@ class ModelAPIError(CNLLMError):
             status_code=500,
             provider=provider,
             details=details,
-            suggestion="请稍后重试，或联系 API 提供商"
+            suggestion=suggestion or "请稍后重试，或联系 API 提供商"
         )
 
 

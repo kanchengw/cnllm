@@ -25,6 +25,10 @@ CNLLM 正在积极开发中，欢迎贡献者参与！
 
 ## 更新日志
 
+### v0.4.1 (2026-04-04)
+
+- 🔧 **已知 bug 修复**
+
 ### v0.4.0（2026-04-03）
 
 - ✨ **mimo适配** - 小米mimo模型适配开发，支持"mimo-v2-pro"、"mimo-v2-omni"、"mimo-v2-flash"
@@ -117,7 +121,7 @@ resp = client.chat.create(
 
 ### 响应入口
 
-**1. 获取纯净会话响应**
+**会话响应入口**
 
 ```python
 client = CNLLM(model="minimax-m2.7", api_key=MINIMAX_API_KEY)
@@ -133,20 +137,20 @@ print(client.chat.still)     # 返回：你好，我是minimax-m2.7模型...
 print(client.chat.raw)     # 返回：{厂商原生响应的 JSON 字符串}
 ```
 
-**2. 获取模型思考过程（reasoning_content）**
+**获取模型思考过程（reasoning_content）**
 
 ```python
-tools = [{"type": "function", "function": {"name": "get_weather", "parameters": {...}}}]
-resp = client.chat.create(thinking=True, tools=tools)
+resp = client.chat.create(thinking=True, ...)
 
 print(client.chat.think)     # 返回：Let me think about this, user asked me to ...
 ```
 
-**3. 获取工具调用消息（tool_calls）**
+**获取工具调用消息（tool_calls）**
 
 ```python
 tools = [{"type": "function", "function": {"name": "get_weather", "parameters": {...}}}]
 resp = client.chat.create(tools=tools, ...)
+
 print(client.chat.tools)     # 返回：{工具调用消息字典}
 ```
 
@@ -158,7 +162,7 @@ print(client.chat.tools)     # 返回：{工具调用消息字典}
 | `api_key`           | str         | ✅  | -        |    ✅    |    ✅    | API 密钥                          |
 | `messages`          | list\[dict] | ⚠️ | -        |    ❌    |    ✅    | OpenAI 格式消息列表（与 prompt 二选一）     |
 | `prompt`            | str         | ⚠️ | -        |    ❌    |    ✅    | 简写参数（与 messages 二选一） |
-| `fallback_models`   | dict        | -  | {}       |    ✅    |    ❌    | 备用模型配置                          |
+| `fallback_models`   | dict        | -  | {}       |    ✅    |    ❌    | 备用模型配置（具体见文档底部的 FallbackManager 流程设计）                          |
 | `base_url`          | str         | -  | API 默认地址 |    ✅    |    ✅    | 自定义 API 地址                      |
 | `timeout`           | int         | -  | 60       |    ✅    |    ✅    | 请求超时（秒）                         |
 | `max_retries`       | int         | -  | 3        |    ✅    |    ✅    | 最大重试次数                          |
@@ -173,10 +177,9 @@ print(client.chat.tools)     # 返回：{工具调用消息字典}
 | `thinking`          | bool        | -  | -        |    ✅    |    ✅    | 思考模式（MiniMax-M1）                |
 | `presence_penalty`  | float       | -  | -        |    ✅    |    ✅    | 存在惩罚                            |
 | `frequency_penalty` | float       | -  | -        |    ✅    |    ✅    | 频率惩罚                            |
+| `organization`      | str         | -  | -        |    ✅    |    ✅    | 使用 MiniMax 时自动映射为 group_id      |
 | `stop`              | str/list    | -  | -        |    ✅    |    ✅    | 停止序列                            |
 | `user`              | str         | -  | -        |    ✅    |    ✅    | 用户标识                            |
-| `organization`      | str         | -  | -        |    ✅    |    ✅    | 使用MiniMax时会自动映射为MiniMax标准字段group_id               |
-
 **说明**：
 
 - 调用入口参数优先，复用客户端建议传入常用参数，单次调用时可灵活覆盖和传入更多参数。
@@ -257,6 +260,36 @@ results = runnable.batch(["Hello", "How are you?"])
 for r in results:
     print(r.content)
 ```
+
+##  FallbackManager 模型选择的流程设计
+
+只有客户端初始化入口接受配置`fallback_models`参数，为追求程序或应用运行时的稳定性建议配置此项。
+当客户端入口处的主模型不可用时，会按顺序尝试`fallback_models`中的模型。
+代码示例：
+
+```python
+client = CNLLM(
+    model="minimax-m2.7", api_key="minimax_key", 
+    fallback_models={"mimo-v2-flash": "xiaomi-key", "minimax-m2.5": None}  # None 表示使用主模型配置的 API_key
+    )   
+resp = client.chat.create(prompt="2+2等于几？")  # 调用入口如再次配置模型，将会覆盖客户端入口处配置的所有模型
+print(resp)
+```
+
+```mermaid
+flowchart TD
+    A[chat.create 调用入口] --> B{model 指定?}
+    B -->|是| C[调用 adapter]
+    C -->|成功| J[调用入口模型成功]
+    C -->|失败| K[ModelNotSupportedError]
+    B -->|否| D[调用 FallbackManager]
+    D --> E{主模型可用?}
+    E -->|是| F[主模型成功]
+    E -->|否| G{按顺序尝试 fallback_models}
+    G -->|全部失败| H[FallbackError]
+    G -->|任一成功| I[该模型成功]
+````
+***
 
 ## 许可证
 

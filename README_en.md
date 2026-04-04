@@ -26,6 +26,10 @@ Detailed architecture: [System Architecture](docs/ARCHITECTURE_en.md)
 
 ## Changelog
 
+### v0.4.1 (2026-04-04)
+
+- 🔧 **Bug fixes**
+
 ### v0.4.0 (2026-04-03)
 
 - ✨ **mimo Adapter** - Xiaomi mimo model adapter, supports "mimo-v2-pro", "mimo-v2-omni", "mimo-v2-flash"
@@ -117,7 +121,7 @@ resp = client.chat.create(
 
 ### Response Entry
 
-**1. Get Clean Chat Response**
+**Get Clean Chat Response**
 
 ```python
 client = CNLLM(model="minimax-m2.7", api_key=MINIMAX_API_KEY)
@@ -133,20 +137,20 @@ print(client.chat.still)     # Returns: Hello, I'm minimax-m2.7 model...
 print(client.chat.raw)     # Returns: {vendor native response JSON string}
 ```
 
-**2. Get Model Thinking Process (reasoning_content)**
+**Get Model Thinking Process (reasoning_content)**
 
 ```python
-tools = [{"type": "function", "function": {"name": "get_weather", "parameters": {...}}}]
-resp = client.chat.create(thinking=True, tools=tools)
+resp = client.chat.create(thinking=True, ...)
 
 print(client.chat.think)     # Returns: Let me think about this, user asked me to ...
 ```
 
-**3. Get Tool Calls (tool_calls)**
+**Get Tool Calls (tool_calls)**
 
 ```python
 tools = [{"type": "function", "function": {"name": "get_weather", "parameters": {...}}}]
 resp = client.chat.create(tools=tools, ...)
+
 print(client.chat.tools)     # Returns: {tool call message dict}
 ```
 
@@ -247,6 +251,35 @@ asyncio.run(async_stream_test())
 results = runnable.batch(["Hello", "How are you?"])
 for r in results:
     print(r.content)
+```
+
+## FallbackManager
+
+Only the client initialization entry accepts the `fallback_models` parameter. It is recommended to configure this option for program or application runtime stability.
+When the primary model at the client entry is unavailable, it will try models in `fallback_models` in order.
+Code example:
+
+```python
+client = CNLLM(
+    model="minimax-m2.7", api_key="minimax_key",
+    fallback_models={"mimo-v2-flash": "xiaomi-key", "minimax-m2.5": None}  # None means use the API_key configured for the primary model
+    )
+resp = client.chat.create(prompt="What is 2+2?")  # If model is configured again at the call entry, it will override all models configured at the client entry
+print(resp)
+```
+
+```mermaid
+flowchart TD
+    A[chat.create Call Entry] --> B{model specified?}
+    B -->|Yes| C[Call adapter]
+    C -->|Success| J[Entry model success]
+    C -->|Failure| K[ModelNotSupportedError]
+    B -->|No| D[Call FallbackManager]
+    D --> E{Primary model available?}
+    E -->|Yes| F[Primary model success]
+    E -->|No| G{Try fallback_models in order}
+    G -->|All fail| H[FallbackError]
+    G -->|Any succeeds| I[That model succeeds]
 ```
 
 ## License

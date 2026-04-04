@@ -1,9 +1,7 @@
 # 新厂商适配开发指南
 
-本文档梳理开发新厂商适配的标准流程，基于MiniMax和小米mimo的适配开发经验总结。
-项目基础框架已基本完善，详细的系统架构可以参阅[系统架构](docs/ARCHITECTURE.md)。
-本文主要关注适配新模型或新厂商的适配开发流程，包括厂商适配器的创建、继承、实现等。
-欢迎贡献者参与，一起完善CNLLM的适配器库。
+CNLLM 项目文本处理方向的基础框架已基本完善，详细的系统架构可以参阅[系统架构](ARCHITECTURE.md)。
+本文档梳理开发新厂商适配的标准流程，基于 MiniMax 和小米 mimo 适配开发经验总结。
 
 ## 两种路线
 
@@ -23,117 +21,204 @@
   `mask`掩码输入
   最后以符合OpenAI API规范的格式返回响应。
 
----
+***
 
 ## 开发流程概览
 
-```
-┌─────────────────────────────────────────────────────────┐
-│  阶段1: 准备                                             │
-│    1.1 确认厂商 API 格式                                 │
-│    1.2 分析请求/响应差异                                 │
-│    1.3 创建配置文件                                      │
-├─────────────────────────────────────────────────────────┤
-│  阶段2: 配置                                             │
-│    2.1 创建 configs/<vendor>/                           │
-│    2.2 编写 request_<vendor>.yaml                       │
-│    2.3 编写 response_<vendor>.yaml                      │
-├─────────────────────────────────────────────────────────┤
-│  阶段3: 厂商适配器开发                                       │
-│    3.1 创建 vendor/<vendor>.py                          │
-│    3.2 继承 BaseAdapter + Responder + VendorError       │
-│    3.3 实现厂商特殊逻辑                                  │
-├─────────────────────────────────────────────────────────┤
-│  阶段4: 测试验证                                         │
-│    基础功能验证                                  │
-└─────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    阶段1["阶段1: 准备"] --> 阶段2["阶段2: 厂商 YAML 配置"]
+    阶段2 --> 阶段3["阶段3: 厂商适配器开发"]
+    阶段3 --> 阶段4["阶段4: 测试验证"]
+
+    阶段1 --> A1["1.1 确认厂商 API 格式<br/>1.2 分析请求/响应差异<br/>1.3 创建配置文件"]
+    阶段2 --> A2["2.1 创建 configs/<vendor>/<br/>2.2 编写 request_<vendor>.yaml<br/>2.3 编写 response_<vendor>.yaml"]
+    阶段3 --> A3["3.1 创建 vendor/<vendor>.py<br/>3.2 继承 BaseAdapter + Responder + VendorError<br/>3.3 实现厂商特殊逻辑"]
+    阶段4 --> A4["单元测试 / 集成测试 / scripts 验证"]
 ```
 
----
+***
 
 ## 阶段1: 准备
 
-### 1.1 确认厂商 API 格式
+### 1.1 架构示意图
 
-首先确认厂商 API 的：
-- Base URL
-- API 路径
-- 认证方式
-- 关键参数
+```mermaid
+flowchart LR
+    subgraph 用户层
+        A[chat.create 调用] & C[厂商 API 端口] & E[OpenAI 标准结构]
+    end
 
-**示例 - 小米：**
-```yaml
-base_url: "https://api.xiaomimimo.com/v1"
-url: "/chat/completions"
-headers:
-  Content-Type: "application/json"
-  Authorization: "Bearer ${api_key}"
+    subgraph 请求映射层
+        F[CNLLM请求字段 → 厂商请求字段] & B[Adapter]
+    end
+
+    B --> C
+
+    subgraph 响应映射层
+        H[厂商响应字段 → OpenAI标准字段] & G[Responder]
+    end
+
+    A --> B
+    C --> G
+    G --> E
 ```
 
-### 1.2 分析请求/响应差异
+### 1.2 确认字段差异
 
-对比 OpenAI 标准格式，找出厂商特殊之处：
+#### 请求字段差异（以 MiniMax 为例）
 
-| 方面 | OpenAI 标准 | 厂商特殊 |
-|------|------------|---------|
-| 请求 | `thinking` (boolean) | `thinking.type` (string: enabled/disabled) |
-| 响应 | `reasoning_content` 无 | `choices[].message.reasoning_content` |
-| 参数 | 无 | `tools[].function.strict` |
+**CNLLM 标准请求字段**以**OpenAI 标准请求参数**为基础，增加如`thinking`等国内厂商基本统一的字段。
+这样做的好处是，用户在切换不同模型时，仅需遵守一套字段标准。
 
-### 1.3 记录差异点
+**非 OpenAI 标准请求字段**
+- 如`thinking` 深度思考模式并非 OpenAI 标准字段，但已作为**CNLLM 标准请求字段**开发，统一各厂商的不同格式。
+  在 CNLLM标准请求字段中，将小米 mimo 的 `"thinking": {"type": "enabled"}`和 `thinking": {"type": "disabled"}` 统一为 `thinking=true` 或 `thinking=false`这种更符合用户习惯的格式。
 
-在 `docs/<vendor>.md` 中记录：
-- 厂商自定义参数（请求端）
-- 厂商自定义字段（响应端）
-- 暂不支持的功能
+如厂商请求字段与**CNLLM 标准请求字段**不一致，需在**厂商 YAML 配置文件**中映射，映射为**厂商请求字段**:
+- 如用户使用 MiniMax M2 系列模型时传入 `max_tokens` 字段时，将被映射为 `max_completion_tokens`  字段
+- 如用户使用小米 mimo 模型时传入的`"thinking": {"type": "enabled"}`，将被映射为 `thinking=true`
 
----
+如为**厂商特有参数**，则用户可直接使用厂商定义的字段，会直接透传到厂商 API，如 MiniMax M2系列模型的特殊参数:
+- `top_k` 最大K采样数
+- `mask` 掩码输入
 
-## 阶段2: 配置
+CNLLM 在完成 **OpenAI 标准请求字段 → 厂商请求字段**的映射后，加入厂商特有字段，拼接成适配厂商 API 的完整请求体。
 
-### 2.1 目录结构
+**请求头**
 
-```
-configs/<vendor>/
-├── request_<vendor>.yaml   # 请求配置
-└── response_<vendor>.yaml  # 响应配置
-```
+| CNLLM 标准请求字段 | MiniMax 请求字段 |
+| :----------------: | :--------------: |
+| `api_key`          | `Authorization` |
+| `organization`     | `group_id`       |
 
-### 2.2 request_<vendor>.yaml
+**请求体字段**
+
+| CNLLM 标准请求字段 | MiniMax 请求字段 |
+| :----------------: | :--------------: |
+| `model`           | `model`         |
+| `messages`        | `messages`      |
+| `temperature`     | `temperature`   |
+| `top_p`           | `top_p`        |
+| `stream`          | `stream`        |
+| `stop`            | `stop`          |
+| `presence_penalty` | `presence_penalty` |
+| `frequency_penalty` | `frequency_penalty` |
+| `user`            | `user`          |
+| `tools`           | `tools`         |
+| `tool_choice`     | `tool_choice`   |
+| `max_tokens`      | `max_completion_tokens` |
+| `thinking`        | `thinking`        |
+| -                 | `mask`     |
+| -            | `top_k`       |
+
+CNLLM 的标准**响应字段**将国内厂商的响应字段统一为 **OpenAI 标准响应字段**，之后封装为 OpenAI 标准响应格式。
+
+如厂商响应字段与 OpenAI 标准字段不一致，需在**厂商 YAML 配置文件**中映射为 **OpenAI 标准响应字段**:
+- 如 MiniMax 的响应中，`reasoning_content` 字段，将被从 CNLM中的完整响应体中丢弃。
+  但是，我们提供了`chat.create.think`的入口，用户可通过该入口获取厂商原生响应中的`reasoning_content`字段。
+  以及`chat.create.raw`可获取厂商原生响应中的所有字段。
+
+CNLLM 在完成 **厂商响应字段 → OpenAI 标准响应字段**的映射后，拼接成完整响应体。
+
+#### 响应字段差异（以 MiniMax 为例）
+
+| CNLLM 标准响应字段 | MiniMax 响应字段 |
+| :----------------: | :--------------: |
+| `id`              | `id`             |
+| `created`         | `created`        |
+| `model`           | `model`          |
+| `content`         | `choices[0].message.content` |
+| `tool_calls`      | `choices[0].message.tool_calls` |
+| `prompt_tokens`   | `usage.prompt_tokens` |
+| `completion_tokens` | `usage.completion_tokens` |
+| `total_tokens`    | `usage.total_tokens` |
+| `reasoning_tokens` | `usage.completion_tokens_details.reasoning_tokens` |
+| -                 | `choices[0].message.reasoning_content` |
+
+***
+
+## 阶段2: 厂商 YAML 配置
+
+### 2.1 YAML 逻辑实现
+
+| 用途 | 访问点 | YAML 路径 | YAML 表名 |
+| --- | --- | --- | --- |
+| 获取默认值 | `timeout`, `max_retries`... | `optional_fields.{field}.default` | request\_{vendor}.yaml |
+| 厂商请求字段映射 | `_build_payload` | `optional_fields.{field}.body` | request\_{vendor}.yaml |
+| 请求头映射 | `_build_headers` | `optional_fields.{field}.header` | request\_{vendor}.yaml |
+| 必填参数校验 | `validate_required_params` | `required_fields` | request\_{vendor}.yaml |
+| 参数支持校验 | `filter_supported_params` | `optional_fields` | request\_{vendor}.yaml |
+| 互斥参数校验 | `validate_one_of` | `one_of` | request\_{vendor}.yaml |
+| API配置 | `get_base_url`, `get_api_path` | `optional_fields.base_url.default`, `request.method` | request\_{vendor}.yaml |
+| 模型名映射 | `model_mapping` | `model_mapping` | request\_{vendor}.yaml |
+| OpenAI 响应字段映射 | `Responder` | `fields` | response\_{vendor}.yaml |
+| 敏感内容检测 | `Responder` | `error_check.sensitive_check` | response\_{vendor}.yaml |
+| 流式响应映射 | `Responder` | `stream_fields` | response\_{vendor}.yaml |
+
+
+### 2.2 请求配置 configs/request\_{vendor}.yaml
+
+**HTTP 请求配置**
 
 ```yaml
 request:
   method: "POST"
-  url: "/chat/completions"
-  base_url: "https://api.<vendor>.com/v1"
   headers:
     Content-Type: "application/json"
     Authorization: "Bearer ${api_key}"
+```
 
-required_fields:
-  api_key: ""
-  model: ""
+**必填字段和选填字段映射**
 
-one_of:
+字段映射部分采用键值对形式，如厂商请求字段与OpenAI标准请求字段一致，则值可留空。
+
+```yaml
+request:  # 请求头配置
+  method: "POST"
+  headers: 
+    Content-Type: "application/json"
+    Authorization: "Bearer ${api_key}"
+
+required_fields:  # 必填参数校验，参数支持校验
+  model: ""  # Value 留空表示无需映射，字段保持不变，便于人工维护
+  api_key:
+    body: "__skip__" # 请求头或内部字段，跳过请求体构建
+
+one_of:  # 互斥参数校验
   messages_or_prompt:
     messages: ""
     prompt: ""
 
-optional_fields:
+optional_fields:  # 参数支持校验
+  base_url:
+    body: "__skip__"
+    default: "https://api.minimaxi.com/v1"  # 有默认值的字段
+    text: "text/chatcompletion_v2"
+  organization:
+    body: "__skip__"  
+    head: "group_id"  # 请求头字段映射，在 build_headers()函数中映射
+  max_tokens:
+    body: "max_completion_tokens"  # 请求体字段映射，在 build_payload()函数中映射
   stream: ""
-  thinking:
-    path: "thinking"
-    transform:
-      true: {"type": "enabled"}
-      false: {"type": "disabled"}
-  user: ""
-  # ...其他支持的参数
+  top_p: ""
+  top_k: ""
+  tools: ""
+    # ...其他支持的字段
+```
 
-model_mapping:
-  <model-a>: "<model-a>"
-  <model-b>: "<model-b>"
+**模型映射**
 
-error_check:
+```yaml
+model_mapping:  # 模型映射，模型支持校验
+  minimax-m2: "MiniMax-M2"
+  minimax-m2.1: "MiniMax-M2.1"
+```
+
+**错误码映射**
+
+```yaml
+error_check: # 请求配置中的错误事件发生在模型响应前，模型并未成功响应
   code_path: "base_resp.status_code"
   success_code: 0
   message_path: "base_resp.status_msg"
@@ -143,446 +228,254 @@ error_check:
       type: "unknown_error"
       message: "未知错误"
       suggestion: "请稍后重试"
-    # ...其他错误码映射
+    # ...其他厂商 API 端口的错误码映射
 ```
 
-**关键配置项：**
-
-| 配置项 | 说明 |
-|--------|------|
-| `method` | HTTP 方法，通常为 POST |
-| `base_url` | API 基础地址 |
-| `url` | API 路径 |
-| `required_fields` | 必填字段 |
-| `optional_fields` | 可选字段及其转换规则 |
-| `model_mapping` | 模型名称映射 |
-| `error_check` | 错误检查配置 |
-
-### 2.3 response_<vendor>.yaml
+### 2.3 响应配置 configs/response\_{vendor}.yaml
 
 ```yaml
-response:
-  fields:
-    id: "id"
-    object: "object"
-    created: "created"
-    model: "model"
-    choices: "choices"
-    usage: "usage"
+fields:  # 响应配置目前采用路径映射，与请求配置不同
+  id: "id"
+  created: "created"
+  model: "model"
+  content: "choices[0].message.content"
+  tool_calls: "choices[0].message.tool_calls"
+  # ...其他字段映射
 
-  choices:
-    index: "index"
-    message: "message"
-    finish_reason: "finish_reason"
+defaults: # 兜底的默认值，厂商响应中字段可能不存在
+  object: "chat.completion"
+  index: 0
+  role: "assistant"
+  finish_reason: "stop"
 
-  message:
-    role: "role"
-    content: "content"
+stream_fields:  # 流式响应的路径映射
+  object: "chat.completion.chunk"
+  index: 0
+  content_path: "choices[0].delta.content"
+  tool_calls_path: "choices[0].delta.tool_calls"
+  reasoning_content_path: "choices[0].delta.reasoning_content"
 
-  usage:
-    prompt_tokens: "usage.prompt_tokens"
-    completion_tokens: "usage.completion_tokens"
-    total_tokens: "usage.total_tokens"
-
-stream:
-  delta:
-    content: "delta.content"
-    role: "delta.role"
-
-special_fields:
-  reasoning_content:
-    path: "choices[].message.reasoning_content"
-    description: "推理内容"
+error_check:  # 响应配置中的错误事件发生在模型响应后，模型返回响应体，但发生业务层错误
+  sensitive_check: 
+    input_sensitive_type_path: "input_sensitive_type"
+    output_sensitive_type_path: "output_sensitive_type"
 ```
 
----
+***
 
 ## 阶段3: 适配器开发
 
 ### 3.1 创建适配器文件
 
+厂商适配器需要继承三类基类组件，基类中定义了大量通用方法，在厂商适配器层只需要实现厂商的特殊逻辑：
+
 ```python
-# cnllm/core/vendor/<vendor>.py
+# 创建位置： cnllm/core/vendor/<vendor>.py
 from . import BaseAdapter
-
-class <Vendor>Adapter(BaseAdapter):
-    """<厂商名>厂商适配器"""
-    VENDOR_NAME = "<vendor>"
-```
-
-### 3.2 继承架构组件
-
-新厂商适配需要继承三类组件：
-
-#### 3.2.1 BaseAdapter (核心适配器)
-
-处理请求构建、发送、响应转换等核心逻辑。
-
-**已实现方法：**
-- `validate_model()` - 模型名称验证
-- `validate_params()` - 参数验证
-- `build_payload()` - 构建请求体
-- `create_completion()` - 发起请求
-- `_to_openai_format()` - 响应格式转换
-- `_to_openai_stream_format()` - 流式响应转换
-- `_collect_stream_result()` - 流式结果累积
-
-#### 3.2.2 Responder (响应转换器)
-
-处理厂商特定响应字段到 OpenAI 标准格式的转换。
-
-**职责：**
-- 提取 `content`、`reasoning_content`、`tool_calls` 等字段
-- 处理 `usage` 信息（prompt_tokens、completion_tokens 等）
-- 支持流式响应转换
-- 支持敏感内容检测
-
-**配置依赖：**
-- `configs/<vendor>/response_<vendor>.yaml` 中的 `fields` 映射
-
-#### 3.2.3 VendorError (厂商错误)
-
-解析厂商错误响应，转换为统一错误类型。
-
-**职责：**
-- 解析厂商错误码和错误信息
-- 支持敏感内容检测（通过 `error_check.sensitive_check` 配置）
-
-**配置依赖：**
-- `configs/<vendor>/response_<vendor>.yaml` 中的 `error_check` 配置
-
-### 3.3 实现厂商适配器
-
-根据阶段1的分析，实现厂商适配器类：
-
-```python
-# cnllm/core/vendor/<vendor>.py
-from ..adapter import BaseAdapter
 from ..responder import Responder
 from ...utils.vendor_error import VendorError, VendorErrorRegistry
 
-class <Vendor>VendorError(VendorError):
-    VENDOR_NAME = "<vendor>"
-
-    @classmethod
-    def from_response(cls, raw_response: dict):
-        """从厂商响应解析错误"""
-        if not raw_response:
-            return None
-        error = raw_response.get("error", {})
-        code = error.get("code")
-        if code is None:
-            return None
-        message = error.get("message", "")
-        return cls(code=code, message=message, vendor=cls.VENDOR_NAME, raw_response=raw_response)
-
-VendorErrorRegistry.register("<vendor>", <Vendor>VendorError)
-
-
-class <Vendor>Responder(Responder):
-    """厂商响应转换器"""
-    CONFIG_DIR = "<vendor>"
-
-
 class <Vendor>Adapter(BaseAdapter):
     """<厂商名>厂商适配器"""
-    ADAPTER_NAME = "<vendor>"
+    VENDOR_NAME = "<vendor>"
+
+class <Vendor>Responder(Responder):
     CONFIG_DIR = "<vendor>"
 
-    def __init__(self, api_key: str, model: str, **kwargs):
-        super().__init__(api_key=api_key, model=model, **kwargs)
-        self.responder = <Vendor>Responder()
-
-    def _get_responder(self):
-        """返回响应转换器，供 BaseAdapter 委托使用"""
-        return self.responder
-
-    def _to_openai_format(self, raw: Dict[str, Any], model: str) -> Dict[str, Any]:
-        """将厂商响应转换为 OpenAI 格式（委托给 Responder）"""
-        return self.responder.to_openai_format(raw, model)
-
-    def _to_openai_stream_format(self, raw: Dict[str, Any], model: str) -> Dict[str, Any]:
-        """将厂商流式响应转换为 OpenAI 格式（委托给 Responder）"""
-        return self.responder.to_openai_stream_format(raw, model)
-
-
-<Vendor>Adapter._register()
+class <Vendor>VendorError(VendorError):
+    VENDOR_NAME = "<vendor>"
 ```
 
-**关键点：**
-1. **VendorError** - 错误解析，通过 `error_check` 配置实现敏感内容检测
-2. **Responder** - 响应转换，通过 `response_<vendor>.yaml` 配置字段映射
-3. **BaseAdapter** - 核心逻辑，请求发送、流式处理等
+### 3.2 继承架构组件和厂商适配开发
 
-### 3.4 常见厂商特殊配置
+#### 3.2.1 BaseAdapter (核心适配器)
 
-#### 3.4.1 reasoning_content 配置
+厂商适配器层只需要实现厂商的特殊逻辑， 通用方法已在基类 BaseAdapter 中实现：
 
-在 `response_<vendor>.yaml` 中配置字段映射：
+**基类中已实现的方法：**
 
+- `get_supported_models()` - 获取支持的模型列表
+- `get_adapter_name_for_model()` - 根据模型名获取适配器
+- `get_vendor_model()` - 模型名映射
+- `get_api_path()` - 获取 API 路径
+- `get_base_url()` - 获取基础 URL
+- `get_header_mappings()` - 获取请求头映射
+- `_validate_required_params()` - 校验必填参数
+- `_validate_one_of()` - 校验互斥参数
+- `_filter_supported_params()` - 过滤不支持的参数
+- `_build_payload()` - 构建请求体
+- `create_completion()` - 发起请求
+- `_handle_stream()` - 处理流式响应
+- `_get_responder()` - 获取 Responder 实例
+
+**厂商层需实现的特殊逻辑：**
+
+- 如小米 mimo 模型的特殊请求参数 `"thinking": {"type": "disabled"}` 的映射逻辑需要额外实现：
+  在`xiaomi.py`中的`_build_payload()` 函数中，配合 YAML 配置文件映射为标准字段的
+
+`request_xiaomi.yaml`
 ```yaml
-fields:
-  reasoning_content: "choices[0].message.reasoning_content"
-```
-
-流式模式下，`_collect_stream_result` 会自动累积 reasoning_content 到 `_thinking`。
-
-#### 3.4.2 tool_calls 配置
-
-在 `response_<vendor>.yaml` 中配置字段映射：
-
-```yaml
-fields:
-  tool_calls: "choices[0].message.tool_calls"
-
-stream_fields:
-  tool_calls_path: "choices[0].delta.tool_calls"
-```
-
-#### 3.4.3 usage 详细配置
-
-```yaml
-fields:
-  prompt_tokens: "usage.prompt_tokens"
-  completion_tokens: "usage.completion_tokens"
-  total_tokens: "usage.total_tokens"
-  reasoning_tokens: "usage.completion_tokens_details.reasoning_tokens"
-  cached_tokens: "usage.prompt_tokens_details.cached_tokens"
-```
-
-#### 3.4.4 敏感内容检测配置
-
-在 `response_<vendor>.yaml` 中配置错误检测：
-
-```yaml
-error_check:
-  sensitive_check:
-    input_sensitive_type_path: "input_sensitive_type"
-    output_sensitive_type_path: "output_sensitive_type"
-```
-
-#### 3.4.5 请求字段转换配置
-
-在 `request_<vendor>.yaml` 中配置请求字段映射：
-
-```yaml
-optional_fields:
+optional_fields:  
   thinking:
-    path: "thinking"
     transform:
       true: {"type": "enabled"}
       false: {"type": "disabled"}
-  tools:
-    path: "tools"
-    keep_array_structure: true
 ```
 
-## 附录: 小米适配经验总结
-
-### 小米 vs OpenAI 差异点
-
-| 方面 | OpenAI | 小米 |
-|------|--------|------|
-| thinking 参数 | `thinking: true` | `thinking.type: "enabled"` |
-| 响应 reasoning_content | 无 | `choices[].message.reasoning_content` |
-| tools.strict | 不支持 | 支持 `tools[].function.strict` |
-| 内置工具 | 无 | 自动调用 tool_calls |
-
----
-
-## 检查清单
-
-新增厂商适配时，确保完成以下检查：
-
-- [ ] `configs/<vendor>/request_<vendor>.yaml` 创建
-- [ ] `configs/<vendor>/response_<vendor>.yaml` 创建
-- [ ] `cnllm/core/vendor/<vendor>.py` 创建
-- [ ] 继承 BaseAdapter + Responder + VendorError 三类组件
-- [ ] `_get_responder()` 方法返回 Responder 实例
-- [ ] `model_mapping` 配置完整
-- [ ] VendorError 注册到 VendorErrorRegistry
-- [ ] 基础对话测试通过
-- [ ] 流式输出测试通过
-- [ ] `.think`、`.still`、`.tools` 属性正常
-- [ ] 敏感内容检测正常
-- [ ] 标准结构无多余字段
-- [ ] 文档 `docs/vendor/<vendor>.md` 更新
-
-
-## 阶段4: 测试验证
-
-### 4.1 基础对话测试
-
+`core/vendor/xiaomi.py`
 ```python
-client = CNLLM(model="<model>", api_key="<key>")
-resp = client.chat.create(messages=[{"role": "user", "content": "详细解释天空为什么是蓝色的"}])
-print(resp)
-print(f"====="*20) 
-print(resp.raw)
-print(f"====="*20)
-print(resp.still)
-print(f"====="*20)
-print(resp.think)
-
-resp = client.chat.create(messages=[{"role": "user", "content": "详细解释天空为什么是蓝色的"}])
-print(resp)
-print(f"====="*20) 
-print(resp.raw)
-print(f"====="*20)
-print(resp.still)
-print(f"====="*20)
-print(resp.think)
-
-resp = client.chat.create(messages=[{"role": "user", "content": "详细解释天空为什么是蓝色的"}], thinking=True)
-print(resp)
-print(f"====="*20) 
-print(resp.raw)
-print(f"====="*20)
-print(resp.still)
-print(f"====="*20)
-print(resp.think)
-
-resp = client.chat.create(messages=[{"role": "user", "content": "详细解释天空为什么是蓝色的"}], stream=True)
-print(resp)
-print(f"====="*20) 
-print(resp.raw)
-print(f"====="*20)
-print(resp.still)
-print(f"====="*20)
-print(resp.think)
-
-resp = client.chat.create(messages=[{"role": "user", "content": "详细解释天空为什么是蓝色的"}], stream=True, thinking=True)
-print(resp)
-print(f"====="*20) 
-print(resp.raw)
-print(f"====="*20)
-print(resp.still)
-print(f"====="*20)
-print(resp.think)
-
-resp = client.chat.create(messages=[{"role": "user", "content": "伊斯坦布尔的天气如何"}], tools=[{"type": "function", "function": {"name": "get_weather", ...} }])
-print(resp)
-print(f"====="*20) 
-print(resp.raw)
-print(f"====="*20)
-print(resp.still)
-print(f"====="*20)
-print(resp.think)
-print(f"====="*20)
-print(resp.tools)
-
-resp = client.chat.create(messages=[{"role": "user", "content": "伊斯坦布尔的天气如何"}], tools=[{"type": "function", "function": {"name": "get_weather", ...} }], stream=True)
-print(resp)
-print(f"====="*20) 
-print(resp.raw)
-print(f"====="*20)
-print(resp.still)
-print(f"====="*20)
-print(resp.think)
-print(f"====="*20)
-print(resp.tools)
+field_config = optional_fields.get(key, key)
+if isinstance(field_config, dict):
+    transform = field_config.get("transform")
+    if transform and value in transform:
+        value = transform[value]
 ```
 
-**验证点：**
-- 确认能够正常工作，不报错
-- 观察resp是否符合openai标准结构，不包含其他额外字段（如content不能包含.think（reasoning_content）的思考过程）
-- 观察.still是否获取纯净输出
-- 观察.think是否获取纯净思考过程
-- 观察流式响应中.raw .think .still .tools输出是否实时累积
-- 观察.tools是否获取纯净工具调用信息
 
+**配置依赖：**
 
-### 4.2 流式输出测试
+- `configs/<vendor>/request_<vendor>.yaml` 中的 `base_url`、`required_fields`、`optional_fields`等
+
+#### 3.2.2 Responder (响应转换器)
+
+厂商响应转换器层只需要实现厂商的特殊逻辑， 通用方法已在基类 Responder 中实现：
+
+**基类中已实现的方法：**
+
+- `to_openai_format()` - 非流式响应转换
+- `to_openai_stream_format()` - 流式响应转换
+- `check_error()` - 检查业务层错误和敏感内容
+- `_check_sensitive()` - 敏感内容检测
+- `collect_stream_result()` - 流式结果累积
+
+**BaseAdapter 分发至 Responder 的方法：**
+
+- `_to_openai_format()` - 分发至 Responder.to_openai_format()
+- `_to_openai_stream_format()` - 分发至 Responder.to_openai_stream_format()
+- `_check_response_error()` - 分发至 Responder.check_error()
+- `_collect_stream_result()` - 分发至 Responder.collect_stream_result()
+
+**配置依赖：**
+
+- `configs/<vendor>/response_<vendor>.yaml` 中的 `fields`、`stream_fields`、`error_check`
+
+**厂商层需实现的特殊逻辑：**
+
+Responder 的字段映射逻辑大多已在 YAML 配置中声明，厂商适配器通常只需定义 `CONFIG_DIR`，无需额外代码实现。
 
 ```python
-client = CNLLM(model="<model>", api_key="<key>", stream=True)
-chunks = []
-resp = client.chat.create(
-    messages=[{"role": "user", "content": "详细解释天空为什么是蓝色的"}],
-    thinking=True
-)
-for i, chunk in enumerate(resp):
-    chunks.append(chunk)
-    if i < 20:
-        print(f"[Chunk {i}] .think: {client.chat.think[:50] if client.chat.think else None}...")
-        print(f"[Chunk {i}] .still: {client.chat.still[:50] if client.chat.still else None}...")
-        print(f"[Chunk {i}] delta: {chunk.get('choices', [{}])[0].get('delta', {})}")
-    elif i == 20:
-        print("... (超过20个chunk，不再打印中间过程)")
-
-print(f"\n共 {len(chunks)} 个 chunks")
-print(f"====="*20)
-print(f".think (完整): {client.chat.think}")
-print(f"====="*20)
-print(f".still (完整): {client.chat.still}")
-print(f"====="*20)
-print(f"resp (完整): {chunks[-1] if chunks else None}")
+class XiaomiResponder(Responder):
+    CONFIG_DIR = "xiaomi"
 ```
 
-**验证点：**
-- ✅ 每个 chunk 有 `id`, `object`, `choices`
-- ✅ `delta` 包含 `content` 或 `role`
-- ✅ `.think` 和 `.still` 可实时累积
-- ✅ reasoning_content 不出现在 resp 中
-
-### 4.3 标准结构验证
+如厂商响应字段结构与 YAML 配置不完全匹配，需自定义解析逻辑（如嵌套字段、动态 key 等）：
 
 ```python
-def check_standard_format(resp):
-    """检查响应是否符合 OpenAI 标准格式"""
-    required_keys = {"id", "object", "created", "model", "choices", "usage"}
-    actual_keys = set(resp.keys())
+class <Vendor>Responder(Responder):
+    CONFIG_DIR = "<vendor>"
 
-    extra = actual_keys - required_keys
-    if extra:
-        print(f"多余字段: {extra}")
+    def _get_by_path(self, data: Dict[str, Any], path: str, default=None):
+        # 自定义路径解析逻辑
+        ...
+```
 
-    choice = resp.get("choices", [{}])[0]
-    choice_keys = set(choice.keys())
-    expected_choice_keys = {"index", "message", "finish_reason"}
+#### 3.2.3 VendorError (厂商错误)
 
-    message = choice.get("message", {})
-    message_keys = set(message.keys())
-    expected_message_keys = {"role", "content"}
+厂商错误层只需要实现厂商的特殊逻辑， 通用方法已在基类 VendorError 中实现：
 
-    print(f"响应结构: {'✅ 标准' if not extra else '❌ 有多余'}")
+**已实现方法：**
 
-## scripts 说明
+- `to_dict()` - 转换为字典
 
-### validate_model_compatible.py
+**配置依赖：**
 
-模型兼容性验证脚本，用于测试新模型是否能被现有适配器正确适配。
+- `configs/<vendor>/request_<vendor>.yaml` 中的 `error_check.error_codes`
+
+**厂商层需实现的特殊逻辑：**
+
+错误解析逻辑大多已在 YAML 配置中声明，厂商适配器只需定义 `VENDOR_NAME` 并注册：
+
+```python
+class MiniMaxVendorError(VendorError):
+    VENDOR_NAME = "minimax"
+
+    @classmethod
+    def from_response(cls, raw_response: dict) -> Optional["MiniMaxVendorError"]:
+        base_resp = raw_response.get("base_resp", {})
+        code = base_resp.get("status_code")
+        if code is None:
+            return None
+        message = base_resp.get("status_msg", "")
+        return cls(code=code, message=message, vendor=cls.VENDOR_NAME, raw_response=raw_response)
+
+VendorErrorRegistry.register(MiniMaxVendorError.VENDOR_NAME, MiniMaxVendorError)
+```
+
+如厂商错误响应结构与 YAML 配置不完全匹配，需自定义 `from_response()` 解析逻辑。
+
+## 阶段4：测试验证
+
+### 4.1 现有的测试用例
+
+**`tests/`** **- 单元测试（非 API 调用）**
+
+- `test_adapter_config.py` - 适配器配置加载测试
+- `test_adapter_payload.py` - 请求 payload 构建测试
+- `test_responder_format.py` - 响应格式转换测试
+- `test_responder_reasoning.py` - reasoning 内容测试
+- `test_stream.py` - 流式输出测试
+- `test_yaml_request.py` - 请求 YAML 配置测试
+- `test_yaml_response.py` - 响应 YAML 配置测试
+- `test_langchain_runnable.py` - LangChain Runnable 集成测试
+
+**`tests/key_needed/`** **- 需要真实 API Key 的集成测试**
+
+- `test_client.py` - 客户端基础功能测试（流式/非流式、think/still/tools 属性）
+- `test_openai_format.py` - OpenAI 标准格式响应对比测试
+- `test_stream_accumulator.py` - 流式响应累加器测试
+- `test_vendor_error.py` - 厂商错误处理测试（认证失败、无效模型、畸形请求）
+- `test_fallback_model_logic.py` - FallbackManager 逻辑测试（主模型成功/失败、fallback 触发、FallbackError 抛出）
+
+需要真实 API 的测试文件在 import 块下方设有以下赋值语句，便于更换测试对象：
+
+```python
+MODEL = "mimo-v2-flash"
+API_KEY = os.getenv("XIAOMI_API_KEY")
+```
+
+### 4.2 scripts脚本
+
+**`validate_model_compatible.py`** **- 模型兼容性验证脚本**
+
+模型兼容性验证脚本，用于测试现有适配器的其他潜在适配模型。
 
 **功能：**
-- 测试已支持模型的兼容性
-- 测试潜在兼容模型（如 M2.1 可能兼容 M2.7 系列）
+
+- 测试现有适配器的潜在兼容模型（如 MiniMax 的其他模型可能适配 MiniMaxAdapter）
 - 测试流式输出
 - 测试 Fallback 机制
 - 测试 LangChain Runnable 集成
+- 测试封装后的响应与 OpenAI 标准格式的对齐度
 
 **环境变量：**
-- `MINIMAX_API_KEY` - MiniMax API Key
-- `XIAOMI_API_KEY` - Xiaomi API Key（可选）
-- `CNLLM_SKIP_MODEL_VALIDATION=true` - 跳过模型映射验证（测试未收录模型时）
 
-**使用：**
-```bash
-python scripts/validate_model_compatible.py
-```
+- `API_KEY`
+- `CNLLM_SKIP_MODEL_VALIDATION=true` - 跳过主程序的模型映射验证（测试后门）
 
-### test_e2e_installed.py
+**`test_e2e_installed.py`**
 
 端到端测试脚本，模拟用户通过 pip install 安装 cnllm 后的生产环境使用。
 
 **特点：**
+
 - 不引用项目本地模块，使用已安装的 cnllm 包
 - 验证安装后包能否正常工作
 - 测试基础对话、流式输出、Fallback 等功能
 
 **环境变量：**
-- `MINIMAX_API_KEY` - 必需
 
-**使用：**
-```bash
-python scripts/test_e2e_installed.py
-```
+- `API_KEY`
+
+
+## 最后一步：文档更新
+- [ ] 文档 `docs/vendor/<vendor>.md` 更新，添加适配器实现的详细说明

@@ -1,13 +1,12 @@
 request:
   method: "POST"
-  url: "/text/chatcompletion_v2"
-  base_url: "https://api.minimaxi.com/v1"
   headers:
     Content-Type: "application/json"
     Authorization: "Bearer ${api_key}"
 
 required_fields:
-  api_key: ""
+  api_key:
+    body: "__skip__"
   model: ""
 
 one_of:
@@ -16,9 +15,27 @@ one_of:
     prompt: ""
 
 optional_fields:
-  fallback_models: ""
+  base_url:
+    body: "__skip__"
+    default: "https://api.minimaxi.com/v1"
+    text: "text/chatcompletion_v2"
+  fallback_models:
+    body: "__skip__"
+  organization:
+    body: "__skip__"
+    head: "group_id"
+  timeout:
+    body: "__skip__"
+    default: 60.0
+  max_retries:
+    body: "__skip__"
+    default: 3
+  retry_delay:
+    body: "__skip__"
+    default: 1.0
   temperature: ""
-  max_tokens: ""
+  max_tokens:
+    body: "max_completion_tokens"
   stream: ""
   top_p: ""
   top_k: ""
@@ -28,88 +45,11 @@ optional_fields:
   presence_penalty: ""
   frequency_penalty: ""
   stop: ""
-  organization: "group_id"
   user: ""
   mask: ""
-  prompt_mask_index: ""
-  timeout:
-    mapping: ""
-    default: 60.0
-  max_retries:
-    mapping: ""
-    default: 3
-  retry_delay:
-    mapping: ""
-    default: 1.0
 
 model_mapping:
   minimax-m2: "MiniMax-M2"
   minimax-m2.1: "MiniMax-M2.1"
   minimax-m2.5: "MiniMax-M2.5"
   minimax-m2.7: "MiniMax-M2.7"
-
-error_check:
-  code_path: "base_resp.status_code"
-  success_code: 0
-  message_path: "base_resp.status_msg"
-  auth_code: 1004
-  error_codes:
-    1000:
-      type: "unknown_error"
-      message: "未知错误"
-      suggestion: "请稍后重试"
-    1001:
-      type: "invalid_parameter"
-      message: "参数错误"
-      suggestion: "请检查请求参数"
-    1002:
-      type: "invalid_parameter"
-      message: "无效的模型名称"
-      suggestion: "请检查模型名称"
-    1003:
-      type: "invalid_parameter"
-      message: "无效的API Key"
-      suggestion: "请检查API Key是否正确"
-    1004:
-      type: "authentication_error"
-      message: "认证失败"
-      suggestion: "请检查API Key是否正确"
-    1005:
-      type: "rate_limit_error"
-      message: "请求频率过高"
-      suggestion: "请降低请求频率"
-    1006:
-      type: "permission_error"
-      message: "无权限"
-      suggestion: "请检查账户权限"
-    1007:
-      type: "invalid_parameter"
-      message: "余额不足"
-      suggestion: "请充值"
-    1008:
-      type: "invalid_parameter"
-      message: "请求体过大"
-      suggestion: "请减少输入内容"
-    1010:
-      type: "model_not_supported"
-      message: "模型不支持"
-      suggestion: "请使用支持的模型"
-    1013:
-      type: "invalid_parameter"
-      message: "无效的messages参数"
-      suggestion: "请检查messages格式"
-    2013:
-      type: "invalid_parameter"
-      message: "参数错误"
-      suggestion: "请检查请求参数是否正确"
-    2064:
-      type: "server_overloaded"
-      message: "当前服务集群负载较高"
-      suggestion: "请稍后重试，感谢您的耐心等待"
-    520:
-      type: "server_error"
-      message: "服务器内部错误"
-      suggestion: "请稍后重试，或联系技术支持"
-  sensitive_check:
-    input_sensitive_type_path: "input_sensitive_type"
-    output_sensitive_type_path: "output_sensitive_type"

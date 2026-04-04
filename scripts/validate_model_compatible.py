@@ -13,6 +13,9 @@ load_dotenv()
 
 os.environ["CNLLM_SKIP_MODEL_VALIDATION"] = "true"
 
+MODEL = "minimax-m2.7"
+API_KEY = os.getenv("MINIMAX_API_KEY")
+
 from cnllm.core.adapter import BaseAdapter
 from cnllm.utils.exceptions import ModelAPIError, ParseError
 
@@ -317,6 +320,42 @@ def validate_runnable() -> Tuple[bool, str]:
         return False, str(e)
 
 
+def validate_openai_format() -> Tuple[bool, str]:
+    print(f"\n{'-' * 50}")
+    print(f"Testing OpenAI Format Response")
+    print(f"{'-' * 50}")
+
+    try:
+        from cnllm import CNLLM
+
+        if not API_KEY:
+            print("[SKIP] MINIMAX_API_KEY not set")
+            return True, "SKIPPED"
+
+        client = CNLLM(model=MODEL, api_key=API_KEY)
+        resp = client.chat.create(messages=[{"role": "user", "content": "Hello"}])
+        raw = client.chat.raw
+
+        print(f"[INFO] Response keys: {list(resp.keys())}")
+        print(f"[INFO] Raw keys: {list(raw.keys())}")
+
+        required_fields = ["id", "object", "created", "model", "choices", "usage"]
+        missing = [f for f in required_fields if f not in resp]
+        if missing:
+            print(f"[FAIL] Missing fields in response: {missing}")
+            return False, f"Missing fields: {missing}"
+
+        if "choices" not in resp or len(resp["choices"]) == 0:
+            print(f"[FAIL] No choices in response")
+            return False, "No choices"
+
+        print(f"[PASS] OpenAI format validated!")
+        return True, "OpenAI format OK"
+    except Exception as e:
+        print(f"[FAIL] {type(e).__name__}: {e}")
+        return False, str(e)
+
+
 def run_validation(
     test_cases: List[Dict] = None,
     auto_update: bool = False
@@ -371,6 +410,9 @@ def run_validation(
         runnable_passed, runnable_msg = validate_runnable()
         extra_results["runnable"] = (runnable_passed, runnable_msg)
 
+        openai_passed, openai_msg = validate_openai_format()
+        extra_results["openai_format"] = (openai_passed, openai_msg)
+
     print("\n" + "=" * 60)
     print("Final Results Summary")
     print("=" * 60)
@@ -379,6 +421,7 @@ def run_validation(
     print(f"Stream: {'PASS' if extra_results.get('stream', (False, ''))[0] else 'FAIL'}")
     print(f"Fallback: {'PASS' if extra_results.get('fallback', (False, ''))[0] else 'FAIL'}")
     print(f"Runnable: {'PASS' if extra_results.get('runnable', (False, ''))[0] else 'FAIL'}")
+    print(f"OpenAI Format: {'PASS' if extra_results.get('openai_format', (False, ''))[0] else 'FAIL'}")
 
     return results, extra_results
 
