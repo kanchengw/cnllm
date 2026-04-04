@@ -24,10 +24,11 @@ class StreamHandler:
         client,
         api_path: str,
         payload: Dict[str, Any],
-        to_openai_stream_format_func: Callable[[Dict[str, Any], str], Dict[str, Any]]
+        to_openai_stream_format_func: Callable[[Dict[str, Any], str], Dict[str, Any]],
+        extra_headers: Dict[str, str] = None
     ) -> Iterator[Dict[str, Any]]:
         model = payload.get("model", "")
-        for raw_chunk in SSEDecoder.decode_stream(client.post_stream(api_path, payload)):
+        for raw_chunk in SSEDecoder.decode_stream(client.post_stream(api_path, payload, extra_headers)):
             yield to_openai_stream_format_func(raw_chunk, model)
 
 

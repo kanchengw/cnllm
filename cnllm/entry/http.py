@@ -20,7 +20,8 @@ class BaseHttpClient:
         timeout: int = None,
         max_retries: int = None,
         retry_delay: float = None,
-        provider: str = "unknown"
+        provider: str = "unknown",
+        header_mappings: Dict[str, str] = None
     ):
         self.api_key = ''.join(api_key.strip().split())
         self.base_url = base_url.strip()
@@ -28,12 +29,18 @@ class BaseHttpClient:
         self.max_retries = max_retries
         self.retry_delay = retry_delay
         self.provider = provider
+        self.header_mappings = header_mappings or {}
 
-    def _build_headers(self) -> Dict[str, str]:
-        return {
+    def _build_headers(self, extra_headers: Dict[str, str] = None) -> Dict[str, str]:
+        headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json; charset=utf-8"
         }
+        if extra_headers:
+            for key, value in extra_headers.items():
+                mapped_key = self.header_mappings.get(key, key)
+                headers[mapped_key] = value
+        return headers
 
     def _raise_for_status(self, response: requests.Response, attempt: int) -> None:
         status_code = response.status_code
@@ -55,13 +62,17 @@ class BaseHttpClient:
                 provider=self.provider
             )
 
-    def post(self, path: str, payload: Dict[str, Any]) -> Dict[str, Any]:
-        headers = self._build_headers()
+    def post(self, path: str, payload: Dict[str, Any], extra_headers: Dict[str, str] = None) -> Dict[str, Any]:
+        headers = self._build_headers(extra_headers)
+        base = self.base_url.rstrip("/")
+        url_path = path.lstrip("/")
+        url = f"{base}/{url_path}"
+        last_error = None
 
         for attempt in range(self.max_retries):
             try:
                 response = requests.post(
-                    url=f"{self.base_url}{path}",
+                    url=url,
                     headers=headers,
                     json=payload,
                     timeout=self.timeout
@@ -88,26 +99,42 @@ class BaseHttpClient:
                 if attempt < self.max_retries - 1:
                     time.sleep(self.retry_delay)
                     continue
-                raise NetworkError(provider=self.provider)
+                raise NetworkError(
+                    provider=self.provider,
+                    suggestion="请检查 base_url 是否可访问，或不传入 base_url 使用默认值"
+                )
+
+            except (requests.exceptions.MissingSchema, requests.exceptions.InvalidURL) as e:
+                raise InvalidRequestError(
+                    message=f"无效的 base_url: {e}",
+                    provider=self.provider,
+                    suggestion="请核实 base_url 格式（需包含 http:// 或 https://），或不传入该参数使用默认值"
+                )
 
             except requests.exceptions.HTTPError:
                 raise
 
-            except requests.exceptions.RequestException:
+            except requests.exceptions.RequestException as e:
                 if attempt < self.max_retries - 1:
                     time.sleep(self.retry_delay)
                     continue
-                raise NetworkError(provider=self.provider)
+                raise NetworkError(
+                    provider=self.provider,
+                    suggestion="请检查 base_url 是否可访问，或不传入 base_url 使用默认值"
+                )
 
         raise ModelAPIError(f"重试 {self.max_retries} 次后仍然失败")
 
-    def post_stream(self, path: str, payload: Dict[str, Any]) -> Iterator[bytes]:
-        headers = self._build_headers()
+    def post_stream(self, path: str, payload: Dict[str, Any], extra_headers: Dict[str, str] = None) -> Iterator[bytes]:
+        headers = self._build_headers(extra_headers)
+        base = self.base_url.rstrip("/")
+        url_path = path.lstrip("/")
+        url = f"{base}/{url_path}"
 
         for attempt in range(self.max_retries):
             try:
                 response = requests.post(
-                    url=f"{self.base_url}{path}",
+                    url=url,
                     headers=headers,
                     json=payload,
                     timeout=self.timeout,

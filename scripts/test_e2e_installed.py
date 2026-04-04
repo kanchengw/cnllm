@@ -20,6 +20,9 @@ from cnllm import CNLLM
 from cnllm.utils.fallback import FallbackError
 from cnllm.utils.exceptions import ModelNotSupportedError
 
+MODEL = "minimax-m2.7"
+API_KEY = os.getenv("MINIMAX_API_KEY")
+
 
 def test_basic_chat():
     print("\n" + "=" * 60)

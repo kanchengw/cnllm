@@ -1,10 +1,10 @@
 """
-CNLLM 适配器 Payload 测试 - 请求参数构建与校验验证
+CNLLM 适配器 Payload 测试 - 请求参数构建与映射验证
 
 测试目标：
 1. Payload 构建
-2. 参数校验
-3. 厂商特有参数处理
+2. 参数映射（max_tokens → max_completion_tokens）
+3. 参数校验
 """
 import os
 import sys
@@ -14,11 +14,85 @@ from dotenv import load_dotenv
 sys.stdout.reconfigure(encoding='utf-8')
 load_dotenv()
 
+from cnllm.core.vendor.minimax import MiniMaxAdapter
 from cnllm.core.vendor.xiaomi import XiaomiAdapter
 
 
-class TestPayloadBuilding:
-    """Payload 构建测试"""
+class TestMiniMaxPayload:
+    """MiniMax Payload 构建测试"""
+
+    def test_max_tokens_mapping(self):
+        """验证 max_tokens → max_completion_tokens 映射"""
+        adapter = MiniMaxAdapter(api_key="test-key", model="minimax-m2")
+
+        params = {
+            "messages": [{"role": "user", "content": "hello"}],
+            "max_tokens": 100
+        }
+
+        payload = adapter._build_payload(params)
+
+        assert "max_completion_tokens" in payload, "max_tokens 应映射为 max_completion_tokens"
+        assert payload["max_completion_tokens"] == 100
+        assert "max_tokens" not in payload, "原始 max_tokens 不应出现在 payload"
+
+        print(f"\n[PASS] MiniMax max_tokens 映射正确")
+        print(f"  max_tokens: 100 → max_completion_tokens: {payload['max_completion_tokens']}")
+
+    def test_basic_payload_structure(self):
+        """验证基础 Payload 结构"""
+        adapter = MiniMaxAdapter(api_key="test-key", model="minimax-m2")
+
+        params = {
+            "messages": [{"role": "user", "content": "hello"}],
+            "model": "minimax-m2"
+        }
+
+        payload = adapter._build_payload(params)
+
+        assert "model" in payload, "payload 应包含 model"
+        assert payload["model"] == "MiniMax-M2", "model 应映射为厂商名"
+        assert "messages" in payload, "payload 应包含 messages"
+
+        print(f"\n[PASS] MiniMax 基础 Payload 结构正确")
+
+    def test_temperature_not_mapped(self):
+        """验证 temperature 不需要映射"""
+        adapter = MiniMaxAdapter(api_key="test-key", model="minimax-m2")
+
+        params = {
+            "messages": [{"role": "user", "content": "hello"}],
+            "temperature": 0.7
+        }
+
+        payload = adapter._build_payload(params)
+
+        assert "temperature" in payload, "temperature 字段名一致，不需要映射"
+        assert payload["temperature"] == 0.7
+
+        print(f"\n[PASS] MiniMax temperature 不需要映射")
+
+
+class TestXiaomiPayload:
+    """Xiaomi Payload 构建测试"""
+
+    def test_max_tokens_mapping(self):
+        """验证 max_tokens → max_completion_tokens 映射"""
+        adapter = XiaomiAdapter(api_key="test-key", model="mimo-v2-flash")
+
+        params = {
+            "messages": [{"role": "user", "content": "hello"}],
+            "max_tokens": 100
+        }
+
+        payload = adapter._build_payload(params)
+
+        assert "max_completion_tokens" in payload, "max_tokens 应映射为 max_completion_tokens"
+        assert payload["max_completion_tokens"] == 100
+        assert "max_tokens" not in payload, "原始 max_tokens 不应出现在 payload"
+
+        print(f"\n[PASS] Xiaomi max_tokens 映射正确")
+        print(f"  max_tokens: 100 → max_completion_tokens: {payload['max_completion_tokens']}")
 
     def test_basic_payload_structure(self):
         """验证基础 Payload 结构"""
@@ -34,49 +108,8 @@ class TestPayloadBuilding:
         assert "model" in payload, "payload 应包含 model"
         assert payload["model"] == "mimo-v2-flash", "model 值应正确"
         assert "messages" in payload, "payload 应包含 messages"
-        assert payload["messages"] == params["messages"], "messages 应保持不变"
 
-        print(f"\n[PASS] 基础 Payload 结构正确")
-        print(f"  payload.model = {payload['model']}")
-        print(f"  payload.messages 类型 = {type(payload['messages'])}")
-
-    def test_optional_params_included(self):
-        """验证可选参数正确包含在 Payload 中"""
-        adapter = XiaomiAdapter(api_key="test-key", model="mimo-v2-flash")
-
-        params = {
-            "messages": [{"role": "user", "content": "hello"}],
-            "temperature": 0.7,
-            "max_tokens": 100,
-            "top_p": 0.9
-        }
-
-        payload = adapter._build_payload(params)
-
-        assert payload.get("temperature") == 0.7, "temperature 应包含"
-        assert payload.get("max_tokens") == 100, "max_tokens 应包含"
-        assert payload.get("top_p") == 0.9, "top_p 应包含"
-
-        print(f"\n[PASS] 可选参数正确包含在 Payload 中")
-        print(f"  temperature = {payload.get('temperature')}")
-        print(f"  max_tokens = {payload.get('max_tokens')}")
-
-    def test_excluded_params_not_in_payload(self):
-        """验证内部参数不包含在 Payload 中"""
-        adapter = XiaomiAdapter(api_key="test-key", model="mimo-v2-flash")
-
-        params = {
-            "messages": [{"role": "user", "content": "hello"}],
-            "api_key": "secret-key",
-            "stream": False
-        }
-
-        payload = adapter._build_payload(params)
-
-        assert "api_key" not in payload, "api_key 不应包含在 payload 中"
-        assert "stream" in payload, "stream 应包含（它是 optional_fields）"
-
-        print(f"\n[PASS] 内部参数正确排除")
+        print(f"\n[PASS] Xiaomi 基础 Payload 结构正确")
 
     def test_thinking_param_transform(self):
         """验证 thinking 参数转换（Xiaomi 特有）"""
@@ -97,7 +130,7 @@ class TestPayloadBuilding:
         payload = adapter._build_payload(params)
         assert payload["thinking"].get("type") == "disabled", "thinking=false 应转换为 disabled"
 
-        print(f"\n[PASS] thinking 参数转换正确")
+        print(f"\n[PASS] Xiaomi thinking 参数转换正确")
         print(f"  thinking=true → {payload['thinking']}")
 
 

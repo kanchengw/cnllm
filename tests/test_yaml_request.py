@@ -30,15 +30,30 @@ class TestRequestYAML:
 
         request = config["request"]
         assert "method" in request, "request 应包含 method"
-        assert "url" in request, "request 应包含 url"
-        assert "base_url" in request, "request 应包含 base_url"
 
         assert request["method"] == "POST", f"method 应为 POST，实际: {request['method']}"
 
+        assert "headers" in request, "request 应包含 headers"
+
         print(f"\n[PASS] request 配置完整")
         print(f"  method: {request['method']}")
-        print(f"  url: {request['url']}")
-        print(f"  base_url: {request['base_url']}")
+        print(f"  headers: {request['headers']}")
+
+    def test_base_url_config(self, config):
+        """验证 base_url 配置在 optional_fields 中"""
+        assert "optional_fields" in config, "配置应包含 optional_fields 节点"
+
+        optional = config["optional_fields"]
+        assert "base_url" in optional, "optional_fields 应包含 base_url"
+
+        base_url_config = optional["base_url"]
+        assert isinstance(base_url_config, dict), "base_url 应为字典"
+        assert "default" in base_url_config, "base_url 应包含 default"
+        assert "text" in base_url_config, "base_url 应包含 text"
+
+        print(f"\n[PASS] base_url 配置正确")
+        print(f"  default: {base_url_config['default']}")
+        print(f"  text: {base_url_config['text']}")
 
     def test_required_fields_config(self, config):
         """验证 required_fields 配置"""

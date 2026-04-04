@@ -84,7 +84,7 @@ class XiaomiAdapter(BaseAdapter):
                 transform = field_config.get("transform")
                 if transform and value in transform:
                     value = transform[value]
-                mapped_key = field_config.get("path", key)
+                mapped_key = field_config.get("body", key)
                 if mapped_key == "":
                     mapped_key = key
             else:

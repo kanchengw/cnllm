@@ -1,13 +1,12 @@
 request:
   method: "POST"
-  url: "/chat/completions"
-  base_url: "https://api.xiaomimimo.com/v1"
   headers:
     Content-Type: "application/json"
     Authorization: "Bearer ${api_key}"
 
 required_fields:
-  api_key: ""
+  api_key:
+    body: "__skip__"
   model: ""
 
 one_of:
@@ -16,25 +15,39 @@ one_of:
     prompt: ""
 
 optional_fields:
-  stream: ""
-  thinking:
-    path: "thinking"
-    transform:
-      true: {"type": "enabled"}
-      false: {"type": "disabled"}
-  tools:
-    path: "tools"
-    keep_array_structure: true
-  tool_choice: ""
+  base_url:
+    body: "__skip__"
+    default: "https://api.xiaomimimo.com/v1"
+    text: "chat/completions"
+  fallback_models:
+    body: "__skip__"
+  timeout:
+    body: "__skip__"
+    default: 60.0
+  max_retries:
+    body: "__skip__"
+    default: 3
+  retry_delay:
+    body: "__skip__"
+    default: 1.0
   temperature: ""
-  max_tokens: ""
+  max_tokens:
+    body: "max_completion_tokens"
   top_p: ""
   presence_penalty: ""
   frequency_penalty: ""
   stop: ""
   user: ""
+  stream: ""
+  thinking:
+    transform:
+      true: {"type": "enabled"}
+      false: {"type": "disabled"}
+  tools: ""
+  tool_choice: ""
 
 model_mapping:
   mimo-v2-pro: "mimo-v2-pro"
   mimo-v2-omni: "mimo-v2-omni"
   mimo-v2-flash: "mimo-v2-flash"
+  mimo-v2-tts: "mimo-v2-tts"
