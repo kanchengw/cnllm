@@ -7,23 +7,37 @@
 [![License](https://img.shields.io/github/license/kanchengw/cnllm null)](LICENSE)
 
 ***
+## 项目背景
 
-中文大模型适配库，将模型 API 响应封装为 OpenAI 格式，无缝协作langchain、LlamaIndex、Pydantic等机器学习库
+在学术研究与实际生产环境中，如何将中文大模型高效接入成熟的机器学习框架一直是开发者面临的核心挑战。
 
-CNLLM 正在积极开发中，欢迎贡献者参与！
+当前主流方案存在明显局限：使用 OpenAI 兼容接口虽简单易用，但无法充分发挥各厂商原生能力；而直接调用原生接口则意味着需要自行处理响应解析、格式转换等繁琐工作。
 
-我们寻求以下帮助：
-- 🌐 **新厂商适配** - 为更多大模型厂商开发适配器（如智谱、豆包、Kimi等）
-- 🔗 **机器学习框架深度适配** - LlamaIndex、LiteLLM 等框架的适配验证
-- 🐛 **能力扩展** - 开发Embedding、多模态的适配框架
-- 📖 **文档完善** - 改进文档、添加示例
-- 💡 **功能建议** - 提出新功能想法
+CNLLM 致力于解决这一两难困境——通过提供一个调用中文大模型的**统一的接口**与一套**一致的参数规范**，在完整释放中文大模型原生能力的同时，将形态各异的响应自动转换为 OpenAI 标准格式。无论是 langchain、LlamaIndex 或其他机器学习框架，都能以相同的方式接入各类大模型。
+
+> 由于深感能力和精力有限，欢迎志同道合的朋友共同参与 CNLLM 的建设：[wangkancheng1122@163.com](mailto:wangkancheng1122@163.com)
+
+### 我们期待这样的合作
+
+| 方向 | 说明 |
+|------|------|
+| 🌐 **新厂商适配** | 接入更多中文大模型（如阿里千问、字节豆包、Kimi 等） |
+| 🔗 **框架适配** | 深化与 LlamaIndex、LiteLLM 等框架的集成 |
+| 🐛 **能力扩展** | Embedding、多模态等功能的适配框架开发 |
+| 📖 **文档完善** | 补充使用案例、优化开发指南 |
+| 💡 **功能建议** | 提出您的想法与需求 |
 
 快速入门：[贡献者指南](docs/CONTRIBUTOR.md)
 详细架构：[系统架构](docs/ARCHITECTURE.md)
 
 
 ## 更新日志
+
+### v0.4.2 (2026-04-05)
+
+- ✨ **智谱GLM适配** - 智谱GLM模型适配开发，支持"glm-4.6"、"glm-5"、"glm-5-turbo"和 GLM 4.7系列模型
+  - 支持智谱原生参数，如`do_sample`、`request_id`、`response_format`、`tool_stream`、`thinking.type`等
+- 🔧 **已知 bug 修复** - 修复`id`字段的响应映射
 
 ### v0.4.1 (2026-04-04)
 
@@ -65,6 +79,7 @@ CNLLM 正在积极开发中，欢迎贡献者参与！
 
 ## 支持的模型
 
+- **智谱GLM**：glm-4.6、glm4.7、glm-4.7-flash、glm-4.7-flashx、glm-5、glm-5-turbo
 - **小米mimo**：mimo-v2-pro、mimo-v2-flash、mimo-v2-omni
 - **MiniMax**：MiniMax-M2.7、MiniMax-M2.5、MiniMax-M2.1、MiniMax-M2
 - **更多厂商、模型支持正在开发中**

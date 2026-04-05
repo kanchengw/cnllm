@@ -1,0 +1,124 @@
+request:
+  method: "POST"
+  headers:
+    Content-Type: "application/json"
+    Authorization: "Bearer ${api_key}"
+
+required_fields:
+  api_key:
+    body: "__skip__"
+  model: ""
+
+one_of:
+  messages_or_prompt:
+    messages: ""
+    prompt: ""
+
+optional_fields:
+  base_url:
+    body: "__skip__"
+    default: "https://open.bigmodel.cn/api/paas/v4"
+    text: "chat/completions"
+  fallback_models:
+    body: "__skip__"
+  timeout:
+    body: "__skip__"
+    default: 60.0
+  max_retries:
+    body: "__skip__"
+    default: 3
+  retry_delay:
+    body: "__skip__"
+    default: 1.0
+  temperature:
+    default: 0.95
+  top_p:
+    default: 0.7
+  max_tokens: ""
+  stream: ""
+  stop: ""
+  tools: ""
+  tool_choice: ""
+  thinking:
+    body: "thinking"
+    transform:
+      true: {"type": "enabled"}
+      false: {"type": "disabled"}
+  user:
+    body: "user_id"
+  do_sample: ""
+  request_id: ""
+  response_format: ""
+  tool_stream: ""
+
+model_mapping:
+  glm-4.6: "glm-4.6"
+  glm-4.7: "glm-4.7"
+  glm-4.7-flash: "glm-4.7-flash"
+  glm-4.7-flashx: "glm-4.7-flashx"
+  glm-5: "glm-5"
+  glm-5-turbo: "glm-5-turbo"
+
+error_check:
+  code_path: "base_resp.status_code"
+  success_code: 0
+  message_path: "base_resp.status_msg"
+  auth_code: 1004
+  error_codes:
+    1000:
+      type: "authentication_error"
+      message: "身份验证失败"
+    1001:
+      type: "authentication_error"
+      message: "Header 中未收到 Authentication 参数"
+    1002:
+      type: "authentication_error"
+      message: "Authentication Token 非法"
+    1003:
+      type: "authentication_error"
+      message: "Authentication Token 已过期"
+    1110:
+      type: "account_error"
+      message: "您的账户当前处于非活动状态"
+    1111:
+      type: "account_error"
+      message: "您的账户不存在"
+    1112:
+      type: "account_error"
+      message: "您的账户已被锁定"
+    1113:
+      type: "account_error"
+      message: "您的账户已欠费"
+    1211:
+      type: "model_not_supported_error"
+      message: "模型不存在"
+    1213:
+      type: "invalid_request_error"
+      message: "未正常接收到参数"
+    1214:
+      type: "invalid_request_error"
+      message: "参数非法"
+    1261:
+      type: "invalid_request_error"
+      message: "Prompt 超长"
+    1301:
+      type: "content_filtered_error"
+      message: "输入或生成内容可能包含不安全或敏感内容"
+    1302:
+      type: "rate_limit_error"
+      message: "并发数过高"
+    1303:
+      type: "rate_limit_error"
+      message: "频率过高"
+    1304:
+      type: "rate_limit_error"
+      message: "已达今日调用次数限额"
+    1308:
+      type: "rate_limit_error"
+      message: "已达到使用上限"
+    1309:
+      type: "account_error"
+      message: "GLM Coding Plan 套餐已到期"
+    1310:
+      type: "rate_limit_error"
+      message: "已达到每周/每月使用上限"
