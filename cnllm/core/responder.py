@@ -146,7 +146,7 @@ class Responder:
         }
 
         result = {
-            "id": f"chatcmpl-{uuid.uuid4().hex[:24]}",
+            "id": self._get_by_path(raw, fields.get("id", "id")) or f"chatcmpl-{uuid.uuid4().hex[:24]}",
             "object": defaults.get("object", "chat.completion"),
             "created": int(time.time()),
             "model": model,
@@ -203,7 +203,7 @@ class Responder:
             delta_obj["tool_calls"] = tool_calls
 
         result = {
-            "id": f"chatcmpl-{uuid.uuid4().hex[:24]}",
+            "id": self._get_by_path(raw, "id") or f"chatcmpl-{uuid.uuid4().hex[:24]}",
             "object": stream_fields.get("object", "chat.completion.chunk"),
             "created": int(time.time()),
             "model": model,

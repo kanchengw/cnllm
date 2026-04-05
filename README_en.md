@@ -8,23 +8,36 @@
 
 ***
 
-Adapter Library for Chinese Large Language Models (LLMs), converts model API responses to OpenAI format, seamlessly integrates with LangChain, LlamaIndex, Pydantic and other major ML frameworks.
+## Project Background
 
-## Contributors
+Integrating Chinese large language models into established ML frameworks has become a core challenge for developers in both academic research and production environments.
 
-CNLLM is actively under development, contributors are welcome!
+Current mainstream approaches have clear limitations: using OpenAI-compatible interfaces is straightforward but cannot fully leverage each vendor's native capabilities; calling native interfaces directly means handling response parsing, format conversion, and other tedious work on your own.
 
-We're looking for help with:
-- 🌐 **New Vendor Adapters** - Develop adapters for more LLM providers (GLM, doubao, Kimi, etc.)
-- 🔗 **ML Framework Deep Adaptation** - Adaptation verification for LlamaIndex, LiteLLM, etc.
-- 🐛 **Capability Expansion** - Develop adapters for Embedding, Multimodal
-- 📖 **Documentation** - Improve docs and add examples
-- 💡 **Feature Suggestions** - Propose new feature ideas
+CNLLM is dedicated to resolving this dilemma—by providing a **unified interface** and **consistent parameter specifications** for calling Chinese LLMs. While fully unleashing the native capabilities of these models, CNLLM automatically converts diverse responses into OpenAI standard format. Whether it's LangChain, LlamaIndex, or other ML frameworks, you can integrate various LLMs in the same way.
+
+> Due to limited time and energy, we welcome like-minded friends to join us in building CNLLM: [wangkancheng1122@163.com](mailto:wangkancheng1122@163.com)
+
+### Collaboration Opportunities
+
+| Area | Description |
+|------|-------------|
+| 🌐 **New Vendor Adapters** | Integrate more Chinese LLMs (Alibaba Qwen, ByteDance Doubao, Kimi, etc.) |
+| 🔗 **Framework Integration** | Deepen integration with LlamaIndex, LiteLLM, and other frameworks |
+| 🐛 **Capability Expansion** | Adapter development for Embedding, Multimodal, and other features |
+| 📖 **Documentation** | Add use cases and improve development guides |
+| 💡 **Feature Suggestions** | Share your ideas and requirements |
 
 Quick start: [Contributor Guide](docs/CONTRIBUTOR_en.md)
 Detailed architecture: [System Architecture](docs/ARCHITECTURE_en.md)
 
 ## Changelog
+
+### v0.4.2 (2026-04-05)
+
+- ✨ **GLM Adapter** - Zhipu GLM model adapter, supports "glm-4.6", "glm-5", "glm-5-turbo" and GLM 4.7 series
+  - Supports GLM native parameters: `do_sample`, `request_id`, `response_format`, `tool_stream`, `thinking.type`, etc.
+- 🔧 **Bug Fix** - Fixed `id` field response mapping
 
 ### v0.4.1 (2026-04-04)
 

@@ -1,0 +1,30 @@
+fields:
+  id: "id"
+  created: "created"
+  model: "model"
+  content: "choices[0].message.content"
+  tool_calls: "choices[0].message.tool_calls"
+  reasoning_content: "choices[0].message.reasoning_content"
+  prompt_tokens: "usage.prompt_tokens"
+  completion_tokens: "usage.completion_tokens"
+  total_tokens: "usage.total_tokens"
+
+defaults:
+  object: "chat.completion"
+  index: 0
+  role: "assistant"
+  finish_reason: "stop"
+
+stream_fields:
+  object: "chat.completion.chunk"
+  index: 0
+  role: "assistant"
+  finish_reason: null
+  content_path: "choices[0].delta.content"
+  tool_calls_path: "choices[0].delta.tool_calls"
+  reasoning_content_path: "choices[0].delta.reasoning_content"
+
+error_check:
+  sensitive_check:
+    input_sensitive_type_path: "input_sensitive_type"
+    output_sensitive_type_path: "output_sensitive_type"

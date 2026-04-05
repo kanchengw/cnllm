@@ -20,12 +20,12 @@ load_dotenv()
 
 from cnllm import CNLLM
 
-MODEL = "mimo-v2-flash"
-API_KEY = os.getenv("XIAOMI_API_KEY")
+MODEL = "glm-4.7"
+API_KEY = os.getenv("GLM_API_KEY")
 
 requires_api_key = pytest.mark.skipif(
-    not os.getenv("XIAOMI_API_KEY"),
-    reason="需要 XIAOMI_API_KEY"
+    not os.getenv("GLM_API_KEY"),
+    reason="需要 GLM_API_KEY"
 )
 
 
