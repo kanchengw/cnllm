@@ -70,7 +70,7 @@ class TestGLMFieldMapping:
         optional_fields = adapter._config.get("optional_fields", {})
         thinking_config = optional_fields.get("thinking", {})
 
-        assert thinking_config.get("body") == "thinking.type", f"thinking.body 应为 thinking.type，实际: {thinking_config.get('body')}"
+        assert thinking_config.get("body") == "thinking", f"thinking.body 应为 thinking，实际: {thinking_config.get('body')}"
         assert "transform" in thinking_config, "thinking 应有 transform 配置"
         assert thinking_config["transform"].get(True) == {"type": "enabled"}, "thinking=true 应转换为 enabled"
         assert thinking_config["transform"].get(False) == {"type": "disabled"}, "thinking=false 应转换为 disabled"

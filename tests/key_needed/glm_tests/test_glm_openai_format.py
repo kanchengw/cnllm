@@ -51,14 +51,18 @@ def get_nested_value(obj, path):
     """支持 choices[0].xxx 格式的嵌套访问"""
     parts = path.replace("]", "").replace("[", ".").split(".")
     current = obj
-    for part in parts:
-        if part.isdigit():
-            part = int(part)
+    for i, part in enumerate(parts):
         if isinstance(current, dict):
             current = current.get(part)
         elif isinstance(current, list):
-            current = current[part] if part.isdigit() else None
+            if part.isdigit():
+                idx = int(part)
+                current = current[idx] if idx < len(current) else None
+            else:
+                return None
         else:
+            if i == len(parts) - 1:
+                return current
             return None
     return current
 
@@ -162,7 +166,8 @@ class TestGLMStreamFormat:
         chunks_received = 0
         for chunk in client.chat.create(
             messages=[{"role": "user", "content": "说一个词"}],
-            max_tokens=20
+            max_tokens=20,
+            thinking=False
         ):
             chunks_received += 1
             assert "choices" in chunk, f"chunk {chunks_received} 应包含 choices"
@@ -179,7 +184,8 @@ class TestGLMStreamFormat:
 
         for chunk in client.chat.create(
             messages=[{"role": "user", "content": "讲故事"}],
-            max_tokens=50
+            max_tokens=50,
+            thinking=False
         ):
             pass
 

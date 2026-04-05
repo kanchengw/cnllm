@@ -43,8 +43,9 @@ class TestGLMClientInit:
 
     def test_model_mapping(self):
         """验证模型名称映射"""
-        client = CNLLM(model="glm-4.7", api_key="test-key")
-        vendor_model = client.adapter.get_vendor_model("glm-4.7")
+        from cnllm.core.vendor.glm import GLMAdapter
+        adapter = GLMAdapter(api_key="test", model="glm-4.7")
+        vendor_model = adapter.get_vendor_model("glm-4.7")
         assert vendor_model is not None
         print(f"\n[PASS] 模型映射: glm-4.7 -> {vendor_model}")
 
@@ -99,7 +100,8 @@ class TestGLMStreamChat:
         content_accumulated = ""
         for chunk in client.chat.create(
             messages=[{"role": "user", "content": "讲个简短的故事"}],
-            max_tokens=100
+            max_tokens=100,
+            thinking=False
         ):
             delta = chunk["choices"][0]["delta"]
             if delta.get("content"):
