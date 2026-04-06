@@ -77,11 +77,17 @@ class ParamValidator:
             for field in required.keys():
                 if field not in params or params[field] is None or params[field] == '':
                     raise MissingParameterError(parameter=field, provider=self.config_dir)
-        elif isinstance(required, list):
-            for field in required:
-                if field not in params or params[field] is None or params[field] == '':
-                    if field not in ("organization",):
-                        raise MissingParameterError(parameter=field, provider=self.config_dir)
+
+    def validate_base_url(self, base_url: str) -> Optional[str]:
+        if base_url is None:
+            return None
+        default_base_url = self._get_config_value("optional_fields", "base_url", "default", default="")
+        if base_url != default_base_url:
+            logger.warning(
+                f"[{self.config_dir}] 不支持自定义 base_url，当前传入: {base_url}，已自动使用默认: {default_base_url}"
+            )
+            return None
+        return base_url
 
     def validate_one_of(self, params: Dict[str, Any]) -> None:
         one_of = self._get_config_value("one_of", default={})

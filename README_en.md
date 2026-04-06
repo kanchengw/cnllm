@@ -33,6 +33,13 @@ Detailed architecture: [System Architecture](docs/ARCHITECTURE_en.md)
 
 ## Changelog
 
+### v0.4.3 (2026-04-06)
+
+- ✨ **Doubao Adapter** - ByteDance Doubao Seed series model adapter, supports seed-2.0 series, seed-1.6 series and seed-1.8, totaling 8 models (see `Supported Models` for details), with support for Doubao native parameters like `stream_options`, `reasoning_effort`, `service_tier`, etc.
+  - Supports `reasoning_effort` inference length field with four-level switching: `minimal`, `low`, `medium`, `high`
+  - Supports `thinking` field with three-level switching: `true` (enabled), `false` (disabled), `auto`; `thinking="auto"` only takes effect on doubao-seed-1-6 model
+- 🔧 **Bug Fix** - Fixed streaming response `_collect_stream_result` duplicate call causing content accumulation anomaly
+
 ### v0.4.2 (2026-04-05)
 
 - ✨ **GLM Adapter** - Zhipu GLM model adapter, supports "glm-4.6", "glm-5", "glm-5-turbo" and GLM 4.7 series
@@ -78,8 +85,10 @@ Detailed architecture: [System Architecture](docs/ARCHITECTURE_en.md)
 
 ## Supported Models
 
-- **Xiaomi mimo**: mimo-v2-pro, mimo-v2-flash, mimo-v2-omni
-- **MiniMax**: MiniMax-M2.7、MiniMax-M2.5、MiniMax-M2.1、MiniMax-M2
+- **Doubao**: doubao-seed-2-0-pro, doubao-seed-2-0-mini, doubao-seed-2-0-lite, doubao-seed-2-0-code, doubao-seed-1-8, doubao-seed-1-6, doubao-seed-1-6-lite, doubao-seed-1-6-flash
+- **Zhipu GLM**: glm-4.6, glm-4.7, glm-4.7-flash, glm-4.7-flashx, glm-5, glm-5-turbo
+- **Xiaomi MiMo**: mimo-v2-pro, mimo-v2-omni, mimo-v2-flash
+- **MiniMax**: MiniMax-M2.7, MiniMax-M2.5, MiniMax-M2.1, MiniMax-M2
 - **More providers and models in development**
 
 ## Installation

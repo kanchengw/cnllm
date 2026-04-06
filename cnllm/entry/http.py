@@ -8,6 +8,7 @@ from ..utils.exceptions import (
     NetworkError,
     ServerError,
     InvalidRequestError,
+    InvalidURLError,
     AuthenticationError
 )
 
@@ -50,7 +51,8 @@ class BaseHttpClient:
         elif status_code == 429:
             raise RateLimitError(provider=self.provider)
         elif status_code == 400:
-            raise InvalidRequestError(message=str(response.text), provider=self.provider)
+            error_detail = str(response.text)[:200] if response.text else "请求参数错误"
+            raise InvalidRequestError(message=error_detail, provider=self.provider)
         elif status_code >= 500:
             raise ServerError(
                 message=f"API 服务器错误 ({status_code})",
@@ -99,31 +101,21 @@ class BaseHttpClient:
                 if attempt < self.max_retries - 1:
                     time.sleep(self.retry_delay)
                     continue
-                raise NetworkError(
-                    provider=self.provider,
-                    suggestion="请检查 base_url 是否可访问，或不传入 base_url 使用默认值"
-                )
+                raise NetworkError(provider=self.provider)
 
             except (requests.exceptions.MissingSchema, requests.exceptions.InvalidURL) as e:
-                raise InvalidRequestError(
-                    message=f"无效的 base_url: {e}",
-                    provider=self.provider,
-                    suggestion="请核实 base_url 格式（需包含 http:// 或 https://），或不传入该参数使用默认值"
-                )
+                raise InvalidURLError(message=str(e), provider=self.provider)
 
             except requests.exceptions.HTTPError:
                 raise
 
-            except requests.exceptions.RequestException as e:
+            except requests.exceptions.RequestException:
                 if attempt < self.max_retries - 1:
                     time.sleep(self.retry_delay)
                     continue
-                raise NetworkError(
-                    provider=self.provider,
-                    suggestion="请检查 base_url 是否可访问，或不传入 base_url 使用默认值"
-                )
+                raise NetworkError(provider=self.provider)
 
-        raise ModelAPIError(f"重试 {self.max_retries} 次后仍然失败")
+        raise ModelAPIError(f"重试 {self.max_retries} 次后仍然失败", provider=self.provider)
 
     def post_stream(self, path: str, payload: Dict[str, Any], extra_headers: Dict[str, str] = None) -> Iterator[bytes]:
         headers = self._build_headers(extra_headers)
@@ -173,4 +165,4 @@ class BaseHttpClient:
                     continue
                 raise NetworkError(provider=self.provider)
 
-        raise ModelAPIError(f"重试 {self.max_retries} 次后仍然失败")
+        raise ModelAPIError(f"重试 {self.max_retries} 次后仍然失败", provider=self.provider)

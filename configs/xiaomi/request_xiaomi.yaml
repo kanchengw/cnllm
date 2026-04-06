@@ -31,8 +31,7 @@ optional_fields:
     body: "__skip__"
     default: 1.0
   temperature: ""
-  max_tokens:
-    body: "max_completion_tokens"
+  max_completion_tokens: ""
   top_p: ""
   presence_penalty: ""
   frequency_penalty: ""
@@ -51,3 +50,34 @@ model_mapping:
   mimo-v2-omni: "mimo-v2-omni"
   mimo-v2-flash: "mimo-v2-flash"
   mimo-v2-tts: "mimo-v2-tts"
+
+error_check:
+  code_path: "error.code"
+  success_code: 0
+  message_path: "error.message"
+  auth_code: 401
+  error_codes:
+    400:
+      type: "invalid_parameter"
+      suggestion: "请求格式错误，请检查 JSON 格式和参数是否正确"
+    401:
+      type: "authentication_error"
+      suggestion: "认证失败，请检查 API Key 和请求头格式是否正确"
+    402:
+      type: "token_limit"
+      suggestion: "余额不足，请检查账户余额并及时充值"
+    403:
+      type: "authentication_error"
+      suggestion: "拒绝访问，请检查 API Key 是否有效或是否被风控"
+    421:
+      type: "content_filtered"
+      suggestion: "内容审核拦截，请避免输入不安全或敏感内容"
+    429:
+      type: "rate_limit"
+      suggestion: "请求超限，请降低请求频率或升级套餐"
+    500:
+      type: "server_error"
+      suggestion: "服务器内部故障，请稍后重试或联系我们"
+    503:
+      type: "server_error"
+      suggestion: "服务器负载过高，请稍后重试"

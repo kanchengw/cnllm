@@ -21,23 +21,23 @@ from cnllm.core.vendor.xiaomi import XiaomiAdapter
 class TestMiniMaxPayload:
     """MiniMax Payload 构建测试"""
 
-    def test_max_tokens_mapping(self):
-        """验证 max_tokens → max_completion_tokens 映射"""
+    def test_max_completion_tokens_pass_through(self):
+        """验证 max_completion_tokens 直接透传"""
         adapter = MiniMaxAdapter(api_key="test-key", model="minimax-m2")
 
         params = {
             "messages": [{"role": "user", "content": "hello"}],
-            "max_tokens": 100
+            "max_completion_tokens": 100
         }
 
         payload = adapter._build_payload(params)
 
-        assert "max_completion_tokens" in payload, "max_tokens 应映射为 max_completion_tokens"
+        assert "max_completion_tokens" in payload, "max_completion_tokens 应直接透传"
         assert payload["max_completion_tokens"] == 100
-        assert "max_tokens" not in payload, "原始 max_tokens 不应出现在 payload"
+        assert "max_tokens" not in payload, "max_tokens 不应出现在 payload"
 
-        print(f"\n[PASS] MiniMax max_tokens 映射正确")
-        print(f"  max_tokens: 100 → max_completion_tokens: {payload['max_completion_tokens']}")
+        print(f"\n[PASS] MiniMax max_completion_tokens 透传正确")
+        print(f"  max_completion_tokens: {payload['max_completion_tokens']}")
 
     def test_basic_payload_structure(self):
         """验证基础 Payload 结构"""
@@ -76,23 +76,23 @@ class TestMiniMaxPayload:
 class TestXiaomiPayload:
     """Xiaomi Payload 构建测试"""
 
-    def test_max_tokens_mapping(self):
-        """验证 max_tokens → max_completion_tokens 映射"""
+    def test_max_completion_tokens_pass_through(self):
+        """验证 max_completion_tokens 直接透传"""
         adapter = XiaomiAdapter(api_key="test-key", model="mimo-v2-flash")
 
         params = {
             "messages": [{"role": "user", "content": "hello"}],
-            "max_tokens": 100
+            "max_completion_tokens": 100
         }
 
         payload = adapter._build_payload(params)
 
-        assert "max_completion_tokens" in payload, "max_tokens 应映射为 max_completion_tokens"
+        assert "max_completion_tokens" in payload, "max_completion_tokens 应直接透传"
         assert payload["max_completion_tokens"] == 100
-        assert "max_tokens" not in payload, "原始 max_tokens 不应出现在 payload"
+        assert "max_tokens" not in payload, "max_tokens 不应出现在 payload"
 
-        print(f"\n[PASS] Xiaomi max_tokens 映射正确")
-        print(f"  max_tokens: 100 → max_completion_tokens: {payload['max_completion_tokens']}")
+        print(f"\n[PASS] Xiaomi max_completion_tokens 透传正确")
+        print(f"  max_completion_tokens: {payload['max_completion_tokens']}")
 
     def test_basic_payload_structure(self):
         """验证基础 Payload 结构"""

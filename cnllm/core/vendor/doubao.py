@@ -1,40 +1,38 @@
-import os
-import uuid
-import time
 import logging
-from typing import Dict, Any, List, Optional, Iterator
+from typing import Dict, Any, Optional
 from ..adapter import BaseAdapter
 from ..responder import Responder
 from ...utils.vendor_error import VendorError, VendorErrorRegistry
 
+
 logger = logging.getLogger(__name__)
 
 
-class MiniMaxVendorError(VendorError):
-    VENDOR_NAME = "minimax"
+class DoubaoVendorError(VendorError):
+    VENDOR_NAME = "doubao"
 
     @classmethod
-    def from_response(cls, raw_response: dict) -> Optional["MiniMaxVendorError"]:
+    def from_response(cls, raw_response: dict) -> Optional["DoubaoVendorError"]:
         if not raw_response:
             return None
-        base_resp = raw_response.get("base_resp", {})
-        code = base_resp.get("status_code")
+        error = raw_response.get("error", {})
+        code = error.get("code")
         if code is None:
             return None
-        message = base_resp.get("status_msg", "")
+        message = error.get("message", "")
         return cls(code=code, message=message, vendor=cls.VENDOR_NAME, raw_response=raw_response)
 
 
-VendorErrorRegistry.register(MiniMaxVendorError.VENDOR_NAME, MiniMaxVendorError)
+VendorErrorRegistry.register("doubao", DoubaoVendorError)
 
 
-class MiniMaxResponder(Responder):
-    CONFIG_DIR = "minimax"
+class DoubaoResponder(Responder):
+    CONFIG_DIR = "doubao"
 
 
-class MiniMaxAdapter(BaseAdapter):
-    ADAPTER_NAME = "minimax"
-    CONFIG_DIR = "minimax"
+class DoubaoAdapter(BaseAdapter):
+    ADAPTER_NAME = "doubao"
+    CONFIG_DIR = "doubao"
 
     def __init__(
         self,
@@ -57,7 +55,7 @@ class MiniMaxAdapter(BaseAdapter):
             fallback_models=fallback_models,
             **kwargs
         )
-        self.responder = MiniMaxResponder()
+        self.responder = DoubaoResponder()
 
     def _get_responder(self):
         return self.responder
@@ -69,4 +67,4 @@ class MiniMaxAdapter(BaseAdapter):
         return self.responder.to_openai_stream_format(raw, model)
 
 
-MiniMaxAdapter._register()
+DoubaoAdapter._register()

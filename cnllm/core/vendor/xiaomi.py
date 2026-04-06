@@ -97,10 +97,8 @@ class XiaomiAdapter(BaseAdapter):
     def _to_openai_format(self, raw: Dict[str, Any], model: str) -> Dict[str, Any]:
         return self.responder.to_openai_format(raw, model)
 
-    def _to_openai_stream_format(self, raw: Dict[str, Any], model: str) -> Dict[str, Any]:
-        result = self.responder.to_openai_stream_format(raw, model)
-        self._collect_stream_result(result)
-        return result
+    def _do_to_openai_stream_format(self, raw: Dict[str, Any], model: str) -> Dict[str, Any]:
+        return self.responder.to_openai_stream_format(raw, model)
 
 
 XiaomiAdapter._register()

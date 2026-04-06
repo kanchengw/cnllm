@@ -121,7 +121,7 @@ class TimeoutError(CNLLMError):
 class NetworkError(CNLLMError):
     def __init__(
         self,
-        message: str = "网络错误",
+        message: str = "网络连接失败",
         provider: str = "unknown",
         details: Optional[Dict[str, Any]] = None
     ):
@@ -131,7 +131,7 @@ class NetworkError(CNLLMError):
             status_code=None,
             provider=provider,
             details=details,
-            suggestion="请检查网络连接，或尝试使用代理"
+            suggestion="请检查网络连接，或不传入 base_url 使用默认值"
         )
 
 
@@ -168,6 +168,23 @@ class InvalidRequestError(CNLLMError):
             provider=provider,
             details=details,
             suggestion=suggestion or "请检查请求参数是否正确"
+        )
+
+
+class InvalidURLError(CNLLMError):
+    def __init__(
+        self,
+        message: str = "无效的 URL 格式",
+        provider: str = "unknown",
+        details: Optional[Dict[str, Any]] = None
+    ):
+        super().__init__(
+            message=message,
+            error_code=ErrorCode.INVALID_REQUEST,
+            status_code=None,
+            provider=provider,
+            details=details,
+            suggestion="请核实 base_url 格式，如非必须参数，建议不传入 base_url 使用默认值"
         )
 
 

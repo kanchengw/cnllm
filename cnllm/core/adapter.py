@@ -65,12 +65,12 @@ class BaseAdapter:
         self.timeout = timeout
         self.max_retries = max_retries
         self.retry_delay = retry_delay
-        self.base_url = base_url
         self.fallback_models = fallback_models or {}
         self._raw_response = None
         self._last_adapter = None
         self._config = self._load_config()
         self._validator = ParamValidator(self.CONFIG_DIR)
+        self.base_url = self._validator.validate_base_url(base_url)
         if self.timeout is None:
             self.timeout = self._validator.get_default_value("timeout") or 30
         if self.max_retries is None:
@@ -176,7 +176,12 @@ class BaseAdapter:
             if isinstance(field_config, dict):
                 if field_config.get("body") == "__skip__":
                     continue
+                transform = field_config.get("transform")
+                if transform and value in transform:
+                    value = transform[value]
                 mapped_key = field_config.get("body") or field_config.get("head", key)
+                if mapped_key == "":
+                    mapped_key = key
             else:
                 if field_config == "__skip__":
                     continue
@@ -256,10 +261,9 @@ class BaseAdapter:
             raise
         except Exception as e:
             error_msg = getattr(e, 'message', str(e))
-            error_suggestion = getattr(e, 'suggestion', None)
             raise ModelAPIError(
                 f"{self.ADAPTER_NAME} API 请求失败: {error_msg}",
-                suggestion=error_suggestion
+                provider=self.ADAPTER_NAME
             )
 
     def _handle_stream(self, client: BaseHttpClient, api_path: str, payload: Dict[str, Any], model: str, extra_headers: Dict[str, str] = None) -> Iterator[Dict[str, Any]]:
@@ -272,7 +276,12 @@ class BaseAdapter:
         raise NotImplementedError("子类必须实现 _to_openai_format")
 
     def _to_openai_stream_format(self, raw: Dict[str, Any], model: str) -> Dict[str, Any]:
-        raise NotImplementedError("子类必须实现 _to_openai_stream_format")
+        result = self._do_to_openai_stream_format(raw, model)
+        self._collect_stream_result(result)
+        return result
+
+    def _do_to_openai_stream_format(self, raw: Dict[str, Any], model: str) -> Dict[str, Any]:
+        raise NotImplementedError("子类必须实现 _do_to_openai_stream_format")
 
     def _get_responder(self) -> Optional[Any]:
         return None

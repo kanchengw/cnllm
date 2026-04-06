@@ -74,7 +74,7 @@ class TestRequestYAML:
 
         assert "stream" in optional, "stream 应在 optional_fields 中"
         assert "temperature" in optional, "temperature 应在 optional_fields 中"
-        assert "max_tokens" in optional, "max_tokens 应在 optional_fields 中"
+        assert "max_completion_tokens" in optional, "max_completion_tokens 应在 optional_fields 中"
         assert "thinking" in optional, "thinking 应在 optional_fields 中（Xiaomi 特有）"
 
         print(f"\n[PASS] optional_fields 配置完整")

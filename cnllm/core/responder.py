@@ -110,7 +110,6 @@ class Responder:
         prompt_tokens = self._get_by_path(raw, fields.get("prompt_tokens", "usage.prompt_tokens"), 0)
         completion_tokens = self._get_by_path(raw, fields.get("completion_tokens", "usage.completion_tokens"), 0)
         total_tokens = self._get_by_path(raw, fields.get("total_tokens", "usage.total_tokens"), 0)
-        reasoning_tokens = self._get_by_path(raw, fields.get("reasoning_tokens", "usage.completion_tokens_details.reasoning_tokens"), None)
 
         usage = {
             "prompt_tokens": prompt_tokens or 0,
@@ -118,7 +117,8 @@ class Responder:
             "total_tokens": total_tokens or 0
         }
 
-        if reasoning_tokens is not None and reasoning_tokens > 0:
+        reasoning_tokens = self._get_by_path(raw, fields.get("reasoning_tokens", "usage.completion_tokens_details.reasoning_tokens"), None)
+        if reasoning_tokens is not None:
             usage["completion_tokens_details"] = {
                 "reasoning_tokens": reasoning_tokens
             }
