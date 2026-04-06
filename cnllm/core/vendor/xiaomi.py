@@ -15,6 +15,7 @@ class XiaomiVendorError(VendorError):
     def from_response(cls, raw_response: dict) -> Optional["XiaomiVendorError"]:
         if not raw_response:
             return None
+
         error = raw_response.get("error", {})
         code = error.get("code")
         if code is None:

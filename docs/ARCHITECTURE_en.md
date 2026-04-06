@@ -104,43 +104,31 @@ configs/
 ## 3. Exception Handling System Architecture
 
 ```mermaid
-flowchart TD
-    subgraph L1["Layer 1: Vendor Error"]
-        direction TB
-        V1["MiniMaxVendorError.from_response()"]
-        V1File["core/vendor/minimax.py"]
-        V1Text["Parse vendor raw response → code, message"]
+flowchart LR
+    subgraph HTTP层["HTTP Layer (cnllm/entry/http.py)"]
+        H["Network Layer\nTimeout / 401 / 429 / 500 / 400"]
     end
 
-    subgraph L2["Layer 2: Error Translator"]
-        direction TB
-        V2["ErrorTranslator.translate()"]
-        V2File["utils/vendor_error.py"]
-        V2Text["Lookup YAML → type → CNLLM Error"]
+    subgraph Responder层["Responder Layer (core/responder.py)"]
+        R["Business Layer\nContent Filter / Balance / Model Not Supported"]
     end
 
-    subgraph L3["Layer 3: CNLLM Error"]
-        direction TB
-        V3["RateLimitError, ServerError,<br/>AuthenticationError..."]
-        V3File["utils/exceptions.py"]
-        V3Text["Unified exception type, preserve vendor info"]
+    subgraph Fallback层["Fallback Layer (utils/fallback.py)"]
+        F["FallbackManager\nMulti-model Fallback"]
     end
 
-    subgraph L4["Layer 4: User Code"]
-        direction TB
-        V4["User Application Layer"]
-        V4File["User Code"]
-        V4Text["try: ... except CNLLMError: ..."]
+    subgraph 用户层["User Code"]
+        U["try: ... except CNLLMError: ..."]
     end
 
-    V1 -->|"Registry.create_vendor_error()"| V2
-    V2 -->|"raise CNLLM Error"| V3
-    V3 -->|"Exception Propagation"| V4
+    HTTP层 -->|"Exception Pass-through"| 用户层
+    Responder层 -->|"Exception Pass-through"| 用户层
+    Fallback层 -->|"FallbackError"| 用户层
 
-    style V1 fill:#ffebee
-    style V2 fill:#fff3e0
-    style V3 fill:#e8f5e9
-    style V4 fill:#e3f2fd
+    style HTTP层 fill:#ffebee
+    style Responder层 fill:#fff3e0
+    style Fallback层 fill:#e8f5e9
+    style 用户层 fill:#e3f2fd
 ```
 
 ***

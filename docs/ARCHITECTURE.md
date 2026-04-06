@@ -100,44 +100,63 @@ configs/
 ## 3. 异常处理系统架构
 
 ```mermaid
-flowchart TD
-    subgraph L1["Layer 1: Vendor Error"]
-        direction TB
-        V1["MiniMaxVendorError.from_response()"]
-        V1File["core/vendor/minimax.py"]
-        V1Text["解析厂商原始响应 → code, message"]
+flowchart LR
+    subgraph HTTP层["HTTP 层 (cnllm/entry/http.py)"]
+        H["网络层异常捕获\n超时 / 401 / 429 / 500 / 400"]
     end
 
-    subgraph L2["Layer 2: Error Translator"]
-        direction TB
-        V2["ErrorTranslator.translate()"]
-        V2File["utils/vendor_error.py"]
-        V2Text["查 YAML → type → CNLLM Error"]
+    subgraph Responder层["Responder 层 (core/responder.py)"]
+        R["业务层异常处理\n内容过滤 / 余额不足 / 模型不支持"]
     end
 
-    subgraph L3["Layer 3: CNLLM Error"]
-        direction TB
-        V3["RateLimitError, ServerError,<br/>AuthenticationError..."]
-        V3File["utils/exceptions.py"]
-        V3Text["统一异常类型，保留厂商信息"]
+    subgraph Fallback层["Fallback 层 (utils/fallback.py)"]
+        F["FallbackManager\n多模型兜底"]
     end
 
-    subgraph L4["Layer 4: User Code"]
-        direction TB
-        V4["用户应用层"]
-        V4File["用户代码"]
-        V4Text["try: ... except CNLLMError: ..."]
+    subgraph 用户层["用户代码"]
+        U["try: ... except CNLLMError: ..."]
     end
 
-    V1 -->|"Registry.create_vendor_error()"| V2
-    V2 -->|"raise CNLLM Error"| V3
-    V3 -->|"异常传播"| V4
+    HTTP层 -->|"异常透传"| 用户层
+    Responder层 -->|"异常透传"| 用户层
+    Fallback层 -->|"FallbackError"| 用户层
 
-    style V1 fill:#ffebee
-    style V2 fill:#fff3e0
-    style V3 fill:#e8f5e9
-    style V4 fill:#e3f2fd
+    style HTTP层 fill:#ffebee
+    style Responder层 fill:#fff3e0
+    style Fallback层 fill:#e8f5e9
+    style 用户层 fill:#e3f2fd
 ```
+
+### 3.1 错误分类与处理职责
+
+| 错误类型 | 发生场景 | 处理组件 |
+|---------|---------|---------|
+| 网络不可达、连接超时 | 发送请求前 | HTTP 层 |
+| API Key 错误 (401) | 请求到达服务器前 | HTTP 层 |
+| 限流 (429) | 请求到达服务器前 | HTTP 层 |
+| 模型不存在、参数错误 (400) | 请求到达服务器后 | HTTP 层 |
+| 服务器错误 (>=500) | 请求到达服务器后 | HTTP 层 |
+| 业务错误 (敏感词、余额不足) | 模型处理后 | Responder 层 |
+| 模型不支持 | 参数验证阶段 | Responder 层 |
+| 所有模型均失败 | Fallback 机制 | Fallback 层 |
+
+### 3.2 FallbackError 错误聚合
+
+当配置多模型 fallback 且所有模型都失败时，`FallbackError` 会聚合所有错误信息：
+
+```python
+try:
+    client = CNLLM(
+        model="primary-model",
+        api_key="key",
+        fallback_models={"backup-1": "key1", "backup-2": "key2"}
+    )
+    client.chat.create(messages=[...])
+except FallbackError as e:
+    print(e.message)  # "所有模型均失败。已尝试: primary-model, backup-1, backup-2"
+    for i, err in enumerate(e.errors):
+        print(f"[{i+1}] {err}")  # 每个模型的详细错误
+
 ***
 
 ## 4. FallbackManager 流程设计

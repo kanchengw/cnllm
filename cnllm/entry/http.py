@@ -46,18 +46,21 @@ class BaseHttpClient:
     def _raise_for_status(self, response: requests.Response, attempt: int) -> None:
         status_code = response.status_code
 
+        try:
+            error_detail = response.json() if response.text else {}
+        except Exception:
+            error_detail = {}
+
         if status_code == 401:
             raise AuthenticationError(provider=self.provider)
         elif status_code == 429:
             raise RateLimitError(provider=self.provider)
         elif status_code == 400:
-            error_detail = str(response.text)[:200] if response.text else "请求参数错误"
-            raise InvalidRequestError(message=error_detail, provider=self.provider)
+            msg = error_detail.get("error", {}).get("message") or str(response.text)[:200] if response.text else "请求参数错误"
+            raise InvalidRequestError(message=msg, provider=self.provider)
         elif status_code >= 500:
-            raise ServerError(
-                message=f"API 服务器错误 ({status_code})",
-                provider=self.provider
-            )
+            msg = error_detail.get("error", {}).get("message") or f"API 服务器错误 ({status_code})"
+            raise ServerError(message=msg, provider=self.provider)
         else:
             raise InvalidRequestError(
                 message=f"API 请求失败 (HTTP {status_code})",

@@ -145,6 +145,9 @@ class Responder:
             "finish_reason": self._get_by_path(raw, fields.get("finish_reason", "choices[0].finish_reason")) or defaults.get("finish_reason")
         }
 
+        logprobs_path = fields.get("logprobs_path", "choices[0].logprobs")
+        choice["logprobs"] = self._get_by_path(raw, logprobs_path)
+
         result = {
             "id": self._get_by_path(raw, fields.get("id", "id")) or f"chatcmpl-{uuid.uuid4().hex[:24]}",
             "object": defaults.get("object", "chat.completion"),
@@ -156,6 +159,10 @@ class Responder:
 
         if reasoning_content:
             result["_thinking"] = reasoning_content
+
+        system_fingerprint = fields.get("system_fingerprint")
+        if system_fingerprint and system_fingerprint in raw:
+            result["system_fingerprint"] = raw[system_fingerprint]
 
         return result
 
@@ -222,8 +229,6 @@ class Responder:
         return result
 
     def check_error(self, raw_response: Dict[str, Any], adapter_name: str = "") -> None:
-        self._check_sensitive(raw_response, adapter_name)
-
         vendor_error = VendorErrorRegistry.create_vendor_error(
             adapter_name.lower(),
             raw_response
@@ -237,42 +242,6 @@ class Responder:
         translator = ErrorTranslator(self.config_dir)
         translator.translate(vendor_error, success_code=success_code, auth_code=auth_code)
 
-    def _check_sensitive(self, raw_response: Dict[str, Any], adapter_name: str = "") -> None:
-        sensitive_check = self._get_config_value("error_check", "sensitive_check")
-        if not sensitive_check:
-            return
-
-        input_path = sensitive_check.get("input_sensitive_type_path", "").split(".")
-        output_path = sensitive_check.get("output_sensitive_type_path", "").split(".")
-
-        input_type = raw_response
-        for key in input_path:
-            if isinstance(input_type, dict):
-                input_type = input_type.get(key)
-            else:
-                input_type = None
-                break
-
-        if input_type is not None and input_type != "null" and input_type != "" and input_type != 0:
-            raise ContentFilteredError(
-                message=f"{adapter_name} 输入内容敏感: {input_type}",
-                provider=adapter_name
-            )
-
-        output_type = raw_response
-        for key in output_path:
-            if isinstance(output_type, dict):
-                output_type = output_type.get(key)
-            else:
-                output_type = None
-                break
-
-        if output_type is not None and output_type != "null" and output_type != "" and output_type != 0:
-            raise ContentFilteredError(
-                message=f"{adapter_name} 输出内容敏感: {output_type}",
-                provider=adapter_name
-            )
-
     def collect_stream_result(self, raw_response: Dict[str, Any], result: Dict[str, Any]) -> None:
         if raw_response is None:
             return
@@ -280,7 +249,7 @@ class Responder:
             raw_response["chunks"] = []
         raw_response["chunks"].append(result)
 
-        reasoning_content = result.pop("_reasoning_content", None)
+        reasoning_content = result.get("_reasoning_content")
         if reasoning_content:
             if "_thinking" not in raw_response:
                 raw_response["_thinking"] = ""

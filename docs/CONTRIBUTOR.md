@@ -134,6 +134,8 @@ CNLLM 在完成 **厂商响应字段 → OpenAI 标准响应字段**的映射后
 | `completion_tokens` | `usage.completion_tokens` |
 | `total_tokens`    | `usage.total_tokens` |
 | `reasoning_tokens` | `usage.completion_tokens_details.reasoning_tokens` |
+| `system_fingerprint` | - |
+| `choices[0].logprobs` | - |
 | -                 | `choices[0].message.reasoning_content` |
 
 ***
@@ -153,8 +155,7 @@ CNLLM 在完成 **厂商响应字段 → OpenAI 标准响应字段**的映射后
 | API配置 | `get_base_url`, `get_api_path` | `optional_fields.base_url.default`, `request.method` | request\_{vendor}.yaml |
 | 模型名映射 | `model_mapping` | `model_mapping` | request\_{vendor}.yaml |
 | OpenAI 响应字段映射 | `Responder` | `fields` | response\_{vendor}.yaml |
-| 敏感内容检测 | `Responder` | `error_check.sensitive_check` | response\_{vendor}.yaml |
-| 流式响应映射 | `Responder` | `stream_fields` | response\_{vendor}.yaml |
+| 厂商错误码映射 | `Adapter` | `error_check.sensitive_check` | response\_{vendor}.yaml |
 
 
 ### 2.2 请求配置 configs/request\_{vendor}.yaml

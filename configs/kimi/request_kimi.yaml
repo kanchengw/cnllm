@@ -1,0 +1,97 @@
+request:
+  method: "POST"
+  headers:
+    Content-Type: "application/json"
+    Authorization: "Bearer ${api_key}"
+
+required_fields:
+  api_key:
+    body: "__skip__"
+  model: ""
+
+one_of:
+  messages_or_prompt:
+    messages: ""
+    prompt: ""
+
+optional_fields:
+  base_url:
+    body: "__skip__"
+    default: "https://api.moonshot.cn/v1"
+    text: "chat/completions"
+  fallback_models:
+    body: "__skip__"
+  timeout:
+    body: "__skip__"
+    default: 60.0
+  max_retries:
+    body: "__skip__"
+    default: 3
+  retry_delay:
+    body: "__skip__"
+    default: 1.0
+  temperature: ""
+  top_p: ""
+  max_completion_tokens: ""
+  stream: ""
+  stop: ""
+  n: ""
+  tools: ""
+  tool_choice: ""
+  user: ""
+  presence_penalty: ""
+  frequency_penalty: ""
+  response_format: ""
+  stream_options: ""
+  thinking:
+    body: "thinking"
+    transform:
+      true: {"type": "enabled"}
+      false: {"type": "disabled"}
+  prompt_cache_key: ""
+  safety_identifier: ""
+
+model_mapping:
+  moonshot-v1-8k: "moonshot-v1-8k"
+  moonshot-v1-32k: "moonshot-v1-32k"
+  moonshot-v1-128k: "moonshot-v1-128k"
+  kimi-k2.5: "kimi-k2.5"
+  kimi-k2-thinking: "kimi-k2-thinking"
+  kimi-k2-thinking-turbo: "kimi-k2-thinking-turbo"
+  kimi-k2-0905-preview: "kimi-k2-0905-preview"
+  kimi-k2-0711-preview: "kimi-k2-0711-preview"
+  kimi-k2-turbo-preview: "kimi-k2-turbo-preview"
+
+error_check:
+  code_path: "error.code"
+  success_code: null
+  auth_code: 401
+  message_path: "error.message"
+  error_codes:
+    invalid_authentication_error:
+      type: "authentication_error"
+      suggestion: "请检查 API Key 是否正确"
+    authentication_error:
+      type: "authentication_error"
+      suggestion: "请检查 API Key 是否正确"
+    rate_limit_error:
+      type: "rate_limit"
+      suggestion: "请求过于频繁，请稍后重试"
+    invalid_request_error:
+      type: "invalid_parameter"
+      suggestion: "请检查请求参数是否正确"
+    server_error:
+      type: "server_error"
+      suggestion: "服务器内部错误，请稍后重试"
+    not_found_error:
+      type: "invalid_parameter"
+      suggestion: "模型或资源不存在"
+    insufficient_quota_error:
+      type: "insufficient_balance"
+      suggestion: "账户配额不足，请充值"
+    content_filter:
+      type: "content_filtered"
+      suggestion: "内容被过滤，请更换输入后重试"
+    access_denied_error:
+      type: "invalid_parameter"
+      suggestion: "禁止访问，请检查权限"

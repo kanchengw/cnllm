@@ -14,7 +14,7 @@ Integrating Chinese large language models into established ML frameworks has bec
 
 Current mainstream approaches have clear limitations: using OpenAI-compatible interfaces is straightforward but cannot fully leverage each vendor's native capabilities; calling native interfaces directly means handling response parsing, format conversion, and other tedious work on your own.
 
-CNLLM is dedicated to resolving this dilemma—by providing a **unified interface** and **consistent parameter specifications** for calling Chinese LLMs. While fully unleashing the native capabilities of these models, CNLLM automatically converts diverse responses into OpenAI standard format. Whether it's LangChain, LlamaIndex, or other ML frameworks, you can integrate various LLMs in the same way.
+CNLLM is dedicated to resolving this dilemma—by providing a **unified interface** and **consistent parameter specifications** for calling Chinese LLMs. While fully unleashing the native capabilities of these models, CNLLM automatically converts diverse responses into OpenAI standard format. Whether it's LangChain, LlamaIndex or other ML frameworks, you can integrate various LLMs in the same way; additionally, in scenarios requiring multi-model collaboration, you can maintain consistent interfaces, parameters, and response formats.
 
 > Due to limited time and energy, we welcome like-minded friends to join us in building CNLLM: [wangkancheng1122@163.com](mailto:wangkancheng1122@163.com)
 
@@ -33,6 +33,12 @@ Detailed architecture: [System Architecture](docs/ARCHITECTURE_en.md)
 
 ## Changelog
 
+### v0.5.0 (2026-04-06)
+
+- ✨ **KIMI (Moonshot AI) Adapter** - Kimi model adapter, supports kimi-k2.5, kimi-k2 series and moonshot-v1 series (8k/32k/128k)
+- ✨ **DeepSeek Adapter** - DeepSeek model adapter, supports `deepseek-chat` and `deepseek-reasoner` models
+- Now CNLLM includes `system_fingerprint` and `choices[0].logprobs` fields in standard response
+
 ### v0.4.3 (2026-04-06)
 
 - ✨ **Doubao Adapter** - ByteDance Doubao Seed series model adapter, supports seed-2.0 series, seed-1.6 series and seed-1.8, totaling 8 models (see `Supported Models` for details), with support for Doubao native parameters like `stream_options`, `reasoning_effort`, `service_tier`, etc.
@@ -43,7 +49,7 @@ Detailed architecture: [System Architecture](docs/ARCHITECTURE_en.md)
 ### v0.4.2 (2026-04-05)
 
 - ✨ **GLM Adapter** - Zhipu GLM model adapter, supports "glm-4.6", "glm-5", "glm-5-turbo" and GLM 4.7 series
-  - Supports GLM native parameters: `do_sample`, `request_id`, `response_format`, `tool_stream`, `thinking.type`, etc.
+  - Supports GLM native parameters: `do_sample`, `request_id`, `response_format`, `tool_stream`, `thinking`, etc.
 - 🔧 **Bug Fix** - Fixed `id` field response mapping
 
 ### v0.4.1 (2026-04-04)
@@ -85,6 +91,8 @@ Detailed architecture: [System Architecture](docs/ARCHITECTURE_en.md)
 
 ## Supported Models
 
+- **DeepSeek**: deepseek-chat, deepseek-reasoner
+- **KIMI (Moonshot AI)**: kimi-k2.5, kimi-k2-thinking, kimi-k2-thinking-turbo, kimi-k2-turbo-preview, kimi-k2-0905-preview, moonshot-v1-8k, moonshot-v1-32k, moonshot-v1-128k
 - **Doubao**: doubao-seed-2-0-pro, doubao-seed-2-0-mini, doubao-seed-2-0-lite, doubao-seed-2-0-code, doubao-seed-1-8, doubao-seed-1-6, doubao-seed-1-6-lite, doubao-seed-1-6-flash
 - **Zhipu GLM**: glm-4.6, glm-4.7, glm-4.7-flash, glm-4.7-flashx, glm-5, glm-5-turbo
 - **Xiaomi MiMo**: mimo-v2-pro, mimo-v2-omni, mimo-v2-flash
@@ -178,30 +186,36 @@ print(client.chat.tools)     # Returns: {tool call message dict}
 
 ## Unified Interface Parameters
 
-| Parameter            | Type          | Required | Default      | Client Init | Call Entry | Description                                           |
-| ------------------- | ------------- | -------- | ------------ | :---------: | :--------: | ----------------------------------------------------- |
-| `model`             | str           | ✅        | -            |     ✅      |     ✅     | Such as minimax-m2.7 or MiniMax-m2.7                 |
-| `api_key`           | str           | ✅        | -            |     ✅      |     ✅     | API key                                               |
-| `messages`          | list\[dict]   | ⚠️       | -            |     ❌      |     ✅     | OpenAI format message list (mutually exclusive with prompt) |
-| `prompt`            | str           | ⚠️       | -            |     ❌      |     ✅     | Short form (mutually exclusive with messages)          |
-| `fallback_models`   | dict          | -        | {}           |     ✅      |     ❌     | Backup model configuration                            |
-| `base_url`          | str           | -        | API default  |     ✅      |     ✅     | Custom API address                                    |
-| `timeout`           | int           | -        | 60           |     ✅      |     ✅     | Request timeout (seconds)                            |
-| `max_retries`       | int           | -        | 3            |     ✅      |     ✅     | Maximum retry count                                   |
-| `retry_delay`       | float         | -        | 1.0          |     ✅      |     ✅     | Retry delay (seconds)                                 |
-| `temperature`       | float         | -        | 0.7          |     ✅      |     ✅     | Generation randomness, 0-2                            |
-| `max_tokens`        | int           | -        | None         |     ✅      |     ✅     | Maximum generation token count                        |
-| `stream`            | bool          | -        | False        |     ✅      |     ✅     | Streaming response                                    |
-| `top_p`             | float         | -        | 0.95         |     ✅      |     ✅     | Nucleus sampling threshold                            |
-| `top_k`             | int           | -        | -            |     ✅      |     ✅     | Top-K sampling                                        |
-| `tools`             | list          | -        | -            |     ✅      |     ✅     | Function tools definition                             |
-| `tool_choice`       | str           | -        | -            |     ✅      |     ✅     | Tool choice mode: none / auto                         |
-| `thinking`          | bool          | -        | -            |     ✅      |     ✅     | Thinking mode (MiniMax-M1)                           |
-| `presence_penalty`  | float         | -        | -            |     ✅      |     ✅     | Presence penalty                                      |
-| `frequency_penalty` | float         | -        | -            |     ✅      |     ✅     | Frequency penalty                                     |
-| `stop`              | str/list      | -        | -            |     ✅      |     ✅     | Stop sequences                                        |
-| `user`              | str           | -        | -            |     ✅      |     ✅     | User identifier                                       |
-| `organization`      | str           | -        | -            |     ✅      |     ✅     | When using MiniMax, automatically maps to MiniMax standard field group_id |
+| Parameter            | Type          | Required | Default                      | Client Init | Call Entry | Description                                           |
+| ------------------- | ------------- | -------- | ---------------------------- | :---------: | :--------: | ----------------------------------------------------- |
+| `model`             | str           | ✅        | -                            |     ✅      |     ✅     | Required at client initialization                      |
+| `api_key`           | str           | ✅        | -                            |     ✅      |     ✅     | API key                                               |
+| `messages`          | list\[dict]   | ⚠️       | -                            |     ❌      |     ✅     | OpenAI format message list (mutually exclusive with prompt) |
+| `prompt`            | str           | ⚠️       | -                            |     ❌      |     ✅     | Short form (mutually exclusive with messages)          |
+| `fallback_models`   | dict          | -        | -                            |     ✅      |     ❌     | Backup model configuration (see FallbackManager design) |
+| `base_url`          | str           | -        | Auto-adapted model default   |     ✅      |     ✅     | Custom API address                                    |
+| `timeout`           | int           | -        | 60                           |     ✅      |     ✅     | Request timeout (seconds)                             |
+| `max_retries`       | int           | -        | 3                            |     ✅      |     ✅     | Maximum retry count                                  |
+| `retry_delay`       | float         | -        | 1.0                          |     ✅      |     ✅     | Retry delay (seconds)                                |
+| `temperature`       | float         | -        | Vendor default               |     ✅      |     ✅     | Generation randomness                                 |
+| `max_tokens`        | int           | -        | Vendor default               |     ✅      |     ✅     | Maximum generation token count                        |
+| `stream`            | bool          | -        | Vendor default, usually False|     ✅      |     ✅     | Streaming response                                   |
+| `top_p`             | float         | -        | Vendor default               |     ✅      |     ✅     | Nucleus sampling threshold                           |
+| `tools`             | list          | -        | -                            |     ✅      |     ✅     | Function tools definition                             |
+| `tool_choice`       | str           | -        | -                            |     ✅      |     ✅     | Tool choice mode: none / auto                         |
+| `thinking`          | bool          | -        | Vendor default               |     ✅      |     ✅     | Thinking mode, unified format as `thinking=True/False` |
+| `presence_penalty`  | float         | -        | Vendor default               |     ✅      |     ✅     | Presence penalty                                     |
+| `frequency_penalty` | float         | -        | Vendor default               |     ✅      |     ✅     | Frequency penalty                                    |
+| `organization`      | str           | -        | -                            |     ✅      |     ✅     | Maps to group_id when using MiniMax                  |
+| `stop`              | str/list      | -        | -                            |     ✅      |     ✅     | Stop sequences                                       |
+| `user`              | str           | -        | -                            |     ✅      |     ✅     | User identifier                                      |
+| `response_format`   | dict          | -        | Vendor default, usually {type:"text"} |     ✅      |     ✅     | Response format                                      |
+
+**Notes**:
+
+- For more parameters supported by specific models, please refer to the official documentation. CNLLM will pass through all parameters supported by the specific model.
+- Call entry parameters take priority. It is recommended to pass commonly used parameters at the client level, and flexibly override or pass more parameters at individual calls.
+- Required parameters only need to be ensured not empty when the request is initiated, i.e., the client and call entry should have at least one provide the parameter.
 
 ## Response Format
 
@@ -219,6 +233,7 @@ Through any API call style in the quick start, the model's response will be conv
             "role": "assistant",
             "content": "I am MiniMax-M2.7..."
         },
+        "logprobs": null,
         "finish_reason": "stop"
     }],
     "usage": {
@@ -231,7 +246,8 @@ Through any API call style in the quick start, the model's response will be conv
         "completion_tokens_details": {
             "reasoning_tokens": 0
         }
-    }
+    },
+    "system_fingerprint": "fp_xxx"
 }
 ```
 
