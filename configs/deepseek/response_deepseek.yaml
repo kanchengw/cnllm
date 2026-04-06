@@ -8,6 +8,9 @@ fields:
   prompt_tokens: "usage.prompt_tokens"
   completion_tokens: "usage.completion_tokens"
   total_tokens: "usage.total_tokens"
+  system_fingerprint: "system_fingerprint"
+  logprobs: true
+  logprobs_path: "choices[0].logprobs"
 
 defaults:
   object: "chat.completion"
@@ -23,4 +26,3 @@ stream_fields:
   content_path: "choices[0].delta.content"
   tool_calls_path: "choices[0].delta.tool_calls"
   reasoning_content_path: "choices[0].delta.reasoning_content"
-

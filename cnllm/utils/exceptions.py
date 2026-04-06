@@ -245,7 +245,8 @@ class ContentFilteredError(CNLLMError):
         self,
         message: str = "内容被过滤",
         provider: str = "unknown",
-        details: Optional[Dict[str, Any]] = None
+        details: Optional[Dict[str, Any]] = None,
+        suggestion: str = None
     ):
         super().__init__(
             message=message,
@@ -253,7 +254,7 @@ class ContentFilteredError(CNLLMError):
             status_code=403,
             provider=provider,
             details=details,
-            suggestion="请修改提示词内容后重试"
+            suggestion=suggestion or "请修改提示词内容后重试"
         )
 
 
@@ -315,16 +316,22 @@ class FallbackError(CNLLMError):
     def __init__(
         self,
         message: str = "所有模型均失败",
+        errors: Optional[list] = None,
         details: Optional[Dict[str, Any]] = None
     ):
+        self.errors = errors or []
+        error_details = []
+        for i, err in enumerate(self.errors):
+            error_details.append(f"[{i+1}] {err}")
+        full_message = message
+        if error_details:
+            full_message = f"{message}\n\n失败详情:\n" + "\n".join(error_details)
+
         super().__init__(
-            message=message,
+            message=full_message,
             error_code=ErrorCode.SERVER_ERROR,
             status_code=500,
             provider="unknown",
             details=details,
             suggestion="请检查网络连接，或稍后重试"
         )
-
-    def _format_message(self) -> str:
-        return self.message

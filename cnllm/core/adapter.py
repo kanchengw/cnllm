@@ -253,11 +253,7 @@ class BaseAdapter:
                 if thinking:
                     self._raw_response["_thinking"] = thinking
                 return result
-        except AuthenticationError:
-            raise
-        except ContentFilteredError:
-            raise
-        except ModelBusinessError:
+        except (AuthenticationError, ContentFilteredError, ModelBusinessError):
             raise
         except Exception as e:
             error_msg = getattr(e, 'message', str(e))

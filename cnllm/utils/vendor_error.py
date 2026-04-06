@@ -83,6 +83,12 @@ class ErrorTranslator:
                 provider=vendor_error.vendor
             )
 
+        if code == 99999:
+            raise ContentFilteredError(
+                message=f"{vendor_error.vendor} 内容过滤: {vendor_error.message}",
+                provider=vendor_error.vendor
+            )
+
         if code != success_code:
             error_info = self.get_error_info(code)
             error_type = error_info.get("type", "unknown_error")
@@ -118,7 +124,7 @@ class ErrorTranslator:
                     provider=vendor_error.vendor,
                     suggestion=suggestion
                 )
-            elif error_type == "content_filtered":
+            elif error_type in ("content_filtered", "content_filtered_error"):
                 raise ContentFilteredError(
                     message=f"{vendor_error.vendor} 内容过滤: {vendor_error.message}",
                     provider=vendor_error.vendor,

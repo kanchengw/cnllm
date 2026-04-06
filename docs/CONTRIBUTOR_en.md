@@ -134,6 +134,8 @@ After completing **Vendor Response Fields → OpenAI Standard Response Fields** 
 | `completion_tokens`          | `usage.completion_tokens` |
 | `total_tokens`               | `usage.total_tokens`   |
 | `reasoning_tokens`           | `usage.completion_tokens_details.reasoning_tokens` |
+| `system_fingerprint`         | - |
+| `choices[0].logprobs`       | - |
 | -                            | `choices[0].message.reasoning_content` |
 
 ***

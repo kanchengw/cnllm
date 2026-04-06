@@ -1,7 +1,7 @@
 import logging
 import warnings
 from typing import Dict, Callable, Any, Optional, List
-from .exceptions import ModelNotSupportedError, FallbackError, MissingParameterError, ContentFilteredError
+from .exceptions import ModelNotSupportedError, FallbackError, MissingParameterError, ContentFilteredError, ModelAPIError
 
 logger = logging.getLogger(__name__)
 
@@ -44,14 +44,12 @@ class FallbackManager:
         **kwargs
     ) -> Any:
         tried = []
-        last_error = None
+        all_errors = []
+        original_exceptions = []
 
         models_to_try = [(primary_model, primary_api_key)]
         for fb_model, fb_key in self.fallback_config.items():
             models_to_try.append((fb_model, fb_key or primary_api_key))
-
-        last_error = None
-        only_primary_failed = len(models_to_try) == 1
 
         for model, api_key in models_to_try:
             tried.append(model)
@@ -65,11 +63,11 @@ class FallbackManager:
                 )
                 self._last_adapter = adapter
             except Exception as e:
-                last_error = e
-                if only_primary_failed:
+                all_errors.append(f"{model}: {type(e).__name__}: {e}")
+                original_exceptions.append(e)
+                if len(models_to_try) == 1:
                     raise
-                if model != tried[0]:
-                    self.on_fallback(tried[0], model, e)
+                self.on_fallback(model, None, e)
                 continue
 
             try:
@@ -84,11 +82,17 @@ class FallbackManager:
             except (ModelNotSupportedError, MissingParameterError, ContentFilteredError):
                 raise
             except Exception as e:
-                last_error = e
-                if model != tried[0]:
-                    self.on_fallback(tried[0], model, e)
+                all_errors.append(f"{model}: {type(e).__name__}: {e}")
+                original_exceptions.append(e)
+                if len(models_to_try) == 1:
+                    raise
+                self.on_fallback(model, None, e)
                 continue
 
+        if len(models_to_try) == 1 and original_exceptions:
+            raise original_exceptions[0] from None
+
         raise FallbackError(
-            f"所有模型均失败。已尝试: {', '.join(tried)}\n最后错误: {last_error}"
-        ) from last_error
+            message=f"所有模型均失败。已尝试: {', '.join(tried)}",
+            errors=all_errors
+        ) from None

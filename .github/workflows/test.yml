@@ -26,7 +26,7 @@ jobs:
 
     - name: Run tests
       run: |
-        pytest --cov=cnllm --cov-report=xml
+        pytest tests/ --ignore=tests/key_needed --cov=cnllm --cov-report=xml
 
     - name: Upload coverage
       uses: codecov/codecov-action@v4

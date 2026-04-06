@@ -25,8 +25,8 @@ from cnllm.utils.exceptions import (
 )
 
 
-MODEL = "mimo-v2-flash"
-API_KEY = os.getenv("XIAOMI_API_KEY")
+MODEL = "deepseek-chat"
+API_KEY = os.getenv("DEEPSEEK_API_KEY")
 
 requires_api_key = pytest.mark.skipif(
     not os.getenv("XIAOMI_API_KEY"),

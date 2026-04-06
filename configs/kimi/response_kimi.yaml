@@ -23,4 +23,3 @@ stream_fields:
   content_path: "choices[0].delta.content"
   tool_calls_path: "choices[0].delta.tool_calls"
   reasoning_content_path: "choices[0].delta.reasoning_content"
-

@@ -12,11 +12,32 @@ logger = logging.getLogger(__name__)
 
 class MiniMaxVendorError(VendorError):
     VENDOR_NAME = "minimax"
+    SENSITIVE_CONTENT_CODE = 99999
 
     @classmethod
     def from_response(cls, raw_response: dict) -> Optional["MiniMaxVendorError"]:
         if not raw_response:
             return None
+
+        input_sensitive = raw_response.get("input_sensitive_type")
+        output_sensitive = raw_response.get("output_sensitive_type")
+
+        if input_sensitive and input_sensitive not in ("null", "", 0):
+            return cls(
+                code=cls.SENSITIVE_CONTENT_CODE,
+                message=f"输入内容敏感: {input_sensitive}",
+                vendor=cls.VENDOR_NAME,
+                raw_response=raw_response
+            )
+
+        if output_sensitive and output_sensitive not in ("null", "", 0):
+            return cls(
+                code=cls.SENSITIVE_CONTENT_CODE,
+                message=f"输出内容敏感: {output_sensitive}",
+                vendor=cls.VENDOR_NAME,
+                raw_response=raw_response
+            )
+
         base_resp = raw_response.get("base_resp", {})
         code = base_resp.get("status_code")
         if code is None:

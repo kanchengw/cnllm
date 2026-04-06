@@ -2,6 +2,7 @@ from typing import Dict, Any, Optional
 from ..adapter import BaseAdapter
 from ..responder import Responder
 from ...utils.vendor_error import VendorError, VendorErrorRegistry
+from ...utils.exceptions import ContentFilteredError
 
 
 class GLMVendorError(VendorError):
@@ -11,6 +12,34 @@ class GLMVendorError(VendorError):
     def from_response(cls, raw_response: dict) -> Optional["GLMVendorError"]:
         if not raw_response:
             return None
+
+        content_filter = raw_response.get("contentFilter", [])
+        if content_filter and len(content_filter) > 0:
+            for item in content_filter:
+                level = item.get("level", 0)
+                if level and level > 0:
+                    role = item.get("role", "unknown")
+                    return cls(
+                        code=1301,
+                        message=f"输入内容敏感 (role: {role}, level: {level})",
+                        vendor=cls.VENDOR_NAME,
+                        raw_response=raw_response
+                    )
+
+        error = raw_response.get("error", {})
+        error_code = error.get("code")
+        if error_code is not None:
+            try:
+                code = int(error_code)
+            except (ValueError, TypeError):
+                code = str(error_code)
+            return cls(
+                code=code,
+                message=error.get("message", ""),
+                vendor=cls.VENDOR_NAME,
+                raw_response=raw_response
+            )
+
         base_resp = raw_response.get("base_resp", {})
         code = base_resp.get("status_code")
         if code is None:
@@ -24,6 +53,29 @@ VendorErrorRegistry.register(GLMVendorError.VENDOR_NAME, GLMVendorError)
 
 class GLMResponder(Responder):
     CONFIG_DIR = "glm"
+
+    def to_openai_stream_format(self, raw: Dict[str, Any], model: str) -> Dict[str, Any]:
+        if not raw:
+            return {
+                "id": f"chatcmpl-{(id(lambda: None)) % (10**24):024d}",
+                "object": self._get_config_value("stream_fields", "object", default="chat.completion.chunk"),
+                "created": 0,
+                "model": model,
+                "choices": [{"index": 0, "delta": {}, "finish_reason": None}]
+            }
+
+        choices = raw.get("choices", [{}])
+        choice = choices[0] if choices else {}
+        delta = choice.get("delta", {})
+        finish_reason = choice.get("finish_reason")
+
+        if finish_reason == "sensitive":
+            raise ContentFilteredError(
+                message="glm 内容过滤: 输出内容敏感",
+                provider="glm"
+            )
+
+        return super().to_openai_stream_format(raw, model)
 
 
 class GLMAdapter(BaseAdapter):

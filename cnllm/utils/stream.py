@@ -37,12 +37,34 @@ class StreamResultAccumulator:
         self._chunks = []
         self._adapter = adapter
         self._iterator = iter(chunks)
+        self._thinking = ""
+        self._content = ""
+        self._tools = None
 
     def __iter__(self):
         return self
 
     def __next__(self):
         chunk = next(self._iterator)
+
+        reasoning = chunk.get("_reasoning_content")
+        if reasoning:
+            self._thinking += reasoning
+
+        delta = chunk.get("choices", [{}])[0].get("delta", {}) if chunk.get("choices") else {}
+        content_delta = delta.get("content", "")
+        if content_delta:
+            self._content += content_delta
+
+        tools_delta = delta.get("tool_calls")
+        if tools_delta:
+            self._tools = tools_delta
+
+        chunk["_thinking"] = self._thinking
+        chunk["_content"] = self._content
+        if self._tools:
+            chunk["_tools"] = self._tools
+
         self._chunks.append(chunk)
         return chunk
 

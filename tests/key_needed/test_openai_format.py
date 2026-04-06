@@ -20,12 +20,12 @@ load_dotenv()
 
 from cnllm import CNLLM
 
-MODEL = "glm-4.7"
-API_KEY = os.getenv("GLM_API_KEY")
+MODEL = "deepseek-chat"
+API_KEY = os.getenv("DEEPSEEK_API_KEY")
 
 requires_api_key = pytest.mark.skipif(
-    not os.getenv("GLM_API_KEY"),
-    reason="需要 GLM_API_KEY"
+    not os.getenv("DEEPSEEK_API_KEY"),
+    reason="需要 DEEPSEEK_API_KEY"
 )
 
 
@@ -44,6 +44,8 @@ OPENAI_STANDARD_FIELDS = [
     ("usage.total_tokens", "int"),
     ("usage.prompt_tokens_details.cached_tokens", "int"),
     ("usage.completion_tokens_details.reasoning_tokens", "int"),
+    ("system_fingerprint", "string"),
+    ("choices[0].logprobs", "any"),
 ]
 
 
