@@ -1,0 +1,145 @@
+request:
+  method: "POST"
+  headers:
+    Content-Type: "application/json"
+    Authorization: "Bearer ${api_key}"
+
+required_fields:
+  api_key:
+    body: "__skip__"
+  model: ""
+
+one_of:
+  messages_or_prompt:
+    messages: ""
+    prompt: ""
+
+optional_fields:
+  base_url:
+    body: "__skip__"
+    default: "https://ark.cn-beijing.volces.com/api/v3"
+    text: "chat/completions"
+  fallback_models:
+    body: "__skip__"
+  timeout:
+    body: "__skip__"
+    default: 60.0
+  max_retries:
+    body: "__skip__"
+    default: 3
+  retry_delay:
+    body: "__skip__"
+    default: 1.0
+  temperature: ""
+  top_p: ""
+  max_tokens:
+    default: 4096
+  max_completion_tokens: ""
+  stream: ""
+  stop: ""
+  tools: ""
+  tool_choice: ""
+  user: ""
+  presence_penalty: ""
+  frequency_penalty: ""
+  response_format: ""
+  stream_options: ""
+  thinking:
+    body: "thinking.type"
+    transform:
+      true: "enabled"
+      false: "disabled"
+      auto: "auto"
+  reasoning_effort: ""
+  service_tier: ""
+
+model_mapping:
+  doubao-seed-2-0-pro: "doubao-seed-2-0-pro-260215"
+  doubao-seed-2-0-mini: "doubao-seed-2-0-mini-260215"
+  doubao-seed-2-0-lite: "doubao-seed-2-0-lite-260215"
+  doubao-seed-2-0-code: "doubao-seed-2-0-code-preview-260215"
+  doubao-seed-1-8: "doubao-seed-1-8-251228"
+  doubao-seed-1-6: "doubao-seed-1-6-251015"
+  doubao-seed-1-6-lite: "doubao-seed-1-6-lite-251015"
+  doubao-seed-1-6-flash: "doubao-seed-1-6-flash-250828"
+
+error_check:
+  code_path: "error.code"
+  success_code: null
+  message_path: "error.message"
+  error_codes:
+    invalid_request:
+      type: "invalid_request_error"
+      suggestion: "请检查请求参数是否正确"
+    InvalidEndpointOrModel.NotFound:
+      type: "not_found_error"
+      suggestion: "模型或接入点不存在，请检查模型名称是否正确"
+    MissingParameter:
+      type: "invalid_request_error"
+      suggestion: "请求缺少必要参数，请查阅 API 文档"
+    InvalidParameter:
+      type: "invalid_request_error"
+      suggestion: "请求包含非法参数，请查阅 API 文档"
+    InvalidEndpoint.ClosedEndpoint:
+      type: "service_unavailable_error"
+      suggestion: "推理接入点已关闭或暂时不可用，请稍后重试"
+    SensitiveContentDetected:
+      type: "content_filter"
+      suggestion: "输入或输出可能包含敏感信息，请更换内容后重试"
+    SensitiveContentDetected.SevereViolation:
+      type: "content_filter"
+      suggestion: "输入或输出包含严重违规信息，请更换内容后重试"
+    SensitiveContentDetected.Violence:
+      type: "content_filter"
+      suggestion: "输入或输出包含激进行为相关信息，请更换内容后重试"
+    InputTextSensitiveContentDetected:
+      type: "content_filter"
+      suggestion: "输入文本包含敏感信息，请更换后重试"
+    InputImageSensitiveContentDetected:
+      type: "content_filter"
+      suggestion: "输入图片包含敏感信息，请更换后重试"
+    InputVideoSensitiveContentDetected:
+      type: "content_filter"
+      suggestion: "输入视频包含敏感信息，请更换后重试"
+    InputAudioSensitiveContentDetected:
+      type: "content_filter"
+      suggestion: "输入音频包含敏感信息，请更换后重试"
+    OutputTextSensitiveContentDetected:
+      type: "content_filter"
+      suggestion: "输出文本包含敏感信息，请更换输入内容后重试"
+    OutputImageSensitiveContentDetected:
+      type: "content_filter"
+      suggestion: "输出图片包含敏感信息，请更换输入内容后重试"
+    OutputVideoSensitiveContentDetected:
+      type: "content_filter"
+      suggestion: "输出视频包含敏感信息，请更换输入内容后重试"
+    OutputAudioSensitiveContentDetected:
+      type: "content_filter"
+      suggestion: "输出音频包含敏感信息，请更换输入内容后重试"
+    InputTextRiskDetection:
+      type: "content_filter"
+      suggestion: "输入文本包含敏感信息，请更换后重试"
+    InputImageRiskDetection:
+      type: "content_filter"
+      suggestion: "输入图片包含敏感信息，请更换后重试"
+    PermissionDenied:
+      type: "permission_denied_error"
+      suggestion: "权限不足，请检查账户权限配置"
+    Unauthorized:
+      type: "authentication_error"
+      suggestion: "认证失败，请检查 API Key 是否正确"
+    ResourceNotFound:
+      type: "not_found_error"
+      suggestion: "请求的资源不存在，请检查模型名称或接入点"
+    RateLimitExceeded:
+      type: "rate_limit_error"
+      suggestion: "请求频率超限，请稍后重试"
+    TokenLimitExceeded:
+      type: "context_length_exceeded"
+      suggestion: "输入内容过长，超过模型上下文限制，请缩短输入"
+    InternalError:
+      type: "server_error"
+      suggestion: "服务器内部错误，请稍后重试"
+    ServiceUnavailable:
+      type: "service_unavailable_error"
+      suggestion: "服务暂不可用，请稍后重试"

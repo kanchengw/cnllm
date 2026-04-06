@@ -43,7 +43,6 @@ class StreamResultAccumulator:
 
     def __next__(self):
         chunk = next(self._iterator)
-        self._adapter._collect_stream_result(chunk)
         self._chunks.append(chunk)
         return chunk
 

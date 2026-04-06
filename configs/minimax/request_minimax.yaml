@@ -34,8 +34,7 @@ optional_fields:
     body: "__skip__"
     default: 1.0
   temperature: ""
-  max_tokens:
-    body: "max_completion_tokens"
+  max_completion_tokens: ""
   stream: ""
   top_p: ""
   top_k: ""
@@ -53,3 +52,70 @@ model_mapping:
   minimax-m2.1: "MiniMax-M2.1"
   minimax-m2.5: "MiniMax-M2.5"
   minimax-m2.7: "MiniMax-M2.7"
+
+error_check:
+  code_path: "base_resp.status_code"
+  success_code: 0
+  message_path: "base_resp.status_msg"
+  auth_code: 1004
+  error_codes:
+    1000:
+      type: "server_error"
+      suggestion: "请稍后再试"
+    1001:
+      type: "timeout"
+      suggestion: "请求超时，请稍后再试"
+    1002:
+      type: "rate_limit"
+      suggestion: "请求频率超限，请稍后重试"
+    1004:
+      type: "authentication_error"
+      suggestion: "请检查 API Key 是否正确"
+    1008:
+      type: "token_limit"
+      suggestion: "余额不足，请检查账户余额"
+    1024:
+      type: "server_error"
+      suggestion: "服务器内部错误，请稍后再试"
+    1026:
+      type: "content_filtered"
+      suggestion: "输入内容涉敏，请调整输入内容"
+    1027:
+      type: "content_filtered"
+      suggestion: "输出内容涉敏，请调整输入内容"
+    1033:
+      type: "server_error"
+      suggestion: "系统错误，请稍后再试"
+    1039:
+      type: "token_limit"
+      suggestion: "Token 数量超限，请调整 max_tokens"
+    1041:
+      type: "rate_limit"
+      suggestion: "连接数超限，请稍后再试或联系我们"
+    1042:
+      type: "invalid_parameter"
+      suggestion: "输入包含非法字符，请检查输入内容"
+    2013:
+      type: "invalid_parameter"
+      suggestion: "参数错误，请检查请求参数"
+    2037:
+      type: "invalid_parameter"
+      suggestion: "语音克隆样本参数错误，请检查 file_id 和 voice_id"
+    2038:
+      type: "authentication_error"
+      suggestion: "语音克隆功能被禁用，请完成账户认证"
+    2039:
+      type: "invalid_parameter"
+      suggestion: "voice_id 重复，请修改 voice_id"
+    2042:
+      type: "authentication_error"
+      suggestion: "无权访问该 voice_id"
+    2045:
+      type: "rate_limit"
+      suggestion: "请求频率增长超限，请避免请求骤增骤减"
+    2049:
+      type: "authentication_error"
+      suggestion: "无效的 API Key，请检查 API Key"
+    2056:
+      type: "token_limit"
+      suggestion: "超出 Token Plan 资源限制，请等待资源释放"
