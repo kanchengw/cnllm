@@ -88,6 +88,34 @@ class Responder:
                 return default
         return value if value is not None else default
 
+    def _path_exists(self, data: Dict[str, Any], path: str) -> bool:
+        import re
+        keys = re.split(r'\.(?!\d)', path)
+        value = data
+        for key in keys:
+            if value is None:
+                return False
+            match = re.match(r'(\w+)\[(\d+)\]', key)
+            if match:
+                dict_key, index = match.groups()
+                if isinstance(value, dict):
+                    value = value.get(dict_key)
+                if isinstance(value, (list, tuple)) and index.isdigit():
+                    index = int(index)
+                    if index < len(value):
+                        value = value[index]
+                    else:
+                        return False
+                else:
+                    return False
+            elif isinstance(value, dict):
+                if key not in value:
+                    return False
+                value = value.get(key)
+            else:
+                return False
+        return True
+
     def _build_defaults(self) -> Dict[str, Any]:
         return {
             "object": self._get_config_value("defaults", "object", default="chat.completion"),
@@ -104,8 +132,10 @@ class Responder:
         if content is not None:
             content = self.cleaner.clean(content)
 
-        tool_calls = self._get_by_path(raw, fields.get("tool_calls", "choices[0].message.tool_calls"))
-        reasoning_content = self._get_by_path(raw, fields.get("reasoning_content", "choices[0].message.reasoning_content"))
+        tool_calls_path = fields.get("tool_calls", "choices[0].message.tool_calls")
+        tool_calls = self._get_by_path(raw, tool_calls_path)
+        reasoning_content_path = fields.get("reasoning_content", "choices[0].message.reasoning_content")
+        reasoning_content = self._get_by_path(raw, reasoning_content_path)
 
         prompt_tokens = self._get_by_path(raw, fields.get("prompt_tokens", "usage.prompt_tokens"), 0)
         completion_tokens = self._get_by_path(raw, fields.get("completion_tokens", "usage.completion_tokens"), 0)
@@ -117,14 +147,16 @@ class Responder:
             "total_tokens": total_tokens or 0
         }
 
-        reasoning_tokens = self._get_by_path(raw, fields.get("reasoning_tokens", "usage.completion_tokens_details.reasoning_tokens"), None)
-        if reasoning_tokens is not None:
+        reasoning_tokens_path = fields.get("reasoning_tokens", "usage.completion_tokens_details.reasoning_tokens")
+        if self._path_exists(raw, reasoning_tokens_path):
+            reasoning_tokens = self._get_by_path(raw, reasoning_tokens_path, None)
             usage["completion_tokens_details"] = {
                 "reasoning_tokens": reasoning_tokens
             }
 
-        cached_tokens = self._get_by_path(raw, fields.get("cached_tokens", "usage.prompt_tokens_details.cached_tokens"), None)
-        if cached_tokens is not None:
+        cached_tokens_path = fields.get("cached_tokens", "usage.prompt_tokens_details.cached_tokens")
+        if self._path_exists(raw, cached_tokens_path):
+            cached_tokens = self._get_by_path(raw, cached_tokens_path, None)
             usage["prompt_tokens_details"] = {
                 "cached_tokens": cached_tokens
             }
@@ -134,7 +166,7 @@ class Responder:
             "content": content or ""
         }
 
-        if tool_calls:
+        if self._path_exists(raw, tool_calls_path):
             message["tool_calls"] = tool_calls
             if message["content"] == "":
                 message["content"] = None
@@ -146,7 +178,9 @@ class Responder:
         }
 
         logprobs_path = fields.get("logprobs_path", "choices[0].logprobs")
-        choice["logprobs"] = self._get_by_path(raw, logprobs_path)
+        if self._path_exists(raw, logprobs_path):
+            logprobs_value = self._get_by_path(raw, logprobs_path)
+            choice["logprobs"] = logprobs_value
 
         result = {
             "id": self._get_by_path(raw, fields.get("id", "id")) or f"chatcmpl-{uuid.uuid4().hex[:24]}",
@@ -157,14 +191,71 @@ class Responder:
             "usage": usage
         }
 
-        if reasoning_content:
-            result["_thinking"] = reasoning_content
-
         system_fingerprint = fields.get("system_fingerprint")
-        if system_fingerprint and system_fingerprint in raw:
-            result["system_fingerprint"] = raw[system_fingerprint]
+        if system_fingerprint and self._path_exists(raw, system_fingerprint):
+            result["system_fingerprint"] = self._get_by_path(raw, system_fingerprint)
 
         return result
+
+    def _extract_extra_fields(self, raw: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        从原生响应中提取额外字段（still、tools、think）
+        返回包含这些字段的字典，供 Adapter 设置到 _cnllm_extra
+        """
+        if not raw:
+            return {}
+
+        cnllm_extra = {}
+
+        reasoning_content_path = self._get_config_value("fields", "reasoning_content")
+        if reasoning_content_path and self._path_exists(raw, reasoning_content_path):
+            reasoning_content = self._get_by_path(raw, reasoning_content_path)
+            if reasoning_content:
+                cnllm_extra["_thinking"] = reasoning_content
+
+        content_path = self._get_config_value("fields", "content")
+        if content_path and self._path_exists(raw, content_path):
+            content = self._get_by_path(raw, content_path)
+            if content:
+                cnllm_extra["_still"] = self.cleaner.clean(content)
+
+        tool_calls_path = self._get_config_value("fields", "tool_calls")
+        if tool_calls_path and self._path_exists(raw, tool_calls_path):
+            tool_calls = self._get_by_path(raw, tool_calls_path)
+            if tool_calls:
+                cnllm_extra["_tools"] = tool_calls
+
+        return cnllm_extra
+
+    def _extract_stream_extra_fields(self, raw: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        从流式原生 chunk 中提取额外字段
+        适用于流式调用的实时累积
+        """
+        if not raw:
+            return {}
+
+        cnllm_extra = {}
+
+        reasoning_content_path = self._get_config_value("stream_fields", "reasoning_content_path")
+        if reasoning_content_path and self._path_exists(raw, reasoning_content_path):
+            reasoning_content = self._get_by_path(raw, reasoning_content_path)
+            if reasoning_content:
+                cnllm_extra["_thinking"] = reasoning_content
+
+        content_path = self._get_config_value("stream_fields", "content_path")
+        if content_path and self._path_exists(raw, content_path):
+            content = self._get_by_path(raw, content_path)
+            if content:
+                cnllm_extra["_still"] = content
+
+        tool_calls_path = self._get_config_value("stream_fields", "tool_calls_path")
+        if tool_calls_path and self._path_exists(raw, tool_calls_path):
+            tool_calls = self._get_by_path(raw, tool_calls_path)
+            if tool_calls:
+                cnllm_extra["_tools"] = tool_calls
+
+        return cnllm_extra
 
     def to_openai_stream_format(self, raw: Dict[str, Any], model: str) -> Dict[str, Any]:
         if not raw:
@@ -199,7 +290,6 @@ class Responder:
             finish_reason = None
 
         tool_calls = self._get_by_path(raw, tool_calls_path)
-        reasoning_content = self._get_by_path(raw, reasoning_content_path)
 
         delta_obj = {
             "content": content,
@@ -223,9 +313,6 @@ class Responder:
             ]
         }
 
-        if reasoning_content:
-            result["_reasoning_content"] = reasoning_content
-
         return result
 
     def check_error(self, raw_response: Dict[str, Any], adapter_name: str = "") -> None:
@@ -241,31 +328,3 @@ class Responder:
 
         translator = ErrorTranslator(self.config_dir)
         translator.translate(vendor_error, success_code=success_code, auth_code=auth_code)
-
-    def collect_stream_result(self, raw_response: Dict[str, Any], result: Dict[str, Any]) -> None:
-        if raw_response is None:
-            return
-        if "chunks" not in raw_response:
-            raw_response["chunks"] = []
-        raw_response["chunks"].append(result)
-
-        reasoning_content = result.get("_reasoning_content")
-        if reasoning_content:
-            if "_thinking" not in raw_response:
-                raw_response["_thinking"] = ""
-            raw_response["_thinking"] += reasoning_content
-
-        delta = result.get("choices", [{}])[0].get("delta", {})
-        content = delta.get("content") or ""
-        if content:
-            if "_still" not in raw_response:
-                raw_response["_still"] = ""
-            raw_response["_still"] += content
-
-        tool_calls = delta.get("tool_calls")
-        if tool_calls:
-            if "_tools" not in raw_response:
-                raw_response["_tools"] = []
-            raw_response["_tools"].extend(tool_calls)
-
-        return result

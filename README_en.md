@@ -33,6 +33,20 @@ Detailed architecture: [System Architecture](docs/ARCHITECTURE_en.md)
 
 ## Changelog
 
+### v0.6.0 (2026-04-08)
+
+- ✨ **Async Support** - Full async support via `AsyncCNLLM` client with `await client.chat.create()` and `await client.embedding.create()`
+  - httpx unified sync/async HTTP client with SSE streaming support
+  - Streaming returns `AsyncIterator[dict]`, non-streaming returns `dict`
+- ✨ **Batch Calls** - `client.chat.batch()` supports batch concurrent calls, returns `BatchResponse`, supports streaming/non-streaming, real-time statistics
+  - Real-time stats: `request_counts` field shows real-time request status
+  - Error isolation: single request failure doesn't affect other requests
+  - Progress callbacks: `callbacks` custom callback functions
+- ✨ **Embedding Support** - `client.embedding.create()` supports single/batch Embedding, returns `EmbeddingResponse`
+  - Sync/async interfaces: `create()` / `acreate()`
+  - Custom IDs: supports `custom_ids` parameter
+  - OpenAI compatible: returns standard OpenAI embedding format
+
 ### v0.5.0 (2026-04-06)
 
 - ✨ **KIMI (Moonshot AI) Adapter** - Kimi model adapter, supports kimi-k2.5, kimi-k2 series and moonshot-v1 series (8k/32k/128k)
@@ -63,24 +77,6 @@ Detailed architecture: [System Architecture](docs/ARCHITECTURE_en.md)
 - ✨ **.think Property** - `client.chat.think` retrieves reasoning_content, not included in resp
 - ✨ **.tools Property** - `client.chat.tools` retrieves tool_calls, supports streaming accumulation
 - ✨ **Streaming Accumulation** - `.think`, `.still`, `.tools` support real-time accumulation during streaming response
-
-### v0.3.3 (2026-04-02) ✨
-
-- ✨ **Unified Parameters** - Client init parameters unified with call entry parameters, call entry flexibly overrides
-- ✨ **Architecture Optimization** - Core logic abstraction, BaseAdapter and Responder handle common logic
-- ✨ **Extensibility** - Adding new provider only requires configuring corresponding YAML file, automatically implements request and response field mapping, error code mapping, no need to modify other upper-level components
-- ✨ **YAML Function Integration** - Related field mapping, model support validation, required param validation, param support validation, vendor error code mapping logic
-- ✨ **MiniMax Support Optimization** - Supports all MiniMax native interface parameters, such as `top_p`, `tools`, `thinking`, etc.
-
-### v0.3.1 (2026-03-29) ✨
-
-- ✨ **Deep LangChain Integration**
-  - Runnable adapter as core feature, one function integrates with LangChain chain
-  - Runnable streaming output, batch calls, async calls support
-- ✨ **chat.create() Streaming Output** - `stream=True` parameter support
-- ✨ **Fallback Mechanism** - Automatically switch to backup model when primary fails
-- ✨ **Response Entry** - `client.chat.still` easily gets clean chat response, `client.chat.raw` gets full response
-- 🔧 **Adapter Refactoring** - Model adapters (Chinese LLMs like MiniMax) + framework adapters (LangChain, etc.) dual-layer architecture
 
 ## Features
 
@@ -139,84 +135,6 @@ resp = client.chat.create(
 )
 ```
 
-### Quick Model Switching at Call:
-
-```python
-resp = client.chat.create(
-    prompt="Introduce yourself",
-    model="minimax-m2.5",
-    api_key="your_other_api_key"
-)
-```
-
-### Response Entry
-
-**Get Clean Chat Response**
-
-```python
-client = CNLLM(model="minimax-m2.7", api_key=MINIMAX_API_KEY)
-resp = client.chat.create(prompt="Introduce yourself in one sentence", ...)
-
-# Traditional way
-print(resp["choices"][0]["message"]["content"])
-
-# Using still property (recommended)
-print(client.chat.still)     # Returns: Hello, I'm minimax-m2.7 model...
-
-# Get raw original response
-print(client.chat.raw)     # Returns: {vendor native response JSON string}
-```
-
-**Get Model Thinking Process (reasoning_content)**
-
-```python
-resp = client.chat.create(thinking=True, ...)
-
-print(client.chat.think)     # Returns: Let me think about this, user asked me to ...
-```
-
-**Get Tool Calls (tool_calls)**
-
-```python
-tools = [{"type": "function", "function": {"name": "get_weather", "parameters": {...}}}]
-resp = client.chat.create(tools=tools, ...)
-
-print(client.chat.tools)     # Returns: {tool call message dict}
-```
-
-## Unified Interface Parameters
-
-| Parameter            | Type          | Required | Default                      | Client Init | Call Entry | Description                                           |
-| ------------------- | ------------- | -------- | ---------------------------- | :---------: | :--------: | ----------------------------------------------------- |
-| `model`             | str           | ✅        | -                            |     ✅      |     ✅     | Required at client initialization                      |
-| `api_key`           | str           | ✅        | -                            |     ✅      |     ✅     | API key                                               |
-| `messages`          | list\[dict]   | ⚠️       | -                            |     ❌      |     ✅     | OpenAI format message list (mutually exclusive with prompt) |
-| `prompt`            | str           | ⚠️       | -                            |     ❌      |     ✅     | Short form (mutually exclusive with messages)          |
-| `fallback_models`   | dict          | -        | -                            |     ✅      |     ❌     | Backup model configuration (see FallbackManager design) |
-| `base_url`          | str           | -        | Auto-adapted model default   |     ✅      |     ✅     | Custom API address                                    |
-| `timeout`           | int           | -        | 60                           |     ✅      |     ✅     | Request timeout (seconds)                             |
-| `max_retries`       | int           | -        | 3                            |     ✅      |     ✅     | Maximum retry count                                  |
-| `retry_delay`       | float         | -        | 1.0                          |     ✅      |     ✅     | Retry delay (seconds)                                |
-| `temperature`       | float         | -        | Vendor default               |     ✅      |     ✅     | Generation randomness                                 |
-| `max_tokens`        | int           | -        | Vendor default               |     ✅      |     ✅     | Maximum generation token count                        |
-| `stream`            | bool          | -        | Vendor default, usually False|     ✅      |     ✅     | Streaming response                                   |
-| `top_p`             | float         | -        | Vendor default               |     ✅      |     ✅     | Nucleus sampling threshold                           |
-| `tools`             | list          | -        | -                            |     ✅      |     ✅     | Function tools definition                             |
-| `tool_choice`       | str           | -        | -                            |     ✅      |     ✅     | Tool choice mode: none / auto                         |
-| `thinking`          | bool          | -        | Vendor default               |     ✅      |     ✅     | Thinking mode, unified format as `thinking=True/False` |
-| `presence_penalty`  | float         | -        | Vendor default               |     ✅      |     ✅     | Presence penalty                                     |
-| `frequency_penalty` | float         | -        | Vendor default               |     ✅      |     ✅     | Frequency penalty                                    |
-| `organization`      | str           | -        | -                            |     ✅      |     ✅     | Maps to group_id when using MiniMax                  |
-| `stop`              | str/list      | -        | -                            |     ✅      |     ✅     | Stop sequences                                       |
-| `user`              | str           | -        | -                            |     ✅      |     ✅     | User identifier                                      |
-| `response_format`   | dict          | -        | Vendor default, usually {type:"text"} |     ✅      |     ✅     | Response format                                      |
-
-**Notes**:
-
-- For more parameters supported by specific models, please refer to the official documentation. CNLLM will pass through all parameters supported by the specific model.
-- Call entry parameters take priority. It is recommended to pass commonly used parameters at the client level, and flexibly override or pass more parameters at individual calls.
-- Required parameters only need to be ensured not empty when the request is initiated, i.e., the client and call entry should have at least one provide the parameter.
-
 ## Response Format
 
 Through any API call style in the quick start, the model's response will be converted to OpenAI standard format:
@@ -252,6 +170,213 @@ Through any API call style in the quick start, the model's response will be conv
 ```
 
 OpenAI standard response structure compatible with LangChain library (deep integration with Runnable component), other libraries like Pydantic, LlamaIndex, Instructor that support OpenAI standard structure should work directly (not verified).
+
+### Streaming Response Format
+
+When streaming is enabled, the response is a `StreamResultAccumulator` iterable object:
+
+```python
+response = client.chat.create(messages=[...], stream=True)
+```
+
+Each chunk follows OpenAI standard format:
+
+```python
+# print(response) output:
+{'id': 'chatcmpl-xxx', 'object': 'chat.completion.chunk', 'created': 1234567890, 'model': 'minimax-m2.7', 'choices': [{'index': 0, 'delta': {'role': 'assistant'}, 'finish_reason': None}]}
+
+{'id': 'chatcmpl-xxx', 'object': 'chat.completion.chunk', 'created': 1234567890, 'model': 'minimax-m2.7', 'choices': [{'index': 0, 'delta': {'content': 'Hi'}, 'finish_reason': None}]}
+
+ # ... middle chunks
+
+{'id': 'chatcmpl-xxx', 'object': 'chat.completion.chunk', 'created': 1234567890, 'model': 'minimax-m2.7', 'choices': [{'index': 0, 'delta': {}, 'finish_reason': 'stop'}]}
+
+'[DONE]'
+```
+
+### Accessing Properties in Streaming Response
+
+```python
+# print(client.chat.still) output:
+"Hello, I am MiniMax-M-2.7..."
+
+# print(client.chat.tools) output:
+[{'id': 'call_xxx', 'type': 'function', 'function': {'name': 'get_weather', 'arguments': '{"city":"Tokyo"}'}}]
+ # ... more chunks
+
+# print(client.chat.think) output:
+"The user is asking me to greet them..."
+
+# print(client.chat.raw) output (keeps vendor-specific fields like reasoning_content):
+[{'id': 'chatcmpl-xxx', 'object': 'chat.completion.chunk', 'created': 1234567890, 'model': 'minimax-m2.7', 'choices': [{'index': 0, 'delta': {'role': 'assistant', 'reasoning_content': 'The user'}, 'finish_reason': None}]},
+ # ... more chunks
+```
+
+## Unified Interface Parameters
+
+| Parameter            | Type          | Required | Default                      | Client Init | Call Entry | Description                                           |
+| ------------------- | ------------- | -------- | ---------------------------- | :---------: | :--------: | ----------------------------------------------------- |
+| `model`             | str           | ✅        | -                            |     ✅      |     ✅     | Required at client initialization                      |
+| `api_key`           | str           | ✅        | -                            |     ✅      |     ✅     | API key                                               |
+| `messages`          | list\[dict]   | ⚠️       | -                            |     ❌      |     ✅     | OpenAI format message list (mutually exclusive with prompt) |
+| `prompt`            | str           | ⚠️       | -                            |     ❌      |     ✅     | Short form (mutually exclusive with messages)          |
+| `fallback_models`   | dict          | -        | -                            |     ✅      |     ❌     | Backup model configuration (see FallbackManager design) |
+| `base_url`          | str           | -        | Auto-adapted model default   |     ✅      |     ✅     | Custom API address                                    |
+| `timeout`           | int           | -        | 60                           |     ✅      |     ✅     | Request timeout (seconds)                             |
+| `max_retries`       | int           | -        | 3                            |     ✅      |     ✅     | Maximum retry count                                  |
+| `retry_delay`       | float         | -        | 1.0                          |     ✅      |     ✅     | Retry delay (seconds)                                |
+| `temperature`       | float         | -        | Vendor default               |     ✅      |     ✅     | Generation randomness                                 |
+| `max_tokens`        | int           | -        | Vendor default               |     ✅      |     ✅     | Maximum generation token count                        |
+| `stream`            | bool          | -        | Vendor default, usually False|     ✅      |     ✅     | Streaming response                                   |
+| `top_p`             | float         | -        | Vendor default               |     ✅      |     ✅     | Nucleus sampling threshold                           |
+| `tools`             | list          | -        | -                            |     ✅      |     ✅     | Function tools definition                             |
+| `tool_choice`       | str           | -        | -                            |     ✅      |     ✅     | Tool choice mode: none / auto                         |
+| `thinking`          | bool          | -        | Vendor default               |     ✅      |     ✅     | Thinking mode, unified format as `thinking=True/False` |
+| `presence_penalty`  | float         | -        | Vendor default               |     ✅      |     ✅     | Presence penalty                                     |
+| `frequency_penalty` | float         | -        | Vendor default               |     ✅      |     ✅     | Frequency penalty                                    |
+| `organization`      | str           | -        | -                            |     ✅      |     ✅     | Organization identifier                              |
+| `stop`              | str/list      | -        | -                            |     ✅      |     ✅     | Stop sequences                                       |
+| `user`              | str           | -        | -                            |     ✅      |     ✅     | User identifier                                      |
+| `response_format`   | dict          | -        | Vendor default, usually {type:"text"} |     ✅      |     ✅     | Response format                                      |
+
+#### Simple Call client()
+
+Pass the prompt string directly, no additional parameters.
+
+**Notes**:
+
+- Not all supported models support all CNLLM standard request parameters. For specific support and other parameters, please refer to the vendor's official documentation.
+
+- For more parameters supported by specific models, please refer to the official documentation. CNLLM will pass through all parameters supported by the specific model.
+- Call entry parameters take priority. It is recommended to pass commonly used parameters at the client level, and flexibly override or pass more parameters at individual calls.
+- Required parameters only need to be ensured not empty when the request is initiated, i.e., the client and call entry should have at least one provide the parameter.
+
+## FallbackManager Model Selection Flow
+
+With the `fallback_models` parameter at client initialization entry, if  the primary model specified in `model` is unavailable, it will try models in `fallback_models` in order.
+Configure this option for program or application runtime stability.
+
+```python
+client = CNLLM(
+    model="minimax-m2.7", api_key="minimax_key",
+    fallback_models={"mimo-v2-flash": "xiaomi-key", "minimax-m2.5": None}  # Apply None to use the API_key configured for the primary model
+    )
+resp = client.chat.create(prompt="What is 2+2?")
+print(resp)
+```
+
+```mermaid
+flowchart TD
+    A[chat.create Call Entry] --> B{model specified?}
+    B -->|Yes| C[Call adapter]
+    C -->|Success| J[Entry model success]
+    C -->|Failure| K[ModelNotSupportedError]
+    B -->|No| D[Call FallbackManager]
+    D --> E{Primary model available?}
+    E -->|Yes| F[Primary model success]
+    E -->|No| G{Try fallback_models in order}
+    G -->|All fail| H[FallbackError]
+    G -->|Any succeeds| I[That model succeeds]
+```
+
+***
+
+### Quick Model Switching at Call:
+
+Note: If model is overridden at the call entry, the FallbackManager flow will not be entered.
+
+```python
+resp = client.chat.create(
+    prompt="Introduce yourself",
+    model="minimax-m2.5",  # Override models in client initialization
+    api_key="your_other_api_key"  # Override, or leave api_key out to use the one in client initialization
+)
+```
+***
+
+## Batch Calls
+
+Supports sync/async, streaming/non-streaming batch calls with various advanced parameters.
+
+```python
+results = client.chat.batch(
+    ["Hello", "How's the weather?", "Who are you?"],
+    stream=True,
+    max_concurrent=3,       # max concurrent requests
+    timeout=60,               # per-request timeout (seconds)
+    stop_on_error=False,      # stop on error
+    callbacks=None            # progress callback functions
+)
+for chunk in results:
+    print(chunk)  # streaming chunk
+print(results.still)               # batch response content {"request_0": "...", ...}
+print(results.tools["request_0"])  # access single result's tool calls
+print(result[0])                   # or print(result["request_0"]) single response
+print(result["doc_001"])           # access by custom_ids
+```
+
+#### to_dict():
+
+```python
+result.to_dict()                        # results only (default)
+result.to_dict(stats=True)              # results + stats (request_counts, elapsed)
+result.to_dict(stats=True, think=True, still=True, tools=True, raw=True)  # results + any fields
+```
+
+### Embedding Calls
+
+#### Batch Embedding
+
+```python
+result = client.embedding.create(["Hello", "world", "你好"])
+```
+
+#### Standard Embedding Response Structure
+
+```python
+{
+    "request_counts": {
+        "total": 2,
+        "dimension": 1024
+    },
+    "elapsed": 0.35,
+    "results": {
+        "request_0": {
+            "object": "list",
+            "data": [{"embedding": [0.1, 0.2, ...], "index": 0}],
+            "model": "embedding-2",
+            "usage": {"prompt_tokens": 5, "total_tokens": 5}
+        }
+    }
+}
+```
+
+#### Response Access
+
+```python
+print(result[0])  # or print(result["request_0"]) single response, standard OpenAI Embedding response
+print(result["doc_001"])                 # access by custom_ids
+print(result.elapsed)                    # request time
+print(result.request_counts)             # statistics
+```
+
+#### to_dict():
+```python
+result.to_dict()                        # results only (default)
+result.to_dict(stats=True)              # results + stats (request_counts, elapsed)
+result.to_dict(results=True, stats=True, usage=True)  # all information
+```
+
+### Quick Response Properties
+
+Quick access properties for specific fields, optimizing complex access like `response.choices[0].message.content`.
+
+| Property | Description | Example |
+|----------|-------------|---------|
+| `client.chat.still` | Clean response | "Hello, I am MiniMax-M2.7..." |
+| `client.chat.tools` | Tool calls | [{'id': '...', 'type': 'function', 'function': {...}}] |
+| `client.chat.think` | Reasoning content | "Let me think about this..." |
+| `client.chat.raw` | Vendor raw response | {'id': '...', 'choices': [{'message': {'reasoning_content': '...'}}} |
 
 ## LangChainRunnable Implementation
 
@@ -289,35 +414,6 @@ asyncio.run(async_stream_test())
 results = runnable.batch(["Hello", "How are you?"])
 for r in results:
     print(r.content)
-```
-
-## FallbackManager
-
-Only the client initialization entry accepts the `fallback_models` parameter. It is recommended to configure this option for program or application runtime stability.
-When the primary model at the client entry is unavailable, it will try models in `fallback_models` in order.
-Code example:
-
-```python
-client = CNLLM(
-    model="minimax-m2.7", api_key="minimax_key",
-    fallback_models={"mimo-v2-flash": "xiaomi-key", "minimax-m2.5": None}  # None means use the API_key configured for the primary model
-    )
-resp = client.chat.create(prompt="What is 2+2?")  # If model is configured again at the call entry, it will override all models configured at the client entry
-print(resp)
-```
-
-```mermaid
-flowchart TD
-    A[chat.create Call Entry] --> B{model specified?}
-    B -->|Yes| C[Call adapter]
-    C -->|Success| J[Entry model success]
-    C -->|Failure| K[ModelNotSupportedError]
-    B -->|No| D[Call FallbackManager]
-    D --> E{Primary model available?}
-    E -->|Yes| F[Primary model success]
-    E -->|No| G{Try fallback_models in order}
-    G -->|All fail| H[FallbackError]
-    G -->|Any succeeds| I[That model succeeds]
 ```
 
 ## License

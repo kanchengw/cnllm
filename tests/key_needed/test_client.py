@@ -17,12 +17,12 @@ load_dotenv()
 
 from cnllm import CNLLM
 
-MODEL = "mimo-v2-flash"
-API_KEY = os.getenv("XIAOMI_API_KEY")
+MODEL = "deepseek-chat"
+API_KEY = os.getenv("DEEPSEEK_API_KEY")
 
 requires_api_key = pytest.mark.skipif(
-    not os.getenv("XIAOMI_API_KEY"),
-    reason="需要 XIAOMI_API_KEY"
+    not os.getenv("DEEPSEEK_API_KEY"),
+    reason="需要 DEEPSEEK_API_KEY"
 )
 
 
@@ -35,11 +35,9 @@ class TestClientInit:
 
         assert client.model == "mimo-v2-flash", "model 属性应正确设置"
         assert client.api_key == "test-key", "api_key 属性应正确设置"
-        assert client.stream is False, "stream 默认值应为 False"
 
         print(f"\n[PASS] 基本初始化正确")
         print(f"  model: {client.model}")
-        print(f"  stream: {client.stream}")
 
 
 class TestNonStreamChat:
@@ -96,13 +94,13 @@ class TestStreamChat:
         """验证流式输出"""
         client = CNLLM(
             model=MODEL,
-            api_key=API_KEY,
-            stream=True
+            api_key=API_KEY
         )
 
         chunks = []
         response = client.chat.create(
-            messages=[{"role": "user", "content": "讲一个短故事"}]
+            messages=[{"role": "user", "content": "讲一个短故事"}],
+            stream=True
         )
 
         for i, chunk in enumerate(response):
@@ -121,13 +119,13 @@ class TestStreamChat:
         """验证流式中 .still 实时累积"""
         client = CNLLM(
             model=MODEL,
-            api_key=API_KEY,
-            stream=True
+            api_key=API_KEY
         )
 
         chunks = []
         response = client.chat.create(
-            messages=[{"role": "user", "content": "数到3"}]
+            messages=[{"role": "user", "content": "数到3"}],
+            stream=True
         )
 
         for chunk in response:

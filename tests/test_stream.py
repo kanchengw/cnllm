@@ -60,8 +60,8 @@ class TestStreamBasic:
             chunk = responder.to_openai_stream_format(raw_chunk, "mimo-v2-flash")
             chunks.append(chunk)
 
-            if "_reasoning_content" in chunk:
-                accumulated_thinking += chunk["_reasoning_content"]
+            if "_thinking" in chunk:
+                accumulated_thinking += chunk["_thinking"]
 
             delta = chunk.get("choices", [{}])[0].get("delta", {})
             content_delta = delta.get("content", "")
@@ -141,8 +141,8 @@ class TestStreamThinking:
             chunk = responder.to_openai_stream_format(raw_chunk, "mimo-v2-flash")
             chunks.append(chunk)
 
-            if "_reasoning_content" in chunk:
-                accumulated_thinking += chunk["_reasoning_content"]
+            if "_thinking" in chunk:
+                accumulated_thinking += chunk["_thinking"]
 
             delta = chunk.get("choices", [{}])[0].get("delta", {})
             content_delta = delta.get("content", "")
@@ -216,8 +216,8 @@ class TestStreamTools:
             chunk = responder.to_openai_stream_format(raw_chunk, "mimo-v2-flash")
             chunks.append(chunk)
 
-            if "_reasoning_content" in chunk:
-                accumulated_thinking += chunk["_reasoning_content"]
+            if "_thinking" in chunk:
+                accumulated_thinking += chunk["_thinking"]
 
             delta = chunk.get("choices", [{}])[0].get("delta", {})
             content_delta = delta.get("content", "")

@@ -33,7 +33,8 @@ class CNLLMError(Exception):
         status_code: Optional[int] = None,
         provider: str = "unknown",
         details: Optional[Dict[str, Any]] = None,
-        suggestion: str = ""
+        suggestion: str = "",
+        original_exc: Optional[Exception] = None
     ):
         self.message = message
         self.error_code = error_code
@@ -41,6 +42,12 @@ class CNLLMError(Exception):
         self.provider = provider
         self.details = details or {}
         self.suggestion = suggestion
+        self.original_exc = original_exc
+        # 关联原始异常的Traceback和上下文
+        if original_exc:
+            self.__cause__ = original_exc
+            if hasattr(original_exc, '__traceback__'):
+                self.__traceback__ = original_exc.__traceback__
         super().__init__(self._format_message())
 
     def _format_message(self) -> str:
@@ -71,7 +78,8 @@ class AuthenticationError(CNLLMError):
         self,
         message: str = "认证失败，请检查 API Key 是否正确",
         provider: str = "unknown",
-        details: Optional[Dict[str, Any]] = None
+        details: Optional[Dict[str, Any]] = None,
+        original_exc: Optional[Exception] = None
     ):
         super().__init__(
             message=message,
@@ -79,7 +87,8 @@ class AuthenticationError(CNLLMError):
             status_code=401,
             provider=provider,
             details=details,
-            suggestion="请检查 API Key 是否正确，或是否已过期"
+            suggestion="请检查 API Key 是否正确，或是否已过期",
+            original_exc=original_exc
         )
 
 
@@ -89,7 +98,8 @@ class RateLimitError(CNLLMError):
         message: str = "请求频率超限，请稍后重试",
         provider: str = "unknown",
         details: Optional[Dict[str, Any]] = None,
-        suggestion: str = None
+        suggestion: str = None,
+        original_exc: Optional[Exception] = None
     ):
         super().__init__(
             message=message,
@@ -97,7 +107,8 @@ class RateLimitError(CNLLMError):
             status_code=429,
             provider=provider,
             details=details,
-            suggestion=suggestion or "请降低请求频率，或联系厂商提升配额"
+            suggestion=suggestion or "请降低请求频率，或联系厂商提升配额",
+            original_exc=original_exc
         )
 
 
@@ -106,7 +117,8 @@ class TimeoutError(CNLLMError):
         self,
         message: str = "请求超时",
         provider: str = "unknown",
-        details: Optional[Dict[str, Any]] = None
+        details: Optional[Dict[str, Any]] = None,
+        original_exc: Optional[Exception] = None
     ):
         super().__init__(
             message=message,
@@ -114,7 +126,8 @@ class TimeoutError(CNLLMError):
             status_code=408,
             provider=provider,
             details=details,
-            suggestion="请增加 timeout 参数值，或检查网络连接"
+            suggestion="请增加 timeout 参数值，或检查网络连接",
+            original_exc=original_exc
         )
 
 
@@ -123,7 +136,8 @@ class NetworkError(CNLLMError):
         self,
         message: str = "网络连接失败",
         provider: str = "unknown",
-        details: Optional[Dict[str, Any]] = None
+        details: Optional[Dict[str, Any]] = None,
+        original_exc: Optional[Exception] = None
     ):
         super().__init__(
             message=message,
@@ -131,7 +145,8 @@ class NetworkError(CNLLMError):
             status_code=None,
             provider=provider,
             details=details,
-            suggestion="请检查网络连接，或不传入 base_url 使用默认值"
+            suggestion="请检查网络连接，或不传入 base_url 使用默认值",
+            original_exc=original_exc
         )
 
 
@@ -141,7 +156,8 @@ class ServerError(CNLLMError):
         message: str = "服务器错误",
         provider: str = "unknown",
         details: Optional[Dict[str, Any]] = None,
-        suggestion: str = None
+        suggestion: str = None,
+        original_exc: Optional[Exception] = None
     ):
         super().__init__(
             message=message,
@@ -149,7 +165,8 @@ class ServerError(CNLLMError):
             status_code=500,
             provider=provider,
             details=details,
-            suggestion=suggestion or "服务器暂时不可用，请稍后重试"
+            suggestion=suggestion or "服务器暂时不可用，请稍后重试",
+            original_exc=original_exc
         )
 
 
@@ -159,7 +176,8 @@ class InvalidRequestError(CNLLMError):
         message: str = "无效的请求",
         provider: str = "unknown",
         details: Optional[Dict[str, Any]] = None,
-        suggestion: str = None
+        suggestion: str = None,
+        original_exc: Optional[Exception] = None
     ):
         super().__init__(
             message=message,
@@ -167,7 +185,8 @@ class InvalidRequestError(CNLLMError):
             status_code=400,
             provider=provider,
             details=details,
-            suggestion=suggestion or "请检查请求参数是否正确"
+            suggestion=suggestion or "请检查请求参数是否正确",
+            original_exc=original_exc
         )
 
 
@@ -176,7 +195,8 @@ class InvalidURLError(CNLLMError):
         self,
         message: str = "无效的 URL 格式",
         provider: str = "unknown",
-        details: Optional[Dict[str, Any]] = None
+        details: Optional[Dict[str, Any]] = None,
+        original_exc: Optional[Exception] = None
     ):
         super().__init__(
             message=message,
@@ -184,7 +204,8 @@ class InvalidURLError(CNLLMError):
             status_code=None,
             provider=provider,
             details=details,
-            suggestion="请核实 base_url 格式，如非必须参数，建议不传入 base_url 使用默认值"
+            suggestion="请核实 base_url 格式，如非必须参数，建议不传入 base_url 使用默认值",
+            original_exc=original_exc
         )
 
 
@@ -193,7 +214,8 @@ class ParseError(CNLLMError):
         self,
         message: str = "响应解析失败",
         provider: str = "unknown",
-        details: Optional[Dict[str, Any]] = None
+        details: Optional[Dict[str, Any]] = None,
+        original_exc: Optional[Exception] = None
     ):
         super().__init__(
             message=message,
@@ -201,7 +223,8 @@ class ParseError(CNLLMError):
             status_code=None,
             provider=provider,
             details=details,
-            suggestion="可能是 API 返回格式变更，请联系开发者"
+            suggestion="可能是 API 返回格式变更，请联系开发者",
+            original_exc=original_exc
         )
 
 
@@ -210,7 +233,8 @@ class ModelNotSupportedError(CNLLMError):
         self,
         message: str = "模型不支持",
         provider: str = "unknown",
-        details: Optional[Dict[str, Any]] = None
+        details: Optional[Dict[str, Any]] = None,
+        original_exc: Optional[Exception] = None
     ):
         super().__init__(
             message=message,
@@ -218,7 +242,8 @@ class ModelNotSupportedError(CNLLMError):
             status_code=404,
             provider=provider,
             details=details,
-            suggestion="请使用支持的模型名称"
+            suggestion="请使用支持的模型名称",
+            original_exc=original_exc
         )
 
 
@@ -227,7 +252,8 @@ class MissingParameterError(CNLLMError):
         self,
         parameter: str = "",
         provider: str = "unknown",
-        details: Optional[Dict[str, Any]] = None
+        details: Optional[Dict[str, Any]] = None,
+        original_exc: Optional[Exception] = None
     ):
         message = f"缺少必要参数: {parameter}" if parameter else "缺少必要参数"
         super().__init__(
@@ -236,7 +262,8 @@ class MissingParameterError(CNLLMError):
             status_code=400,
             provider=provider,
             details=details,
-            suggestion="请提供完整的请求参数"
+            suggestion="请提供完整的请求参数",
+            original_exc=original_exc
         )
 
 
@@ -246,7 +273,8 @@ class ContentFilteredError(CNLLMError):
         message: str = "内容被过滤",
         provider: str = "unknown",
         details: Optional[Dict[str, Any]] = None,
-        suggestion: str = None
+        suggestion: str = None,
+        original_exc: Optional[Exception] = None
     ):
         super().__init__(
             message=message,
@@ -254,7 +282,8 @@ class ContentFilteredError(CNLLMError):
             status_code=403,
             provider=provider,
             details=details,
-            suggestion=suggestion or "请修改提示词内容后重试"
+            suggestion=suggestion or "请修改提示词内容后重试",
+            original_exc=original_exc
         )
 
 
@@ -263,7 +292,8 @@ class TokenLimitError(CNLLMError):
         self,
         message: str = "Token 数量超限",
         provider: str = "unknown",
-        details: Optional[Dict[str, Any]] = None
+        details: Optional[Dict[str, Any]] = None,
+        original_exc: Optional[Exception] = None
     ):
         super().__init__(
             message=message,
@@ -271,7 +301,8 @@ class TokenLimitError(CNLLMError):
             status_code=431,
             provider=provider,
             details=details,
-            suggestion="请减少输入文本长度，或增加 max_tokens 限制"
+            suggestion="请减少输入文本长度，或增加 max_tokens 限制",
+            original_exc=original_exc
         )
 
 
@@ -281,7 +312,8 @@ class ModelAPIError(CNLLMError):
         message: str = "模型 API 调用失败",
         provider: str = "unknown",
         details: Optional[Dict[str, Any]] = None,
-        suggestion: str = None
+        suggestion: str = None,
+        original_exc: Optional[Exception] = None
     ):
         super().__init__(
             message=message,
@@ -289,7 +321,8 @@ class ModelAPIError(CNLLMError):
             status_code=500,
             provider=provider,
             details=details,
-            suggestion=suggestion or "请稍后重试，或联系 API 提供商"
+            suggestion=suggestion or "请稍后重试，或联系 API 提供商",
+            original_exc=original_exc
         )
 
 
@@ -300,7 +333,8 @@ class ModelBusinessError(CNLLMError):
         business_code: int = None,
         provider: str = "unknown",
         details: Optional[Dict[str, Any]] = None,
-        suggestion: str = None
+        suggestion: str = None,
+        original_exc: Optional[Exception] = None
     ):
         super().__init__(
             message=message,
@@ -308,7 +342,8 @@ class ModelBusinessError(CNLLMError):
             status_code=business_code,
             provider=provider,
             details=details,
-            suggestion=suggestion or "请检查输入是否合法，或稍后重试"
+            suggestion=suggestion or "请检查输入是否合法，或稍后重试",
+            original_exc=original_exc
         )
 
 
@@ -317,7 +352,8 @@ class FallbackError(CNLLMError):
         self,
         message: str = "所有模型均失败",
         errors: Optional[list] = None,
-        details: Optional[Dict[str, Any]] = None
+        details: Optional[Dict[str, Any]] = None,
+        original_exc: Optional[Exception] = None
     ):
         self.errors = errors or []
         error_details = []
@@ -333,5 +369,6 @@ class FallbackError(CNLLMError):
             status_code=500,
             provider="unknown",
             details=details,
-            suggestion="请检查网络连接，或稍后重试"
+            suggestion="请检查网络连接，或稍后重试",
+            original_exc=original_exc
         )

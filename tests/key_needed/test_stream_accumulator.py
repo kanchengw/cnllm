@@ -143,16 +143,16 @@ class TestStreamAccumulator:
         print(f"resp (完整): {chunks[-1] if chunks else None}")
         print(f"{'='*60}")
 
-    @requires_glm_key
-    def test_glm_stream_accumulator(self):
-        """GLM 流式响应累积"""
+    @requires_doubao_key
+    def test_doubao_stream_accumulator(self):
+        """Doubao 流式响应累积"""
         print(f"\n{'='*60}")
-        print(f"[GLM Stream Accumulator]")
+        print(f"[Doubao Stream Accumulator]")
         print(f"{'='*60}")
 
         client = CNLLM(
-            model=MODEL_GLM,
-            api_key=API_KEY_GLM,
+            model=MODEL_DOUBAO,
+            api_key=API_KEY_DOUBAO,
             stream=True
         )
 

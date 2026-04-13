@@ -6,58 +6,99 @@ request:
 
 required_fields:
   api_key:
-    body: "__skip__"
-  model: ""
+    adapter: [chat, embedding]
+    skip: true
+  model:
+    adapter: [chat, embedding]
+  input:
+    adapter: [embedding]
 
 one_of:
   messages_or_prompt:
-    messages: ""
-    prompt: ""
+    adapter: [chat]
+    messages: {adapter: [chat]}
+    prompt: {adapter: [chat]}
 
 optional_fields:
   base_url:
-    body: "__skip__"
-    default: "https://open.bigmodel.cn/api/paas/v4"
-    text: "chat/completions"
+    adapter: [chat, embedding]
+    skip: true
+    chat:
+      default: "https://open.bigmodel.cn"
+      path: "api/paas/v4/chat/completions"
+    embedding:
+      default: "https://open.bigmodel.cn"
+      path: "/api/paas/v4/embeddings"
   fallback_models:
-    body: "__skip__"
+    adapter: [chat]
+    skip: true
   timeout:
-    body: "__skip__"
+    adapter: [chat, embedding]
+    skip: true
     default: 60.0
   max_retries:
-    body: "__skip__"
+    adapter: [chat, embedding]
+    skip: true
     default: 3
   retry_delay:
-    body: "__skip__"
+    adapter: [chat, embedding]
+    skip: true
     default: 1.0
   temperature:
+    adapter: [chat]
     default: 0.95
   top_p:
+    adapter: [chat]
     default: 0.7
-  max_tokens: ""
-  stream: ""
-  stop: ""
-  tools: ""
-  tool_choice: ""
+  max_tokens:
+    adapter: [chat]
+  stream:
+    adapter: [chat]
+  stop:
+    adapter: [chat]
+  tools:
+    adapter: [chat]
+  tool_choice:
+    adapter: [chat]
   thinking:
-    body: "thinking"
+    adapter: [chat]
     transform:
       true: {"type": "enabled"}
       false: {"type": "disabled"}
   user:
-    body: "user_id"
-  do_sample: ""
-  request_id: ""
-  response_format: ""
-  tool_stream: ""
+    adapter: [chat]
+    map: "user_id"
+  do_sample:
+    adapter: [chat]
+  request_id:
+    adapter: [chat]
+  response_format:
+    adapter: [chat]
+  tool_stream:
+    adapter: [chat]
+  presence_penalty:
+    adapter: [chat]
+  frequency_penalty:
+    adapter: [chat]
+  n:
+    adapter: [chat]
+  dimensions:
+    adapter: [embedding]
+  enable_search:
+    adapter: [embedding]
 
 model_mapping:
-  glm-4.6: "glm-4.6"
-  glm-4.7: "glm-4.7"
-  glm-4.7-flash: "glm-4.7-flash"
-  glm-4.7-flashx: "glm-4.7-flashx"
-  glm-5: "glm-5"
-  glm-5-turbo: "glm-5-turbo"
+  chat:
+    glm-4.6: "glm-4.6"
+    glm-4.7: "glm-4.7"
+    glm-4.7-flash: "glm-4.7-flash"
+    glm-4.7-flashx: "glm-4.7-flashx"
+    glm-5: "glm-5"
+    glm-5-turbo: "glm-5-turbo"
+    glm-5.1: "glm-5.1"
+  embedding:
+    embedding-2: "embedding-2"
+    embedding-3: "embedding-3"
 
 error_check:
   code_path: "base_resp.status_code"
