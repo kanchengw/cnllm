@@ -72,14 +72,17 @@ flowchart LR
 这样做的好处是，用户在切换不同模型时，仅需遵守一套字段标准。
 
 **非 OpenAI 标准请求字段**
+
 - 如`thinking` 深度思考模式并非 OpenAI 标准字段，但已作为**CNLLM 标准请求字段**开发，统一各厂商的不同格式。
   在 CNLLM标准请求字段中，将小米 mimo 的 `"thinking": {"type": "enabled"}`和 `thinking": {"type": "disabled"}` 统一为 `thinking=true` 或 `thinking=false`这种更符合用户习惯的格式。
 
 如厂商请求字段与**CNLLM 标准请求字段**不一致，需在**厂商 YAML 配置文件**中映射，映射为**厂商请求字段**:
+
 - 如用户使用 MiniMax M2 系列模型时传入 `max_tokens` 字段时，将被映射为 `max_completion_tokens`  字段
 - 如用户使用小米 mimo 模型时传入的`"thinking": {"type": "enabled"}`，将被映射为 `thinking=true`
 
 如为**厂商特有参数**，则用户可直接使用厂商定义的字段，会直接透传到厂商 API，如 MiniMax M2系列模型的特殊参数:
+
 - `top_k` 最大K采样数
 - `mask` 掩码输入
 
@@ -87,34 +90,35 @@ CNLLM 在完成 **OpenAI 标准请求字段 → 厂商请求字段**的映射后
 
 **请求头**
 
-| CNLLM 标准请求字段 | MiniMax 请求字段 |
-| :----------------: | :--------------: |
-| `api_key`          | `Authorization` |
-| `organization`     | `group_id`       |
+|  CNLLM 标准请求字段  |   MiniMax 请求字段  |
+| :------------: | :-------------: |
+|    `api_key`   | `Authorization` |
+| `organization` |    `group_id`   |
 
 **请求体字段**
 
-| CNLLM 标准请求字段 | MiniMax 请求字段 |
-| :----------------: | :--------------: |
-| `model`           | `model`         |
-| `messages`        | `messages`      |
-| `temperature`     | `temperature`   |
-| `top_p`           | `top_p`        |
-| `stream`          | `stream`        |
-| `stop`            | `stop`          |
-| `presence_penalty` | `presence_penalty` |
-| `frequency_penalty` | `frequency_penalty` |
-| `user`            | `user`          |
-| `tools`           | `tools`         |
-| `tool_choice`     | `tool_choice`   |
-| `max_tokens`      | `max_completion_tokens` |
-| `thinking`        | `thinking`        |
-| -                 | `mask`     |
-| -            | `top_k`       |
+|     CNLLM 标准请求字段    |       MiniMax 请求字段      |
+| :-----------------: | :---------------------: |
+|       `model`       |         `model`         |
+|      `messages`     |        `messages`       |
+|    `temperature`    |      `temperature`      |
+|       `top_p`       |         `top_p`         |
+|       `stream`      |         `stream`        |
+|        `stop`       |          `stop`         |
+|  `presence_penalty` |    `presence_penalty`   |
+| `frequency_penalty` |   `frequency_penalty`   |
+|        `user`       |          `user`         |
+|       `tools`       |         `tools`         |
+|    `tool_choice`    |      `tool_choice`      |
+|     `max_tokens`    | `max_completion_tokens` |
+|      `thinking`     |        `thinking`       |
+|          -          |          `mask`         |
+|          -          |         `top_k`         |
 
 CNLLM 的标准**响应字段**将国内厂商的响应字段统一为 **OpenAI 标准响应字段**，之后封装为 OpenAI 标准响应格式。
 
 如厂商响应字段与 OpenAI 标准字段不一致，需在**厂商 YAML 配置文件**中映射为 **OpenAI 标准响应字段**:
+
 - 如 MiniMax 的响应中，`reasoning_content` 字段，将被从 CNLM中的完整响应体中丢弃。
   但是，我们提供了`chat.create.think`的入口，用户可通过该入口获取厂商原生响应中的`reasoning_content`字段。
   以及`chat.create.raw`可获取厂商原生响应中的所有字段。
@@ -123,20 +127,20 @@ CNLLM 在完成 **厂商响应字段 → OpenAI 标准响应字段**的映射后
 
 #### 响应字段差异（以 MiniMax 为例）
 
-| CNLLM 标准响应字段 | MiniMax 响应字段 |
-| :----------------: | :--------------: |
-| `id`              | `id`             |
-| `created`         | `created`        |
-| `model`           | `model`          |
-| `content`         | `choices[0].message.content` |
-| `tool_calls`      | `choices[0].message.tool_calls` |
-| `prompt_tokens`   | `usage.prompt_tokens` |
-| `completion_tokens` | `usage.completion_tokens` |
-| `total_tokens`    | `usage.total_tokens` |
-| `reasoning_tokens` | `usage.completion_tokens_details.reasoning_tokens` |
-| `system_fingerprint` | - |
-| `choices[0].logprobs` | - |
-| -                 | `choices[0].message.reasoning_content` |
+|      CNLLM 标准响应字段     |                    MiniMax 响应字段                    |
+| :-------------------: | :------------------------------------------------: |
+|          `id`         |                        `id`                        |
+|       `created`       |                      `created`                     |
+|        `model`        |                       `model`                      |
+|       `content`       |            `choices[0].message.content`            |
+|      `tool_calls`     |           `choices[0].message.tool_calls`          |
+|    `prompt_tokens`    |                `usage.prompt_tokens`               |
+|  `completion_tokens`  |              `usage.completion_tokens`             |
+|     `total_tokens`    |                `usage.total_tokens`                |
+|   `reasoning_tokens`  | `usage.completion_tokens_details.reasoning_tokens` |
+|  `system_fingerprint` |                          -                         |
+| `choices[0].logprobs` |                          -                         |
+|           -           |       `choices[0].message.reasoning_content`       |
 
 ***
 
@@ -144,18 +148,27 @@ CNLLM 在完成 **厂商响应字段 → OpenAI 标准响应字段**的映射后
 
 ### 2.1 YAML 逻辑实现
 
-| 用途 | 访问点 | YAML 路径 | YAML 表名 |
-| --- | --- | --- | --- |
-| 获取默认值 | `timeout`, `max_retries`... | `optional_fields.{field}.default` | request\_{vendor}.yaml |
-| 厂商请求字段映射 | `_build_payload` | `optional_fields.{field}.body` | request\_{vendor}.yaml |
-| 请求头映射 | `_build_headers` | `optional_fields.{field}.header` | request\_{vendor}.yaml |
-| 必填参数校验 | `validate_required_params` | `required_fields` | request\_{vendor}.yaml |
-| 参数支持校验 | `filter_supported_params` | `optional_fields` | request\_{vendor}.yaml |
-| 互斥参数校验 | `validate_one_of` | `one_of` | request\_{vendor}.yaml |
-| API配置 | `get_base_url`, `get_api_path` | `optional_fields.base_url.default`, `request.method` | request\_{vendor}.yaml |
-| 模型名映射 | `model_mapping` | `model_mapping` | request\_{vendor}.yaml |
-| OpenAI 响应字段映射 | `Responder` | `fields` | response\_{vendor}.yaml |
-| 厂商错误码映射 | `Adapter` | `error_check.sensitive_check` | response\_{vendor}.yaml |
+> **参数传递顺序说明**：
+>
+> - 用户调用 `chat.create()` 或 `embeddings.create()` 时，adapter 类型（chat/embedding）已确定
+> - `filter_supported_params` 执行后，参数已全部过滤为当前 adapter 支持的参数
+> - 以下逻辑按参数处理顺序排序（从上到下）
+
+| 序号 | 用途 | 访问点 | 判断范围 | 判断依据 | 新增参数 |
+| --- | --- | --- | --- | --- | --- |
+| 1 | 必填参数校验 | `validate_required_params` | required_fields | adapter 标识 + chat/embedding 层级 | - |
+| 2 | 参数支持校验 | `filter_supported_params` | required_fields + optional_fields + one_of | adapter 标识 + chat/embedding 层级 | - |
+| 3 | 互斥参数校验 | `validate_one_of` | one_of | adapter 标识 | - |
+| 4 | 获取默认值 | `get_default_value` | 硬编码：timeout, max_retries, retry_delay | - | timeout, max_retries, retry_delay |
+| 5 | 验证 base_url + 获取完整地址 | `validate_base_url` + `get_api_path` | base_url | chat/embedding 层级 | 可能新增：base_url + api_path |
+| 6 | 请求头映射 | `get_header_mappings` | required_fields + optional_fields + one_of | skip: true | - |
+| 7 | 构建请求体 | `_build_payload` | required_fields + optional_fields + one_of | 字段映射：不含 skip: true 且 {fields}.map | - |
+| 8 | 模型名映射 | `get_vendor_model` | model_mapping | chat/embedding 层级 | - |
+
+**判断依据说明**：
+
+- `adapter`：字段级别的标识，如 `adapter: [chat]` 或 `adapter: [embedding]`
+- `chat`/`embedding` 层级：字段下有 `chat:` 或 `embedding:` 子层级的配置（如 `base_url`）
 
 
 ### 2.2 请求配置 configs/request\_{vendor}.yaml
@@ -170,66 +183,86 @@ request:
     Authorization: "Bearer ${api_key}"
 ```
 
-**必填字段和选填字段映射**
+**字段配置说明**
 
-字段映射部分采用键值对形式，如厂商请求字段与OpenAI标准请求字段一致，则值可留空。
+| 场景 | 格式 | 说明 |
+|------|------|------|
+| **支持某 adapter** | `{adapter: [chat, embedding]}` | 字段仅在该 adapter 类型下可用 |
+| **跳过请求体** | `skip: true` | 字段不添加到请求体，可用于请求头映射 |
+| **映射字段** | `map: "xxx"` | 将字段映射到请求体的其他键名 |
+| **转换值** | `transform: {true: "a", false: "b"}` | 将参数值进行转换 |
+| **默认值** | `default: 60.0` | 用户未传参时使用该默认值 |
+
+**请求配置示例**
 
 ```yaml
-request:  # 请求头配置
+request:  # HTTP 请求配置
   method: "POST"
   headers: 
     Content-Type: "application/json"
     Authorization: "Bearer ${api_key}"
 
-required_fields:  # 必填参数校验，参数支持校验
-  model: ""  # Value 留空表示无需映射，字段保持不变，便于人工维护
+required_fields:  # 必填参数校验
   api_key:
-    body: "__skip__" # 请求头或内部字段，跳过请求体构建
+    adapter: [chat, embedding]
+    skip: true
+  model:
+    adapter: [chat, embedding]
 
 one_of:  # 互斥参数校验
   messages_or_prompt:
-    messages: ""
-    prompt: ""
+    adapter: [chat]
+    messages: {adapter: [chat]}
+    prompt: {adapter: [chat]}
 
-optional_fields:  # 参数支持校验
+optional_fields:  # 可选参数校验
   base_url:
-    body: "__skip__"
-    default: "https://api.minimaxi.com/v1"  # 有默认值的字段
-    text: "text/chatcompletion_v2"
-  organization:
-    body: "__skip__"  
-    head: "group_id"  # 请求头字段映射，在 build_headers()函数中映射
-  max_tokens:
-    body: "max_completion_tokens"  # 请求体字段映射，在 build_payload()函数中映射
-  stream: ""
-  top_p: ""
-  top_k: ""
-  tools: ""
-    # ...其他支持的字段
+    adapter: [chat, embedding]
+    skip: true
+    chat:
+      default: "https://api.minimaxi.com/v1"
+      path: "text/chatcompletion_v2"  # API 路径（用于 URL 拼接）
+    embedding:
+      default: "https://api.minimax.chat"
+      path: "/v1/embeddings"
+  timeout:
+    adapter: [chat, embedding]
+    skip: true
+    default: 60.0
+  temperature:
+    adapter: [chat]
+  thinking:
+    adapter: [chat]
+    map: "thinking"  # 字段映射到请求体的键名
+    transform:  # 值转换
+      true: {"type": "enabled"}
+      false: {"type": "disabled"}
 ```
 
 **模型映射**
 
 ```yaml
-model_mapping:  # 模型映射，模型支持校验
-  minimax-m2: "MiniMax-M2"
-  minimax-m2.1: "MiniMax-M2.1"
+model_mapping:  # 模型名映射
+  chat:
+    minimax-m2: "MiniMax-M2"
+    minimax-m2.1: "MiniMax-M2.1"
+  embedding:
+    embo-01: "embo-01"
 ```
 
 **错误码映射**
 
 ```yaml
-error_check: # 请求配置中的错误事件发生在模型响应前，模型并未成功响应
-  code_path: "base_resp.status_code"
-  success_code: 0
-  message_path: "base_resp.status_msg"
-  auth_code: 1004
+error_check:  # 错误码映射
+  code_path: "base_resp.status_code"  # 错误码路径
+  success_code: 0  # 成功码
+  message_path: "base_resp.status_msg"  # 错误信息路径
+  auth_code: 1004  # 认证错误码
   error_codes:
     1000:
       type: "unknown_error"
       message: "未知错误"
       suggestion: "请稍后重试"
-    # ...其他厂商 API 端口的错误码映射
 ```
 
 ### 2.3 响应配置 configs/response\_{vendor}.yaml
@@ -315,6 +348,7 @@ class <Vendor>VendorError(VendorError):
   在`xiaomi.py`中的`_build_payload()` 函数中，配合 YAML 配置文件映射为标准字段的
 
 `request_xiaomi.yaml`
+
 ```yaml
 optional_fields:  
   thinking:
@@ -324,6 +358,7 @@ optional_fields:
 ```
 
 `core/vendor/xiaomi.py`
+
 ```python
 field_config = optional_fields.get(key, key)
 if isinstance(field_config, dict):
@@ -331,7 +366,6 @@ if isinstance(field_config, dict):
     if transform and value in transform:
         value = transform[value]
 ```
-
 
 **配置依赖：**
 
@@ -351,10 +385,10 @@ if isinstance(field_config, dict):
 
 **BaseAdapter 分发至 Responder 的方法：**
 
-- `_to_openai_format()` - 分发至 Responder.to_openai_format()
-- `_to_openai_stream_format()` - 分发至 Responder.to_openai_stream_format()
-- `_check_response_error()` - 分发至 Responder.check_error()
-- `_collect_stream_result()` - 分发至 Responder.collect_stream_result()
+- `_to_openai_format()` - 分发至 Responder.to\_openai\_format()
+- `_to_openai_stream_format()` - 分发至 Responder.to\_openai\_stream\_format()
+- `_check_response_error()` - 分发至 Responder.check\_error()
+- `_collect_stream_result()` - 分发至 Responder.collect\_stream\_result()
 
 **配置依赖：**
 
@@ -477,6 +511,7 @@ API_KEY = os.getenv("XIAOMI_API_KEY")
 
 - `API_KEY`
 
-
 ## 最后一步：文档更新
+
 - [ ] 文档 `docs/vendor/<vendor>.md` 更新，添加适配器实现的详细说明
+

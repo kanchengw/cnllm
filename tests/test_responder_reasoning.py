@@ -49,20 +49,21 @@ class TestResponderReasoningContent:
         }
 
     def test_reasoning_content_not_in_response(self, responder, raw_with_reasoning):
-        """验证 reasoning_content 不出现在标准响应中（应通过 _thinking 传递）"""
+        """验证 reasoning_content 不出现在标准响应中（应通过 _extract_extra_fields 传递）"""
         result = responder.to_openai_format(raw_with_reasoning, "mimo-v2-flash")
 
         message = result["choices"][0]["message"]
         assert "reasoning_content" not in message, \
             f"reasoning_content 不应出现在 message 中，实际: {message.keys()}"
 
-        assert "_thinking" in result, "reasoning_content 应通过 _thinking 传递"
-        assert result["_thinking"] == "这是思考过程...", \
-            f"_thinking 内容不匹配: {result.get('_thinking')}"
+        extra_fields = responder._extract_extra_fields(raw_with_reasoning)
+        assert "_thinking" in extra_fields, "reasoning_content 应通过 _extract_extra_fields 返回的 _thinking 传递"
+        assert extra_fields["_thinking"] == "这是思考过程...", \
+            f"_thinking 内容不匹配: {extra_fields.get('_thinking')}"
 
         print(f"\n[PASS] reasoning_content 正确分离")
         print(f"  message.content: {message['content']}")
-        print(f"  _thinking: {result['_thinking'][:30] if result['_thinking'] else None}...")
+        print(f"  _thinking: {extra_fields['_thinking'][:30] if extra_fields['_thinking'] else None}...")
 
 
 class TestResponderStreamReasoningContent:
@@ -90,8 +91,9 @@ class TestResponderStreamReasoningContent:
 
         result = responder.to_openai_stream_format(chunk, "mimo-v2-flash")
 
-        assert "_reasoning_content" in result, \
-            "reasoning_content 应通过 _reasoning_content 传递"
+        extra_fields = responder._extract_stream_extra_fields(chunk)
+        assert "_thinking" in extra_fields, \
+            "reasoning_content 应通过 _extract_stream_extra_fields 返回的 _thinking 传递"
 
         print(f"\n[PASS] 流式 reasoning_content 处理正确")
 

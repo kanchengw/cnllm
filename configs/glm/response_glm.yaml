@@ -9,11 +9,21 @@ fields:
   completion_tokens: "usage.completion_tokens"
   total_tokens: "usage.total_tokens"
 
+embedding_fields:
+  embedding: "data[0].embedding"
+  index: "data[0].index"
+  embedding_object: "data[0].object"
+
 defaults:
   object: "chat.completion"
   index: 0
   role: "assistant"
   finish_reason: "stop"
+
+embedding_defaults:
+  object: "list"
+  index: 0
+  embedding_object: "embedding"
 
 stream_fields:
   object: "chat.completion.chunk"
@@ -23,4 +33,3 @@ stream_fields:
   content_path: "choices[0].delta.content"
   tool_calls_path: "choices[0].delta.tool_calls"
   reasoning_content_path: "choices[0].delta.reasoning_content"
-

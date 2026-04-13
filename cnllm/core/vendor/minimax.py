@@ -91,3 +91,77 @@ class MiniMaxAdapter(BaseAdapter):
 
 
 MiniMaxAdapter._register()
+
+
+from typing import Dict, Any, List, Union, Optional
+from ..embedding import BaseEmbeddingAdapter, EmbeddingResponder
+
+
+class MiniMaxEmbeddingResponder(EmbeddingResponder):
+    CONFIG_DIR = "minimax"
+
+    def _load_config(self) -> Dict[str, Any]:
+        import yaml
+        config_path = os.path.join(
+            os.path.dirname(__file__),
+            "..", "..", "..", "configs", self.config_dir,
+            f"response_{self.config_dir}.yaml"
+        )
+        try:
+            with open(config_path, 'r', encoding='utf-8') as f:
+                return yaml.safe_load(f) or {}
+        except FileNotFoundError:
+            logger.warning(f"Embedding response config not found: {config_path}")
+            return {}
+        except Exception as e:
+            logger.error(f"Failed to load embedding response config: {e}")
+            return {}
+
+    def to_openai_format(self, raw: Dict[str, Any], model: str) -> Dict[str, Any]:
+        vectors = raw.get("vectors", [])
+        total_tokens = raw.get("total_tokens", 0)
+
+        embedding = []
+        index = 0
+
+        if vectors and len(vectors) > 0:
+            if isinstance(vectors[0], list):
+                embedding = vectors[0]
+            else:
+                embedding = vectors
+
+        return {
+            "object": "list",
+            "data": [{
+                "object": "embedding",
+                "embedding": embedding,
+                "index": index
+            }],
+            "model": model,
+            "usage": {
+                "prompt_tokens": total_tokens,
+                "total_tokens": total_tokens
+            }
+        }
+
+
+class MiniMaxEmbeddingAdapter(BaseEmbeddingAdapter):
+    ADAPTER_NAME = "minimax"
+    CONFIG_DIR = "minimax"
+
+    def _get_responder(self) -> MiniMaxEmbeddingResponder:
+        return MiniMaxEmbeddingResponder(self.CONFIG_DIR)
+
+    def _prepare_params(self, input_data: Union[str, List[str]], model: str = None, **kwargs) -> Dict[str, Any]:
+        params = {
+            "api_key": self.api_key,
+            "model": model or self.model,
+            "input": input_data,
+            **kwargs
+        }
+        self._validator.validate_required_params(params)
+        params = self._validator.filter_supported_params(params)
+        return params
+
+
+MiniMaxEmbeddingAdapter._register("minimax")

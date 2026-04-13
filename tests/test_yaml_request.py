@@ -48,12 +48,24 @@ class TestRequestYAML:
 
         base_url_config = optional["base_url"]
         assert isinstance(base_url_config, dict), "base_url 应为字典"
-        assert "default" in base_url_config, "base_url 应包含 default"
-        assert "text" in base_url_config, "base_url 应包含 text"
 
-        print(f"\n[PASS] base_url 配置正确")
-        print(f"  default: {base_url_config['default']}")
-        print(f"  text: {base_url_config['text']}")
+        assert "adapter" in base_url_config, "base_url 应包含 adapter"
+        assert "chat" in base_url_config or "embedding" in base_url_config, \
+            "base_url 应包含 chat 或 embedding 子配置"
+
+        if "default" in base_url_config:
+            assert "text" in base_url_config, "default 存在时 text 也应存在"
+            print(f"\n[PASS] base_url 配置正确 (全局)")
+            print(f"  default: {base_url_config['default']}")
+            print(f"  text: {base_url_config['text']}")
+        else:
+            if "chat" in base_url_config:
+                assert "default" in base_url_config["chat"], "chat.default 应存在"
+                print(f"\n[PASS] base_url 配置正确 (仅 chat)")
+                print(f"  chat.default: {base_url_config['chat']['default']}")
+            if "embedding" in base_url_config:
+                assert "default" in base_url_config["embedding"], "embedding.default 应存在"
+                print(f"  embedding.default: {base_url_config['embedding']['default']}")
 
     def test_required_fields_config(self, config):
         """验证 required_fields 配置"""

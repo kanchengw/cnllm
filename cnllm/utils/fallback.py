@@ -1,6 +1,7 @@
 import logging
 import warnings
-from typing import Dict, Callable, Any, Optional, List
+import asyncio
+from typing import Dict, Callable, Any, Optional, List, AsyncIterator
 from .exceptions import ModelNotSupportedError, FallbackError, MissingParameterError, ContentFilteredError, ModelAPIError
 
 logger = logging.getLogger(__name__)
@@ -79,7 +80,73 @@ class FallbackManager:
                     model=model,
                     **kwargs
                 )
-            except (ModelNotSupportedError, MissingParameterError, ContentFilteredError):
+            except (ModelNotSupportedError, MissingParameterError, ContentFilteredError) as e:
+                original_exceptions.append(e)
+                raise
+            except Exception as e:
+                all_errors.append(f"{model}: {type(e).__name__}: {e}")
+                original_exceptions.append(e)
+                if len(models_to_try) == 1:
+                    raise
+                self.on_fallback(model, None, e)
+                continue
+
+        if len(models_to_try) == 1 and original_exceptions:
+            raise original_exceptions[0] from None
+
+        raise FallbackError(
+            message=f"所有模型均失败。已尝试: {', '.join(tried)}",
+            errors=all_errors
+        ) from None
+
+    async def aexecute_with_fallback(
+        self,
+        primary_model: str,
+        primary_api_key: str,
+        messages: List[Dict[str, str]],
+        temperature: float,
+        max_tokens: Optional[int],
+        stream: bool,
+        **kwargs
+    ) -> Any:
+        tried = []
+        all_errors = []
+        original_exceptions = []
+
+        models_to_try = [(primary_model, primary_api_key)]
+        for fb_model, fb_key in self.fallback_config.items():
+            models_to_try.append((fb_model, fb_key or primary_api_key))
+
+        for model, api_key in models_to_try:
+            tried.append(model)
+            try:
+                adapter = self.get_adapter_func(
+                    model, api_key,
+                    timeout=self.timeout,
+                    max_retries=self.max_retries,
+                    retry_delay=self.retry_delay,
+                    base_url=self.base_url
+                )
+                self._last_adapter = adapter
+            except Exception as e:
+                all_errors.append(f"{model}: {type(e).__name__}: {e}")
+                original_exceptions.append(e)
+                if len(models_to_try) == 1:
+                    raise
+                self.on_fallback(model, None, e)
+                continue
+
+            try:
+                return await adapter.acreate_completion(
+                    messages=messages,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                    stream=stream,
+                    model=model,
+                    **kwargs
+                )
+            except (ModelNotSupportedError, MissingParameterError, ContentFilteredError) as e:
+                original_exceptions.append(e)
                 raise
             except Exception as e:
                 all_errors.append(f"{model}: {type(e).__name__}: {e}")

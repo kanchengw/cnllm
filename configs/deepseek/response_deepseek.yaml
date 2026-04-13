@@ -4,7 +4,6 @@ fields:
   model: "model"
   content: "choices[0].message.content"
   tool_calls: "choices[0].message.tool_calls"
-  reasoning_content: "choices[0].message.reasoning_content"
   prompt_tokens: "usage.prompt_tokens"
   completion_tokens: "usage.completion_tokens"
   total_tokens: "usage.total_tokens"

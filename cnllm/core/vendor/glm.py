@@ -1,8 +1,11 @@
 from typing import Dict, Any, Optional
+import logging
 from ..adapter import BaseAdapter
 from ..responder import Responder
 from ...utils.vendor_error import VendorError, VendorErrorRegistry
 from ...utils.exceptions import ContentFilteredError
+
+logger = logging.getLogger(__name__)
 
 
 class GLMVendorError(VendorError):
@@ -161,3 +164,59 @@ class GLMAdapter(BaseAdapter):
 
 
 GLMAdapter._register()
+
+
+from typing import List
+from ..embedding import BaseEmbeddingAdapter, EmbeddingResponder
+
+
+class GLMEmbeddingResponder(EmbeddingResponder):
+    CONFIG_DIR = "glm"
+
+
+class GLMEmbeddingAdapter(BaseEmbeddingAdapter):
+    ADAPTER_NAME = "glm"
+    CONFIG_DIR = "glm"
+
+    def __init__(self, api_key: str, model: str = None, base_url: str = None, **kwargs):
+        super().__init__(
+            api_key=api_key,
+            model=model,
+            base_url=base_url,
+            config_file=f"request_{self.CONFIG_DIR}.yaml",
+            **kwargs
+        )
+
+    @classmethod
+    def _load_class_config(cls) -> Dict[str, Any]:
+        if cls._class_config is not None:
+            return cls._class_config
+
+        import yaml
+        import os
+
+        config_path = os.path.join(
+            os.path.dirname(__file__),
+            "..", "..", "..", "configs", cls.CONFIG_DIR,
+            f"request_{cls.CONFIG_DIR}.yaml"
+        )
+
+        try:
+            with open(config_path, 'r', encoding='utf-8') as f:
+                cls._class_config = yaml.safe_load(f) or {}
+                mapping = cls._class_config.get("model_mapping", {})
+                if isinstance(mapping, dict) and "embedding" in mapping:
+                    mapping = mapping["embedding"]
+                cls._supported_models = list(mapping.keys()) if isinstance(mapping, dict) else []
+                return cls._class_config
+        except FileNotFoundError:
+            logger.warning(f"Config not found: {config_path}")
+            cls._class_config = {}
+            cls._supported_models = []
+            return {}
+
+    def _get_responder(self) -> GLMEmbeddingResponder:
+        return GLMEmbeddingResponder(self.CONFIG_DIR)
+
+
+GLMEmbeddingAdapter._register("glm")

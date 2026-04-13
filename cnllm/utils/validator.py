@@ -12,8 +12,10 @@ logger = logging.getLogger(__name__)
 
 
 class ParamValidator:
-    def __init__(self, config_dir: str):
+    def __init__(self, config_dir: str, config_file: str = None, adapter_type: str = "chat"):
         self.config_dir = config_dir
+        self.config_file = config_file or f"request_{config_dir}.yaml"
+        self.adapter_type = adapter_type
         self._config = None
 
     @property
@@ -32,7 +34,7 @@ class ParamValidator:
             "..",
             "configs",
             self.config_dir,
-            f"request_{self.config_dir}.yaml"
+            self.config_file
         )
 
         if not os.path.exists(config_path):
@@ -55,7 +57,14 @@ class ParamValidator:
 
     def get_supported_models(self) -> List[str]:
         mapping = self._get_config_value("model_mapping", default={})
-        return list(mapping.keys()) if isinstance(mapping, dict) else []
+        if isinstance(mapping, dict):
+            type_mapping = mapping.get(self.adapter_type)
+            if isinstance(type_mapping, dict):
+                return list(type_mapping.keys())
+            if self.adapter_type in mapping:
+                return []
+            return list(mapping.keys())
+        return []
 
     def validate_model(self, model: str) -> bool:
         if os.getenv("CNLLM_SKIP_MODEL_VALIDATION") == "true":
@@ -74,30 +83,63 @@ class ParamValidator:
     def validate_required_params(self, params: Dict[str, Any]) -> None:
         required = self._get_config_value("required_fields", default={})
         if isinstance(required, dict):
-            for field in required.keys():
+            for field, field_config in required.items():
+                if not self._is_field_supported(field_config):
+                    continue
                 if field not in params or params[field] is None or params[field] == '':
                     raise MissingParameterError(parameter=field, provider=self.config_dir)
 
     def validate_base_url(self, base_url: str) -> Optional[str]:
+        """验证 base_url，只返回 base_url 部分（不含路径）"""
+        base_url_config = self._get_config_value("optional_fields", "base_url", default={})
+        
+        default_base_url = ""
+        if isinstance(base_url_config, dict):
+            type_config = base_url_config.get(self.adapter_type, {})
+            if isinstance(type_config, dict):
+                default_base_url = type_config.get("default", "")
+            else:
+                default_base_url = base_url_config.get("default", "")
+        elif isinstance(base_url_config, str):
+            default_base_url = base_url_config
+        
         if base_url is None:
-            return None
-        default_base_url = self._get_config_value("optional_fields", "base_url", "default", default="")
-        if base_url != default_base_url:
+            return default_base_url
+        elif base_url != default_base_url:
             logger.warning(
                 f"[{self.config_dir}] 不支持自定义 base_url，当前传入: {base_url}，已自动使用默认: {default_base_url}"
             )
-            return None
-        return base_url
+            return default_base_url
+        else:
+            return base_url
+
+    def get_api_path(self) -> str:
+        """获取 API 路径，根据 adapter_type 选择 chat 或 embedding 层级的 path"""
+        base_url_config = self._get_config_value("optional_fields", "base_url", default={})
+        
+        if isinstance(base_url_config, dict):
+            type_config = base_url_config.get(self.adapter_type, {})
+            if isinstance(type_config, dict):
+                return type_config.get("path", "")
+            return base_url_config.get("path", "")
+        return ""
 
     def validate_one_of(self, params: Dict[str, Any]) -> None:
         one_of = self._get_config_value("one_of", default={})
         if isinstance(one_of, dict):
             for group_name, fields in one_of.items():
                 if isinstance(fields, dict):
-                    field_list = list(fields.keys())
+                    if not self._is_field_supported(fields):
+                        continue
+                    field_list = []
+                    for k, v in fields.items():
+                        if self._is_field_supported(v):
+                            field_list.append(k)
                 elif isinstance(fields, list):
-                    field_list = fields
+                    field_list = [f for f in fields if self._is_field_supported(f)]
                 else:
+                    continue
+                if not field_list:
                     continue
                 if all(params.get(field) is None for field in field_list):
                     raise MissingParameterError(
@@ -105,26 +147,51 @@ class ParamValidator:
                         provider=self.config_dir
                     )
 
+    def _is_field_supported(self, field_config: Any) -> bool:
+        if field_config is None:
+            return False
+        if isinstance(field_config, str):
+            return True
+        if isinstance(field_config, dict):
+            adapter_list = field_config.get("adapter")
+            if adapter_list is not None:
+                if isinstance(adapter_list, str):
+                    if adapter_list not in [self.adapter_type, "all"]:
+                        return False
+                elif isinstance(adapter_list, list):
+                    if self.adapter_type not in adapter_list and "all" not in adapter_list:
+                        return False
+                return True
+            return False
+        return False
+
     def filter_supported_params(self, params: Dict[str, Any]) -> Dict[str, Any]:
         all_fields = {}
 
         required = self._get_config_value("required_fields", default={})
         if isinstance(required, dict):
             for k, v in required.items():
-                all_fields[k] = v
+                if self._is_field_supported(v):
+                    all_fields[k] = v
 
         one_of = self._get_config_value("one_of", default={})
         if isinstance(one_of, dict):
             for fields in one_of.values():
                 if isinstance(fields, dict):
                     for k, v in fields.items():
-                        all_fields[k] = v
+                        if self._is_field_supported(v):
+                            all_fields[k] = v
 
         optional = self._get_config_value("optional_fields", default={})
         if isinstance(optional, dict):
             for k, v in optional.items():
                 if isinstance(v, dict):
-                    all_fields[k] = v.get("mapping", "")
+                    if "chat" in v or "embedding" in v:
+                        if self.adapter_type not in v:
+                            continue
+                    elif not self._is_field_supported(v):
+                        continue
+                    all_fields[k] = v.get("map", k)
                 else:
                     all_fields[k] = v
 
@@ -139,28 +206,28 @@ class ParamValidator:
                     )
         return filtered
 
-    def get_default_value(self, *keys, default=None) -> Any:
-        if keys:
-            field_name = keys[-1]
-            optional = self._get_config_value("optional_fields", default={})
-            if isinstance(optional, dict) and field_name in optional:
-                v = optional[field_name]
-                if isinstance(v, dict) and "default" in v:
-                    return v["default"]
-
-        section_defaults = self._get_config_value(*keys, "default_values", default=None)
-        if section_defaults is not None:
-            if len(keys) == 1:
-                return section_defaults
-            return section_defaults.get(keys[-1])
-        root_defaults = self._get_config_value("default_values", default={})
-        if isinstance(root_defaults, dict):
-            return root_defaults.get(keys[-1], default) if keys else root_defaults
+    def get_default_value(self, field_name: str, default=None) -> Any:
+        allowed_fields = {"timeout", "max_retries", "retry_delay"}
+        if field_name not in allowed_fields:
+            return default
+        optional = self._get_config_value("optional_fields", default={})
+        if isinstance(optional, dict) and field_name in optional:
+            v = optional[field_name]
+            if isinstance(v, dict) and "default" in v:
+                return v["default"]
+            elif isinstance(v, str):
+                return v
         return default
 
     def get_vendor_model(self, model: str) -> str:
         mapping = self._get_config_value("model_mapping", default={})
-        return mapping.get(model, model)
+        if isinstance(mapping, dict):
+            if "chat" in mapping:
+                return mapping["chat"].get(model, model)
+            if "embedding" in mapping:
+                return mapping["embedding"].get(model, model)
+            return mapping.get(model, model)
+        return model
 
     def validate(self, params: Dict[str, Any], *keys) -> None:
         self.validate_required_params(params, *keys)

@@ -6,61 +6,87 @@ request:
 
 required_fields:
   api_key:
-    body: "__skip__"
-  model: ""
+    adapter: [chat, embedding]
+    skip: true
+  model:
+    adapter: [chat, embedding]
 
 one_of:
   messages_or_prompt:
-    messages: ""
-    prompt: ""
+    adapter: [chat]
+    messages: {adapter: [chat]}
+    prompt: {adapter: [chat]}
 
 optional_fields:
   base_url:
-    body: "__skip__"
-    default: "https://api.moonshot.cn/v1"
-    text: "chat/completions"
+    adapter: [chat, embedding]
+    skip: true
+    chat:
+      default: "https://api.moonshot.cn/v1"
+      path: "chat/completions"
   fallback_models:
-    body: "__skip__"
+    adapter: [chat]
+    skip: true
   timeout:
-    body: "__skip__"
+    adapter: [chat, embedding]
+    skip: true
     default: 60.0
   max_retries:
-    body: "__skip__"
+    adapter: [chat, embedding]
+    skip: true
     default: 3
   retry_delay:
-    body: "__skip__"
+    adapter: [chat, embedding]
+    skip: true
     default: 1.0
-  temperature: ""
-  top_p: ""
-  max_completion_tokens: ""
-  stream: ""
-  stop: ""
-  n: ""
-  tools: ""
-  tool_choice: ""
-  user: ""
-  presence_penalty: ""
-  frequency_penalty: ""
-  response_format: ""
-  stream_options: ""
+  temperature:
+    adapter: [chat]
+  top_p:
+    adapter: [chat]
+  max_completion_tokens:
+    adapter: [chat]
+  stream:
+    adapter: [chat]
+  stop:
+    adapter: [chat]
+  n:
+    adapter: [chat]
+  tools:
+    adapter: [chat]
+  tool_choice:
+    adapter: [chat]
+  user:
+    adapter: [chat]
+  presence_penalty:
+    adapter: [chat]
+  frequency_penalty:
+    adapter: [chat]
+  response_format:
+    adapter: [chat]
+  stream_options:
+    adapter: [chat]
   thinking:
-    body: "thinking"
+    adapter: [chat]
+    map: "thinking"
     transform:
       true: {"type": "enabled"}
       false: {"type": "disabled"}
-  prompt_cache_key: ""
-  safety_identifier: ""
+  prompt_cache_key:
+    adapter: [chat]
+  safety_identifier:
+    adapter: [chat]
 
 model_mapping:
-  moonshot-v1-8k: "moonshot-v1-8k"
-  moonshot-v1-32k: "moonshot-v1-32k"
-  moonshot-v1-128k: "moonshot-v1-128k"
-  kimi-k2.5: "kimi-k2.5"
-  kimi-k2-thinking: "kimi-k2-thinking"
-  kimi-k2-thinking-turbo: "kimi-k2-thinking-turbo"
-  kimi-k2-0905-preview: "kimi-k2-0905-preview"
-  kimi-k2-0711-preview: "kimi-k2-0711-preview"
-  kimi-k2-turbo-preview: "kimi-k2-turbo-preview"
+  chat:
+    moonshot-v1-8k: "moonshot-v1-8k"
+    moonshot-v1-32k: "moonshot-v1-32k"
+    moonshot-v1-128k: "moonshot-v1-128k"
+    kimi-k2.5: "kimi-k2.5"
+    kimi-k2-thinking: "kimi-k2-thinking"
+    kimi-k2-thinking-turbo: "kimi-k2-thinking-turbo"
+    kimi-k2-0905-preview: "kimi-k2-0905-preview"
+    kimi-k2-0711-preview: "kimi-k2-0711-preview"
+    kimi-k2-turbo-preview: "kimi-k2-turbo-preview"
 
 error_check:
   code_path: "error.code"

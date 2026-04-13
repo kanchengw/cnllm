@@ -6,52 +6,76 @@ request:
 
 required_fields:
   api_key:
-    body: "__skip__"
-  model: ""
+    adapter: [chat, embedding]
+    skip: true
+  model:
+    adapter: [chat, embedding]
 
 one_of:
   messages_or_prompt:
-    messages: ""
-    prompt: ""
+    adapter: [chat]
+    messages: {adapter: [chat]}
+    prompt: {adapter: [chat]}
 
 optional_fields:
   base_url:
-    body: "__skip__"
-    default: "https://api.deepseek.com/v1"
-    text: "chat/completions"
+    adapter: [chat, embedding]
+    skip: true
+    chat:
+      default: "https://api.deepseek.com/v1"
+      path: "chat/completions"
   fallback_models:
-    body: "__skip__"
+    adapter: [chat]
+    skip: true
   timeout:
-    body: "__skip__"
+    adapter: [chat, embedding]
+    skip: true
     default: 60.0
   max_retries:
-    body: "__skip__"
+    adapter: [chat, embedding]
+    skip: true
     default: 3
   retry_delay:
-    body: "__skip__"
+    adapter: [chat, embedding]
+    skip: true
     default: 1.0
-  temperature: ""
-  top_p: ""
-  max_tokens: ""
-  stream: ""
-  stop: ""
-  n: ""
-  tools: ""
-  tool_choice: ""
-  user: ""
-  presence_penalty: ""
-  frequency_penalty: ""
-  response_format: ""
+  temperature:
+    adapter: [chat]
+  top_p:
+    adapter: [chat]
+  max_tokens:
+    adapter: [chat]
+  stream:
+    adapter: [chat]
+  stop:
+    adapter: [chat]
+  n:
+    adapter: [chat]
+  tools:
+    adapter: [chat]
+  tool_choice:
+    adapter: [chat]
+  user:
+    adapter: [chat]
+  presence_penalty:
+    adapter: [chat]
+  frequency_penalty:
+    adapter: [chat]
+  response_format:
+    adapter: [chat]
   thinking:
-    body: "thinking"
+    adapter: [chat]
+    map: "thinking"
     transform:
       true: {"type": "enabled"}
       false: {"type": "disabled"}
-  logit_bias: ""
+  logit_bias:
+    adapter: [chat]
 
 model_mapping:
-  deepseek-chat: "deepseek-chat"
-  deepseek-reasoner: "deepseek-reasoner"
+  chat:
+    deepseek-chat: "deepseek-chat"
+    deepseek-reasoner: "deepseek-reasoner"
 
 error_check:
   code_path: "error.type"

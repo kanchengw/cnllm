@@ -7,10 +7,10 @@ test_venv/
 .venv_test2/
 .venv_test3/
 .venv_test4/
-
+backup*/
 # IDE / Editor
 .trae/
-
+test_*/
 # C extensions
 *.so
 

@@ -6,50 +6,70 @@ request:
 
 required_fields:
   api_key:
-    body: "__skip__"
-  model: ""
+    adapter: [chat, embedding]
+    skip: true
+  model:
+    adapter: [chat, embedding]
 
 one_of:
   messages_or_prompt:
-    messages: ""
-    prompt: ""
+    adapter: [chat]
+    messages: {adapter: [chat]}
+    prompt: {adapter: [chat]}
 
 optional_fields:
   base_url:
-    body: "__skip__"
-    default: "https://api.xiaomimimo.com/v1"
-    text: "chat/completions"
+    adapter: [chat, embedding]
+    skip: true
+    chat:
+      default: "https://api.xiaomimimo.com/v1"
+      path: "chat/completions"
   fallback_models:
-    body: "__skip__"
+    adapter: [chat]
+    skip: true
   timeout:
-    body: "__skip__"
+    adapter: [chat, embedding]
+    skip: true
     default: 60.0
   max_retries:
-    body: "__skip__"
+    adapter: [chat, embedding]
+    skip: true
     default: 3
   retry_delay:
-    body: "__skip__"
+    adapter: [chat, embedding]
+    skip: true
     default: 1.0
-  temperature: ""
-  max_completion_tokens: ""
-  top_p: ""
-  presence_penalty: ""
-  frequency_penalty: ""
-  stop: ""
-  user: ""
-  stream: ""
+  temperature:
+    adapter: [chat]
+  max_completion_tokens:
+    adapter: [chat]
+  top_p:
+    adapter: [chat]
+  presence_penalty:
+    adapter: [chat]
+  frequency_penalty:
+    adapter: [chat]
+  stop:
+    adapter: [chat]
+  user:
+    adapter: [chat]
+  stream:
+    adapter: [chat]
   thinking:
+    adapter: [chat]
     transform:
       true: {"type": "enabled"}
       false: {"type": "disabled"}
-  tools: ""
-  tool_choice: ""
+  tools:
+    adapter: [chat]
+  tool_choice:
+    adapter: [chat]
 
 model_mapping:
-  mimo-v2-pro: "mimo-v2-pro"
-  mimo-v2-omni: "mimo-v2-omni"
-  mimo-v2-flash: "mimo-v2-flash"
-  mimo-v2-tts: "mimo-v2-tts"
+  chat:
+    mimo-v2-pro: "mimo-v2-pro"
+    mimo-v2-omni: "mimo-v2-omni"
+    mimo-v2-flash: "mimo-v2-flash"
 
 error_check:
   code_path: "error.code"
