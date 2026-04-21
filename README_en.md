@@ -185,7 +185,7 @@ In streaming calls, responses support **in-stream access** with **real-time accu
 Supports sync/async, streaming/non-streaming batch calls with **progress callbacks, custom request IDs, error stopping** and other advanced features, with **concurrency control**.
 
 ```python
-results = client.chat.batch(
+resp = client.chat.batch(
     ["Hello", "How's the weather today", "Who are you"]
 )
 ```
@@ -241,15 +241,15 @@ In streaming/non-streaming batch calls, responses support **in-batch access** wi
 
 **repr():**
 ```python
-print(result)
+print(resp)
 # BatchResponse(request_counts={...}, elapsed=..., success=[...], fail=[...])
 ```
 
 **to_dict():**
 ```python
-result.to_dict()                        # Only results (default)
-result.to_dict(stats=True)              # Results + statistics
-result.to_dict(stats=True, think=True, still=True, tools=True, raw=True)  # Results + any fields
+resp.to_dict()                        # Only results (default)
+resp.to_dict(stats=True)              # Results + statistics
+resp.to_dict(stats=True, think=True, still=True, tools=True, raw=True)  # Results + any fields
 ```
 
 ### 2.3 Embeddings Calls
@@ -260,14 +260,14 @@ Currently supports MiniMax embo-01, GLM embedding-2/embedding-3 models.
 #### 2.3.1 Single Call
 
 ```python
-result = client.embeddings.create(input="Hello world")
+resp = client.embeddings.create(input="Hello world")
 # Returns: Dict (OpenAI standard Embeddings format)
 ```
 
 #### 2.3.2 Batch Call
 
 ```python
-results = client.embeddings.batch(
+resp = client.embeddings.batch(
     ["Hello", "world", "你好"]
 )
 ```
@@ -315,30 +315,36 @@ In streaming/non-streaming batch calls, responses support **in-batch access** wi
 
 **repr():**
 ```python
-print(result)
+print(resp)
 # EmbeddingResponse(request_counts={...}, elapsed=..., success=[...], fail=[...])
 ```
 
 **to_dict():**
 ```python
-result.to_dict()                        # Only results (default)
-result.to_dict(stats=True)              # Results + statistics
+resp.to_dict()                        # Only results (default)
+resp.to_dict(stats=True)              # Results + statistics
 ```
 
-### 2.4 Batch Advanced Features
+### 2.4 Control Parameters
 
-#### 2.4.1 Retry Strategy and Concurrency Control Parameters
+Batch request allows **retry strategy** and **concurrency configuration**
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `batch_size` | `int` | Auto-calculated | Batch size, auto-calculated based on request count (Embedding calls only) |
+| `batch_size` | `int` | Auto-calculated | Batch size, batch Embeddings calls only |
 | `max_concurrent` | `int` | `12`/`3` | Max concurrent requests, Embeddings default 12, Chat completion default 3 |
 | `rps` | `float` | `10`/`2` | Requests per second, Embeddings default 10, Chat completion default 2 |
 | `timeout` | `int` | 30 | Single request timeout (seconds) |
 | `max_retries` | `int` | 3 | Max retry attempts |
 | `retry_delay` | `float` | 1.0 | Retry delay (seconds) |
 
-#### 2.4.2 Custom Request IDs
+**Batch Size**:
+Supported only for batch Embeddings calls, auto-calculated based on request count by default.
+Not recommended to manually configure.
+
+### 2.5 Batch Calls Advanced Features
+
+#### 2.5.1 Custom Request IDs
 
 Specify custom IDs for batch requests via `custom_ids` parameter, which will replace original request_ids in batch response.
 
@@ -352,7 +358,7 @@ resp.results["doc_001"]          # Get doc_001's response
 resp.think["doc_002"]            # Get doc_002's reasoning content
 ```
 
-#### 2.4.3 Progress Callbacks
+#### 2.5.2 Progress Callbacks
 
 Callbacks are invoked when **each request completes**, useful for:
 - Real-time progress display
@@ -364,13 +370,13 @@ Callbacks are invoked when **each request completes**, useful for:
 def on_complete(request_id, status):  # Custom callback function example
     print(f"[{request_id}] {status}")
 
-results = client.chat.batch(
+resp = client.chat.batch(
     requests,
     callbacks=[on_complete]
 )
 ```
 
-#### 2.4.4 Stop on Error
+#### 2.5.3 Stop on Error
 
 When the first error occurs in batch requests, subsequent tasks are immediately stopped while returning results of already processed requests:
 
