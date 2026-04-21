@@ -12,7 +12,7 @@ from dotenv import load_dotenv
 load_dotenv()
 sys.stdout.reconfigure(encoding='utf-8')
 
-from cnllm import CNLLM, AsyncCNLLM
+from cnllm import CNLLM, asyncCNLLM as AsyncCNLLM
 
 DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")
 XIAOMI_API_KEY = os.getenv("XIAOMI_API_KEY")
@@ -57,8 +57,8 @@ def test_sync_streaming_realtime():
             print(f"[Chunk {chunk_count:2d}] (empty delta)", end="", flush=True)
 
         # 实时显示各属性的当前累积状态
-        think_preview = client.chat.think[:30] if client.chat.think else "(空)"
-        still_preview = client.chat.still[:30] if client.chat.still else "(空)"
+        think_preview = client.chat.think[:30] if client.chat.think is not None else "(空)"
+        still_preview = client.chat.still[:30] if client.chat.still is not None else "(空)"
 
         print(f"  | .think: {think_preview}... | .still: {still_preview}...")
 
@@ -73,18 +73,13 @@ def test_sync_streaming_realtime():
     print(f"client.chat.still 长度: {len(client.chat.still) if client.chat.still else 0}")
     print(f"client.chat.tools: {client.chat.tools}")
     print(f"client.chat.raw 类型: {type(client.chat.raw)}")
-    print(f"client.chat.raw keys: {list(client.chat.raw.keys()) if isinstance(client.chat.raw, dict) else 'N/A'}")
-    print(f"client.chat.raw chunks 数量: {len(client.chat.raw.get('chunks', [])) if isinstance(client.chat.raw, dict) else 'N/A'}")
+    print(f"client.chat.raw keys: {list(client.chat.raw.keys()) if isinstance(client.chat.raw, dict) else len(client.chat.raw)}")
 
-    print("\n📝 client.chat.raw['chunks'] 前3个和后3个:")
+    print("\n📝 client.chat.raw keys:")
     print("-" * 70)
-    chunks = client.chat.raw.get("chunks", [])
-    for i, c in enumerate(chunks[:3]):
-        print(f"  [{i}] {c}")
-    if len(chunks) > 6:
-        print(f"  ... ({len(chunks) - 6} 个中间 chunks) ...")
-    for i, c in enumerate(chunks[-3:]):
-        print(f"  [{len(chunks) - 3 + i}] {c}")
+    if isinstance(client.chat.raw, dict):
+        for k in list(client.chat.raw.keys())[:5]:
+            print(f"  {k}: {client.chat.raw[k]}")
 
     print("\n" + "=" * 70)
     print("【同步流式测试结束】")
@@ -130,8 +125,8 @@ async def test_async_streaming_realtime():
                 print(f"[Chunk {chunk_count:2d}] (empty delta)", end="", flush=True)
 
             # 实时显示各属性的当前累积状态
-            think_preview = client.chat.think[:30] if client.chat.think else "(空)"
-            still_preview = client.chat.still[:30] if client.chat.still else "(空)"
+            think_preview = client.chat.think[:30] if client.chat.think is not None else "(空)"
+            still_preview = client.chat.still[:30] if client.chat.still is not None else "(空)"
 
             print(f"  | .think: {think_preview}... | .still: {still_preview}...")
 
@@ -146,18 +141,13 @@ async def test_async_streaming_realtime():
         print(f"client.chat.still 长度: {len(client.chat.still) if client.chat.still else 0}")
         print(f"client.chat.tools: {client.chat.tools}")
         print(f"client.chat.raw 类型: {type(client.chat.raw)}")
-        print(f"client.chat.raw keys: {list(client.chat.raw.keys()) if isinstance(client.chat.raw, dict) else 'N/A'}")
-        print(f"client.chat.raw chunks 数量: {len(client.chat.raw.get('chunks', [])) if isinstance(client.chat.raw, dict) else 'N/A'}")
+        print(f"client.chat.raw keys: {list(client.chat.raw.keys()) if isinstance(client.chat.raw, dict) else len(client.chat.raw)}")
 
-        print("\n📝 client.chat.raw['chunks'] 前3个和后3个:")
+        print("\n📝 client.chat.raw keys:")
         print("-" * 70)
-        chunks = client.chat.raw.get("chunks", [])
-        for i, c in enumerate(chunks[:3]):
-            print(f"  [{i}] {c}")
-        if len(chunks) > 6:
-            print(f"  ... ({len(chunks) - 6} 个中间 chunks) ...")
-        for i, c in enumerate(chunks[-3:]):
-            print(f"  [{len(chunks) - 3 + i}] {c}")
+        if isinstance(client.chat.raw, dict):
+            for k in list(client.chat.raw.keys())[:5]:
+                print(f"  {k}: {client.chat.raw[k]}")
 
     print("\n" + "=" * 70)
     print("【异步流式测试结束】")
@@ -211,10 +201,11 @@ def test_sync_streaming_with_thinking():
             print(f" ⚡thinking: '{thinking[:20]}...' ", end="", flush=True)
 
         # 实时显示各属性的当前累积状态
-        think_preview = client.chat.think[:50] if client.chat.think else "(空)"
-        still_preview = client.chat.still[:30] if client.chat.still else "(空)"
+        think_preview = client.chat.think[:50] if client.chat.think is not None else "(空)"
+        still_preview = client.chat.still[:30] if client.chat.still is not None else "(空)"
+        raw_preview = list(client.chat.raw.keys())[:3] if isinstance(client.chat.raw, dict) and client.chat.raw is not None else "(空)"
 
-        print(f" | .think: {think_preview}... | .still: {still_preview}...")
+        print(f" | .think: {think_preview}... | .still: {still_preview}... | .raw: {raw_preview}...")
 
         # 限制输出数量
         if chunk_count >= 50:
@@ -227,8 +218,8 @@ def test_sync_streaming_with_thinking():
 
     print("\n📊 迭代完成后各属性值:")
     print("-" * 70)
-    print(f"client.chat.think: {client.chat.think[:200] if client.chat.think else None}...")
-    print(f"client.chat.think 长度: {len(client.chat.think) if client.chat.think else 0}")
+    print(f"client.chat.think: {client.chat.think[:200] if client.chat.think is not None else None}...")
+    print(f"client.chat.think 长度: {len(client.chat.think) if client.chat.think is not None else 0}")
     print(f"client.chat.still: {client.chat.still}")
     print(f"client.chat.still 长度: {len(client.chat.still) if client.chat.still else 0}")
     print(f"client.chat.tools: {client.chat.tools}")
@@ -298,8 +289,8 @@ def test_sync_streaming_with_tools():
             print(f"[Chunk {chunk_count:2d}] (empty)", end="", flush=True)
 
         # 实时显示各属性的当前累积状态
-        tools_preview = client.chat.tools[:100] if client.chat.tools else "(空)"
-        still_preview = client.chat.still[:30] if client.chat.still else "(空)"
+        tools_preview = list(client.chat.tools.values())[:100] if isinstance(client.chat.tools, dict) and client.chat.tools is not None else "(空)"
+        still_preview = client.chat.still[:30] if client.chat.still is not None else "(空)"
 
         print(f" | .tools: {tools_preview}... | .still: {still_preview}...")
 
@@ -314,11 +305,11 @@ def test_sync_streaming_with_tools():
 
     print("\n📊 迭代完成后各属性值:")
     print("-" * 70)
-    print(f"client.chat.think: {client.chat.think[:200] if client.chat.think else None}...")
+    print(f"client.chat.think: {client.chat.think[:200] if client.chat.think is not None else None}...")
     print(f"client.chat.still: {client.chat.still}")
-    print(f"client.chat.still 长度: {len(client.chat.still) if client.chat.still else 0}")
+    print(f"client.chat.still 长度: {len(client.chat.still) if client.chat.still is not None else 0}")
     print(f"client.chat.tools: {client.chat.tools}")
-    print(f"client.chat.tools 数量: {len(client.chat.tools) if client.chat.tools else 0}")
+    print(f"client.chat.tools 数量: {len(client.chat.tools) if client.chat.tools is not None else 0}")
 
     print("\n" + "=" * 70)
     print("【tools测试结束】")

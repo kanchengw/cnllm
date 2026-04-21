@@ -1,9 +1,10 @@
 import time
 import logging
 import os
+import asyncio
 from typing import Dict, Any, List, Union, Optional
 
-from ..utils.accumulator import EmbeddingResponse
+from .accumulators.embedding_accumulator import EmbeddingResponse
 from ..utils.validator import ParamValidator
 
 logger = logging.getLogger(__name__)
@@ -350,39 +351,6 @@ class BaseEmbeddingAdapter:
         responder = self._get_responder()
         return responder.to_openai_format(raw, model)
 
-    def _process_batch_result(
-        self,
-        raw_response: Dict[str, Any],
-        inputs: List[str],
-        custom_ids: Optional[List[str]] = None,
-        start_time: float = None
-    ) -> EmbeddingResponse:
-        custom_ids = custom_ids or [f"request_{i}" for i in range(len(inputs))]
-        results = {}
-        dimension = 0
-
-        if "data" in raw_response:
-            for item in raw_response.get("data", []):
-                index = item.get("index", 0)
-                request_id = custom_ids[index] if index < len(custom_ids) else f"request_{index}"
-                results[request_id] = self._to_openai_format({"data": [item]}, self.model)
-                if "usage" in item:
-                    results[request_id]["usage"] = item["usage"]
-                embedding = item.get("embedding", [])
-                if embedding and dimension == 0:
-                    dimension = len(embedding)
-
-        elapsed = time.time() - start_time if start_time else 0
-
-        return EmbeddingResponse(
-            request_counts={
-                "total": len(inputs),
-                "dimension": dimension
-            },
-            elapsed=elapsed,
-            results=results
-        )
-
     def _prepare_params(self, input_data: Union[str, List[str]], model: str = None, **kwargs) -> Dict[str, Any]:
         params = {
             "api_key": self.api_key,
@@ -395,19 +363,53 @@ class BaseEmbeddingAdapter:
         return params
 
     def create_single(self, input_str: str, model: str = None, **kwargs) -> Dict[str, Any]:
-        params = self._prepare_params(input_str, model, **kwargs)
+        from .accumulators.embedding_accumulator import EmbeddingAccumulator
+        input_list = [input_str] if isinstance(input_str, str) else input_str
+        params = self._prepare_params(input_list, model, **kwargs)
         payload = self._build_payload(params)
         url = self._get_request_url(**params)
         raw_response = self._post(url, payload, **params)
-        return self._to_openai_format(raw_response, self.model)
+        accumulator = EmbeddingAccumulator(raw_response, self)
+        return accumulator.process()
+
+    def create(
+        self,
+        input: str,
+        model: str = None,
+        **kwargs
+    ) -> Dict[str, Any]:
+        if not isinstance(input, str):
+            raise ValueError("create() 只接受单条文本输入 (str)，请使用 batch() 方法处理批量输入")
+        return self.create_single(input, model=model, **kwargs)
 
     def create_batch(
         self,
-        inputs: List[str],
+        input: Union[str, List[str]],
         custom_ids: Optional[List[str]] = None,
         model: str = None,
+        timeout: int = None,
+        max_retries: int = None,
+        retry_delay: float = None,
         **kwargs
     ) -> EmbeddingResponse:
+        if isinstance(input, str):
+            inputs = [input]
+        else:
+            inputs = input
+        custom_ids = custom_ids or [f"request_{i}" for i in range(len(inputs))]
+        dimension = 0
+
+        response = EmbeddingResponse(
+            _request_counts={
+                "total": len(inputs),
+                "dimension": 0
+            }
+        )
+
+        actual_timeout = timeout if timeout is not None else self.timeout
+        actual_max_retries = max_retries if max_retries is not None else self.max_retries
+        actual_retry_delay = retry_delay if retry_delay is not None else self.retry_delay
+
         params = self._prepare_params(inputs, model, **kwargs)
         payload = self._build_payload(params)
         url = self._get_request_url(**params)
@@ -416,132 +418,166 @@ class BaseEmbeddingAdapter:
         try:
             raw_response = self._post(url, payload, **params)
         except Exception as e:
-            custom_ids = custom_ids or [f"request_{i}" for i in range(len(inputs))]
-            return EmbeddingResponse(
-                request_counts={
-                    "total": len(inputs),
-                    "dimension": 0
-                },
-                elapsed=time.time() - start_time,
-                results={}
-            )
+            elapsed = time.time() - start_time
+            response._elapsed = elapsed
+            for rid in custom_ids:
+                response.add_error(rid, e)
+            return response
 
-        return self._process_batch_result(raw_response, inputs, custom_ids, start_time)
+        base_resp = raw_response.get("base_resp", {})
+        status_code = base_resp.get("status_code")
+        if status_code and status_code != 0:
+            error_msg = base_resp.get("status_msg", f"API error: {status_code}")
+            for rid in custom_ids:
+                response.add_error(rid, error_msg)
+            elapsed = time.time() - start_time
+            response._elapsed = elapsed
+            return response
 
-    def create(
-        self,
-        input: Union[str, List[str]],
-        model: str = None,
-        custom_ids: Optional[List[str]] = None,
-        **kwargs
-    ) -> Union[Dict[str, Any], EmbeddingResponse]:
-        if isinstance(input, str):
-            return self.create_single(input, model=model, **kwargs)
-        elif isinstance(input, list):
-            if not all(isinstance(item, str) for item in input):
-                raise ValueError("All elements in input list must be string")
-            if custom_ids and len(custom_ids) != len(input):
-                raise ValueError(f"custom_ids length ({len(custom_ids)}) must match input length ({len(input)})")
-            return self.create_batch(input, custom_ids=custom_ids, model=model, **kwargs)
-        else:
-            raise ValueError("input must be str or list[str]")
+        if "data" in raw_response:
+            for item in raw_response.get("data", []):
+                index = item.get("index", 0)
+                request_id = custom_ids[index] if index < len(custom_ids) else f"request_{index}"
+                result_data = self._to_openai_format({"data": [item]}, self.model)
+                if "usage" in item:
+                    result_data["usage"] = item["usage"]
+                response.add_result(request_id, result_data)
+                embedding = item.get("embedding", [])
+                if embedding and dimension == 0:
+                    dimension = len(embedding)
 
-    async def acreate_single(self, input_str: str, model: str = None, **kwargs) -> Dict[str, Any]:
-        params = self._prepare_params(input_str, model, **kwargs)
-        payload = self._build_payload(params)
-        url = self._get_request_url(**params)
-        raw_response = await self._apost(url, payload, **params)
-        return self._to_openai_format(raw_response, self.model)
+        if dimension > 0:
+            response._request_counts["dimension"] = dimension
 
-    async def acreate_batch(
-        self,
-        inputs: List[str],
-        custom_ids: Optional[List[str]] = None,
-        model: str = None,
-        **kwargs
-    ) -> EmbeddingResponse:
-        params = self._prepare_params(inputs, model, **kwargs)
-        payload = self._build_payload(params)
-        url = self._get_request_url(**params)
-        start_time = time.time()
+        elapsed = time.time() - start_time
+        response._elapsed = elapsed
 
-        try:
-            raw_response = await self._apost(url, payload, **params)
-        except Exception as e:
-            custom_ids = custom_ids or [f"request_{i}" for i in range(len(inputs))]
-            return EmbeddingResponse(
-                request_counts={
-                    "total": len(inputs),
-                    "dimension": 0
-                },
-                elapsed=time.time() - start_time,
-                results={}
-            )
-
-        return self._process_batch_result(raw_response, inputs, custom_ids, start_time)
-
-    async def acreate(
-        self,
-        input: Union[str, List[str]],
-        model: str = None,
-        custom_ids: Optional[List[str]] = None,
-        **kwargs
-    ) -> Union[Dict[str, Any], EmbeddingResponse]:
-        if isinstance(input, str):
-            return await self.acreate_single(input, model=model, **kwargs)
-        elif isinstance(input, list):
-            if not all(isinstance(item, str) for item in input):
-                raise ValueError("All elements in input list must be string")
-            if custom_ids and len(custom_ids) != len(input):
-                raise ValueError(f"custom_ids length ({len(custom_ids)}) must match input length ({len(input)})")
-            return await self.acreate_batch(input, custom_ids=custom_ids, model=model, **kwargs)
-        else:
-            raise ValueError("input must be str or list[str]")
+        return response
 
 
 class EmbeddingsNamespace:
+    DEFAULT_MAX_CONCURRENCY = 12
+    DEFAULT_RPS = 10
+
     def __init__(self, parent):
         self.parent = parent
+
+    def _get_adapter(self, model: str = None):
+        if model is None:
+            model = getattr(self.parent, 'model', None) or BaseEmbeddingAdapter.get_default_model()
+        adapter_class = BaseEmbeddingAdapter.get_adapter_for_model(model)
+        if not adapter_class:
+            raise ValueError(f"不支持的 embedding 模型: {model}")
+        
+        timeout = getattr(self.parent, 'timeout', None)
+        max_retries = getattr(self.parent, 'max_retries', None)
+        retry_delay = getattr(self.parent, 'retry_delay', None)
+        
+        return adapter_class(
+            api_key=self.parent.api_key,
+            model=model,
+            base_url=self.parent.base_url,
+            timeout=timeout,
+            max_retries=max_retries,
+            retry_delay=retry_delay
+        )
 
     def create(
         self,
-        input: Union[str, List[str]],
+        input: str,
         model: str = None,
-        custom_ids: Optional[List[str]] = None,
         **kwargs
-    ) -> Union[Dict[str, Any], EmbeddingResponse]:
-        model = model or BaseEmbeddingAdapter.get_default_model()
-        adapter_class = BaseEmbeddingAdapter.get_adapter_for_model(model)
-        if not adapter_class:
-            raise ValueError(f"不支持的 embedding 模型: {model}")
+    ) -> Dict[str, Any]:
+        adapter = self._get_adapter(model)
+        return adapter.create(input, model=model, **kwargs)
 
-        adapter = adapter_class(
-            api_key=self.parent.api_key,
-            model=model,
-            base_url=self.parent.base_url
+    async def create_async(
+        self,
+        input: str,
+        model: str = None,
+        **kwargs
+    ) -> Dict[str, Any]:
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(
+            None,
+            lambda: self.create(input, model=model, **kwargs)
         )
-        return adapter.create(input, custom_ids=custom_ids, **kwargs)
 
-
-class AsyncEmbeddingsNamespace:
-    def __init__(self, parent):
-        self.parent = parent
-
-    async def acreate(
+    def batch(
         self,
         input: Union[str, List[str]],
-        model: str = None,
+        batch_size: int = None,
+        max_concurrent: int = None,
+        rps: float = None,
         custom_ids: Optional[List[str]] = None,
+        model: str = None,
+        timeout: int = None,
+        max_retries: int = None,
+        retry_delay: float = None,
+        stop_on_error: bool = False,
+        callbacks: Optional[List] = None,
         **kwargs
-    ) -> Union[Dict[str, Any], EmbeddingResponse]:
-        model = model or BaseEmbeddingAdapter.get_default_model()
-        adapter_class = BaseEmbeddingAdapter.get_adapter_for_model(model)
-        if not adapter_class:
-            raise ValueError(f"不支持的 embedding 模型: {model}")
-
-        adapter = adapter_class(
-            api_key=self.parent.api_key,
-            model=model,
-            base_url=self.parent.base_url
+    ) -> EmbeddingResponse:
+        from cnllm.utils.batch import EmbeddingBatchScheduler
+        from cnllm.core.accumulators.embedding_accumulator import EmbeddingBatchAccumulator
+        
+        if isinstance(input, str):
+            input = [input]
+        
+        adapter = self._get_adapter(model)
+        scheduler = EmbeddingBatchScheduler(
+            adapter=adapter,
+            max_concurrent=max_concurrent,
+            rps=rps,
+            batch_size=batch_size,
+            custom_ids=custom_ids,
+            timeout=timeout,
+            max_retries=max_retries,
+            retry_delay=retry_delay,
+            stop_on_error=stop_on_error,
+            callbacks=callbacks,
         )
-        return await adapter.acreate(input, custom_ids=custom_ids, **kwargs)
+        batch_result = scheduler.execute(input, **kwargs)
+        accumulator = EmbeddingBatchAccumulator(batch_result, adapter, elapsed=batch_result.elapsed if hasattr(batch_result, 'elapsed') else 0.0)
+        return accumulator.process()
+
+    async def batch_async(
+        self,
+        input: Union[str, List[str]],
+        batch_size: int = None,
+        max_concurrent: int = None,
+        rps: float = None,
+        custom_ids: Optional[List[str]] = None,
+        model: str = None,
+        timeout: int = None,
+        max_retries: int = None,
+        retry_delay: float = None,
+        stop_on_error: bool = False,
+        callbacks: Optional[List] = None,
+        **kwargs
+    ) -> EmbeddingResponse:
+        from cnllm.utils.batch import AsyncEmbeddingBatchScheduler
+        from cnllm.core.accumulators.embedding_accumulator import AsyncEmbeddingBatchAccumulator
+        
+        if isinstance(input, str):
+            input = [input]
+        
+        adapter = self._get_adapter(model)
+        scheduler = AsyncEmbeddingBatchScheduler(
+            adapter=adapter,
+            max_concurrent=max_concurrent,
+            rps=rps,
+            batch_size=batch_size,
+            custom_ids=custom_ids,
+            timeout=timeout,
+            max_retries=max_retries,
+            retry_delay=retry_delay,
+            stop_on_error=stop_on_error,
+            callbacks=callbacks,
+        )
+        batch_result = None
+        async for resp in scheduler.execute(input, **kwargs):
+            batch_result = resp
+        
+        accumulator = AsyncEmbeddingBatchAccumulator(batch_result, adapter, elapsed=batch_result.elapsed if hasattr(batch_result, 'elapsed') else 0.0)
+        return await accumulator.process()

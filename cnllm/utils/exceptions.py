@@ -372,3 +372,30 @@ class FallbackError(CNLLMError):
             suggestion="请检查网络连接，或稍后重试",
             original_exc=original_exc
         )
+
+
+class BatchStopOnError(CNLLMError):
+    """批量请求stop_on_error触发时抛出的异常"""
+    def __init__(
+        self,
+        message: str = "批量请求遇到错误终止（stop_on_error=True）",
+        batch_response: Any = None,
+        error: Optional[Exception] = None,
+        original_exc: Optional[Exception] = None
+    ):
+        self.batch_response = batch_response
+        self.error = error
+        
+        full_message = message
+        if error:
+            full_message = f"{message}\n\n错误: {str(error)}"
+        
+        super().__init__(
+            message=full_message,
+            error_code=ErrorCode.SERVER_ERROR,
+            status_code=500,
+            provider="unknown",
+            details={"first_error": str(error)} if error else None,
+            suggestion="请检查错误详情或调整参数后重试",
+            original_exc=original_exc
+        )

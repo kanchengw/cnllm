@@ -165,7 +165,10 @@ class TestThinkingFeature:
             print(f"\n[INFO] .think 为空（可能是模型配置问题）")
 
         raw_has_reasoning = False
-        raw_message = raw.get("choices", [{}])[0].get("message", {})
+        if raw and isinstance(raw, dict):
+            raw_message = raw.get("choices", [{}])[0].get("message", {}) if raw.get("choices") else {}
+        else:
+            raw_message = {}
         if "reasoning_content" in raw_message and raw_message.get("reasoning_content"):
             raw_has_reasoning = True
 

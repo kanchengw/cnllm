@@ -3,26 +3,6 @@
 CNLLM 项目文本处理方向的基础框架已基本完善，详细的系统架构可以参阅[系统架构](ARCHITECTURE.md)。
 本文档梳理开发新厂商适配的标准流程，基于 MiniMax 和小米 mimo 适配开发经验总结。
 
-## 两种路线
-
-### 路线1：适配厂商的OpenAI兼容接口
-
-- 优势：适配简单，请求前后字段基本一致。
-- 劣势：兼容接口一般功能较少，缺少厂商原生功能。
-- 案例：小米mimo系列模型适配采用此路线，因为小米官方只提供OpenAI兼容接口。
-
-### 路线2：适配厂商的原生接口
-
-- 优势：功能完善，支持更多厂商原生功能。
-- 劣势：适配复杂，需要详细分析厂商 API 的请求和响应格式，需要在vendor适配器中实现厂商特殊逻辑处理。
-- 案例：MiniMax M2系列的模型适配采用此路线，支持更多原生接口的独特能力，如：
-  `thinking`深度思考模式
-  `top_p`最小概率采样
-  `mask`掩码输入
-  最后以符合OpenAI API规范的格式返回响应。
-
-***
-
 ## 开发流程概览
 
 ```mermaid
@@ -93,7 +73,6 @@ CNLLM 在完成 **OpenAI 标准请求字段 → 厂商请求字段**的映射后
 |  CNLLM 标准请求字段  |   MiniMax 请求字段  |
 | :------------: | :-------------: |
 |    `api_key`   | `Authorization` |
-| `organization` |    `group_id`   |
 
 **请求体字段**
 
@@ -110,7 +89,7 @@ CNLLM 在完成 **OpenAI 标准请求字段 → 厂商请求字段**的映射后
 |        `user`       |          `user`         |
 |       `tools`       |         `tools`         |
 |    `tool_choice`    |      `tool_choice`      |
-|     `max_tokens`    | `max_completion_tokens` |
+| `max_completion_tokens` | `max_completion_tokens` |
 |      `thinking`     |        `thinking`       |
 |          -          |          `mask`         |
 |          -          |         `top_k`         |
@@ -211,9 +190,10 @@ required_fields:  # 必填参数校验
 
 one_of:  # 互斥参数校验
   messages_or_prompt:
-    adapter: [chat]
-    messages: {adapter: [chat]}
-    prompt: {adapter: [chat]}
+    messages: 
+      adapter: [chat]
+    prompt: 
+      adapter: [chat]
 
 optional_fields:  # 可选参数校验
   base_url:

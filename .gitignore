@@ -13,7 +13,7 @@ backup*/
 test_*/
 # C extensions
 *.so
-
+skills/
 # Distribution / packaging
 .Python
 build/

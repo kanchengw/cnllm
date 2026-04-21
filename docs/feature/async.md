@@ -21,7 +21,7 @@ CNLLM 采用 **OpenAI SDK 风格的双客户端设计**：
 | 客户端 | 类 | 用途 | 调用方式 |
 | ------ | --- | ---- | -------- |
 | 同步客户端 | `CNLLM` | 同步场景 | `client.chat.create(...)` |
-| 异步客户端 | `AsyncCNLLM` | 异步场景 | `await client.chat.create(...)` |
+| 异步客户端 | `asyncCNLLM` | 异步场景 | `await client.chat.create(...)` |
 
 ### 2.2 统一 stream 参数
 
@@ -30,7 +30,7 @@ CNLLM 采用 **OpenAI SDK 风格的双客户端设计**：
 | 客户端 | `stream=False` | `stream=True` | 批量 `stream=True` |
 | ------ | -------------- | ------------- | ----------------- |
 | 同步 `CNLLM` | `dict` | `StreamResultAccumulator` | `Iterator[dict]` |
-| 异步 `AsyncCNLLM` | `dict` | `AsyncStreamResponse` | `AsyncIterator[dict]` |
+| 异步 `asyncCNLLM` | `dict` | `AsyncStreamResponse` | `AsyncIterator[dict]` |
 
 ### 2.3 httpx 统一方案
 
@@ -109,9 +109,9 @@ for chunk in resp:
 
 
 # ========== 异步客户端 ==========
-from cnllm import AsyncCNLLM
+from cnllm import asyncCNLLM
 
-async_client = AsyncCNLLM(model="deepseek-chat", api_key="xxx")
+async_client = asyncCNLLM(model="deepseek-chat", api_key="xxx")
 
 # 非流式
 resp = await async_client.chat.create(messages=[...])
@@ -157,12 +157,12 @@ class BaseHttpClient:
         """关闭异步客户端"""
 ```
 
-### 3.4 AsyncStreamResponse 异步流式封装
+### 3.4 AsyncStreamAccumulator 异步流式封装
 
-`AsyncStreamResponse` 封装异步迭代器，实现实时流式处理：
+`AsyncStreamAccumulator` 封装异步迭代器，实现实时流式处理：
 
 ```python
-class AsyncStreamResponse:
+class AsyncStreamAccumulator:
     """异步流式响应，支持 async for 实时迭代"""
 
     def __init__(self, async_iterator, adapter):
@@ -231,14 +231,14 @@ async for line in await client.http_client.apost_stream(path, payload):
 
 ```python
 # 方式1：手动关闭（适合长生命周期，如 FastAPI 全局客户端）
-client = AsyncCNLLM(model="deepseek-chat", api_key="xxx")
+client = asyncCNLLM(model="deepseek-chat", api_key="xxx")
 try:
     result = await client.chat.create("你好")
 finally:
     await client.aclose()
 
 # 方式2：上下文管理器（推荐，适合短生命周期）
-async with AsyncCNLLM(model="deepseek-chat", api_key="xxx") as client:
+async with asyncCNLLM(model="deepseek-chat", api_key="xxx") as client:
     result = await client.chat.create("你好")
 # 自动调用 aclose
 ```
@@ -248,12 +248,12 @@ async with AsyncCNLLM(model="deepseek-chat", api_key="xxx") as client:
 ### 6.1 异步客户端创建
 
 ```python
-from cnllm import AsyncCNLLM
+from cnllm import asyncCNLLM
 
-client = AsyncCNLLM(model="deepseek-chat", api_key="xxx")
+client = asyncCNLLM(model="deepseek-chat", api_key="xxx")
 
 # 或使用上下文管理器
-async with AsyncCNLLM(model="deepseek-chat", api_key="xxx") as client:
+async with asyncCNLLM(model="deepseek-chat", api_key="xxx") as client:
     result = await client.chat.create("你好")
     print(result)
 ```
@@ -261,8 +261,8 @@ async with AsyncCNLLM(model="deepseek-chat", api_key="xxx") as client:
 ### 6.2 异步流式
 
 ```python
-async with AsyncCNLLM(model="deepseek-chat", api_key="xxx") as client:
-    async for chunk in client.chat.create("写一首诗", stream=True):
+async with asyncCNLLM(model="deepseek-chat", api_key="xxx") as client:
+    async for chunk in await client.chat.create("写一首诗", stream=True):
         content = chunk.get("choices", [{}])[0].get("delta", {}).get("content", "")
         print(content, end="", flush=True)
 ```
@@ -270,13 +270,38 @@ async with AsyncCNLLM(model="deepseek-chat", api_key="xxx") as client:
 ### 6.3 异步批量
 
 ```python
-async with AsyncCNLLM(model="deepseek-chat", api_key="xxx") as client:
-    results = await client.chat.abatch([
+async with asyncCNLLM(model="deepseek-chat", api_key="xxx") as client:
+    results = await client.chat.batch([
         "问题1",
         "问题2",
         "问题3",
     ])
     print(f"成功: {results.success_count}/{results.total}")
+```
+
+### 6.4 异步 Embedding 单条
+
+```python
+async with asyncCNLLM(model="embedding-2", api_key="xxx") as client:
+    result = await client.embeddings.create(input="要向量化的文本")
+    # 返回: Dict (OpenAI 标准格式)
+    embedding = result["data"][0]["embedding"]
+    print(f"向量维度: {len(embedding)}")
+```
+
+### 6.5 异步 Embedding 批量
+
+```python
+async with asyncCNLLM(model="embedding-2", api_key="xxx") as client:
+    results = await client.embeddings.batch(inputs=[
+        "文本1",
+        "文本2",
+        "文本3",
+    ])
+    # 返回: EmbeddingResponse
+    for request_id, result in results.results.items():
+        embedding = result["data"][0]["embedding"]
+        print(f"{request_id}: 维度={len(embedding)}")
 ```
 
 ## 7. 注意事项

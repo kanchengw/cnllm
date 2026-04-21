@@ -4,10 +4,10 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "cnllm"
-version = "0.6.0"
+version = "0.7.0"
 description = "中文大模型适配库，将 API 响应封装为 OpenAI 标准，无缝协作 LangChain、LlamaIndex、LiteLLM 等机器学习框架"
 readme = "README.md"
-license = {text = "MIT"}
+license = "MIT"
 authors = [
     {name = "kanchengw", email = "wangkancheng1122@163.com"}
 ]
@@ -15,13 +15,14 @@ keywords = ["ai", "llm", "openai", "langchain", "minimax", "chinese-llm", "adapt
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.8",
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Topic :: Software Development :: Libraries :: Python Modules",
 ]
 requires-python = ">=3.8"

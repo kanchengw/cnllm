@@ -313,6 +313,9 @@ class Responder:
             ]
         }
 
+        if "request_id" in raw:
+            result["request_id"] = raw["request_id"]
+
         return result
 
     def check_error(self, raw_response: Dict[str, Any], adapter_name: str = "") -> None:

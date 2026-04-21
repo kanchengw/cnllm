@@ -15,7 +15,7 @@ from dotenv import load_dotenv
 load_dotenv()
 sys.stdout.reconfigure(encoding='utf-8')
 
-from cnllm import CNLLM, AsyncCNLLM
+from cnllm import CNLLM, asyncCNLLM as AsyncCNLLM
 
 MINIMAX_API_KEY = os.getenv("MINIMAX_API_KEY")
 GLM_API_KEY = os.getenv("GLM_API_KEY")
@@ -146,8 +146,8 @@ async def test_async_stream_batch_properties():
     print("-" * 70)
 
     chunk_count = 0
-    abatch_iterator = client.chat.abatch(requests, stream=True)
-    async for chunk in abatch_iterator:
+    batch_iterator = client.chat.batch(requests, stream=True)
+    async for chunk in batch_iterator:
         chunk_count += 1
         request_id = chunk.get("request_id")
         index = int(request_id.split("_")[-1])
@@ -160,9 +160,9 @@ async def test_async_stream_batch_properties():
             print(f"[Chunk {chunk_count:2d}] request_id={request_id}, content='{content_preview}...' " if content else f"[Chunk {chunk_count:2d}] request_id={request_id}, content='{content}'")
 
         if chunk_count == 5:
-            print(f"\n📊 实时查看 batch_result_async 属性 (前5个chunks后):")
+            print(f"\n📊 实时查看 batch_result 属性 (前5个chunks后):")
             print("-" * 70)
-            result = client.chat.batch_result_async
+            result = client.chat.batch_result
 
             print(f"\n1. result.think:")
             for cid, think in result.think.items():
@@ -180,7 +180,7 @@ async def test_async_stream_batch_properties():
 
     print("\n📊 迭代完成后各属性值:")
     print("-" * 70)
-    result = client.chat.batch_result_async
+    result = client.chat.batch_result
 
     print(f"\n1. result.think:")
     for cid, think in result.think.items():
@@ -286,7 +286,7 @@ async def test_async_nonstream_batch_properties():
     print("-" * 70)
 
     result = None
-    async for r in client.chat.abatch(requests, stream=False):
+    async for r in client.chat.batch(requests, stream=False):
         result = r
 
     print("\n📊 异步非流式批量结果:")

@@ -13,9 +13,10 @@ required_fields:
 
 one_of:
   messages_or_prompt:
-    adapter: [chat]
-    messages: {adapter: [chat]}
-    prompt: {adapter: [chat]}
+    messages: 
+      adapter: [chat]
+    prompt: 
+      adapter: [chat]
 
 optional_fields:
   base_url:
@@ -87,6 +88,7 @@ model_mapping:
     kimi-k2-0905-preview: "kimi-k2-0905-preview"
     kimi-k2-0711-preview: "kimi-k2-0711-preview"
     kimi-k2-turbo-preview: "kimi-k2-turbo-preview"
+    kimi-k2.6: "kimi-k2.6"
 
 error_check:
   code_path: "error.code"

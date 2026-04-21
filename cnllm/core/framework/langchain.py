@@ -9,8 +9,17 @@ from langchain_core.runnables.base import Runnable
 
 
 class LangChainRunnable(Runnable):
+    """
+    统一的 LangChain Runnable
+    
+    接受 CNLLM 客户端，使用其内部的 asyncCNLLM 引擎处理所有请求。
+    """
+
     def __init__(self, cnllm_client):
-        self.client = cnllm_client
+        if not hasattr(cnllm_client, 'async_client'):
+            raise TypeError("cnllm_client 必须有 async_client 属性")
+        self._client = cnllm_client
+        self._async_client = cnllm_client.async_client
 
     def _convert_input(self, input: Any) -> List[dict]:
         if isinstance(input, str):
@@ -38,73 +47,25 @@ class LangChainRunnable(Runnable):
         }
         return mapping.get(langchain_role, "user")
 
-    def invoke(self, input: Any, config=None, **kwargs) -> AIMessage:
+    async def invoke(self, input: Any, config=None, **kwargs) -> AIMessage:
         messages = self._convert_input(input)
-        result = self.client.chat.create(messages=messages, **kwargs)
+        result = await self._async_client.chat.create(messages=messages, **kwargs)
         return AIMessage(content=result["choices"][0]["message"]["content"])
 
-    async def ainvoke(self, input: Any, config=None, **kwargs) -> AIMessage:
-        from cnllm.entry.async_client import AsyncCNLLM
-        messages = self._convert_input(input)
-        if isinstance(self.client, AsyncCNLLM):
-            result = await self.client.chat.create(messages=messages, **kwargs)
-        else:
-            result = self.client.chat.create(messages=messages, **kwargs)
-        return AIMessage(content=result["choices"][0]["message"]["content"])
-
-    def batch(self, inputs: List[Any], config=None, **kwargs) -> List[AIMessage]:
-        # 转换输入为CNLLM格式
-        results = []
-        for input in inputs:
-            messages = self._convert_input(input)
-            try:
-                # 直接使用create方法，确保与测试兼容
-                result = self.client.chat.create(messages=messages, **kwargs)
-                results.append(AIMessage(content=result["choices"][0]["message"]["content"]))
-            except Exception as e:
-                # 忽略错误，继续处理下一个
-                pass
-        return results
-
-    async def abatch(self, inputs: List[Any], config=None, **kwargs) -> List[AIMessage]:
-        # 转换输入为CNLLM格式
-        requests = []
-        for input in inputs:
-            messages = self._convert_input(input)
-            requests.append({"messages": messages, **kwargs})
-        
-        # 使用CNLLM的异步批量调度器
-        result = await self.client.chat.abatch(requests)
-        return [AIMessage(content=r.response["choices"][0]["message"]["content"]) 
-                for r in result.results if r.status == "success"]
-
-    def stream(self, input: Any, config=None, **kwargs) -> Iterator[str]:
+    async def stream(self, input: Any, config=None, **kwargs) -> AsyncIterator[str]:
         messages = self._convert_input(input)
         kwargs["stream"] = True
-
-        for chunk in self.client.chat.create(messages=messages, **kwargs):
+        response = await self._async_client.chat.create(messages=messages, **kwargs)
+        async for chunk in response:
             content = chunk["choices"][0].get("delta", {}).get("content", "")
             if content:
                 yield content
 
-    async def astream(self, input: Any, config=None, **kwargs) -> AsyncIterator[str]:
-        messages = self._convert_input(input)
-        kwargs["stream"] = True
-
-        if hasattr(self.client, 'chat') and hasattr(self.client.chat, 'create'):
-            from cnllm.entry.async_client import AsyncCNLLM
-            if isinstance(self.client, AsyncCNLLM):
-                response = await self.client.chat.create(messages=messages, **kwargs)
-                async for chunk in response:
-                    content = chunk["choices"][0].get("delta", {}).get("content", "")
-                    if content:
-                        yield content
-            else:
-                import asyncio
-                def sync_stream():
-                    for chunk in self.client.chat.create(messages=messages, **kwargs):
-                        content = chunk["choices"][0].get("delta", {}).get("content", "")
-                        if content:
-                            yield content
-                for content in await asyncio.to_thread(list, sync_stream()):
-                    yield content
+    async def batch(self, inputs: List[Any], config=None, **kwargs) -> List[AIMessage]:
+        requests = []
+        for input in inputs:
+            messages = self._convert_input(input)
+            requests.append({"messages": messages, **kwargs})
+        result = await self._async_client.chat.batch(requests)
+        return [AIMessage(content=r.response["choices"][0]["message"]["content"])
+                for r in result.results if r.status == "success"]

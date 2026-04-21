@@ -20,12 +20,12 @@ load_dotenv()
 
 from cnllm import CNLLM
 
-MODEL = "glm-5.1"
-API_KEY = os.getenv("GLM_API_KEY")
+MODEL = "deepseek-chat"
+API_KEY = os.getenv("DEEPSEEK_API_KEY")
 
 requires_api_key = pytest.mark.skipif(
-    not os.getenv("GLM_API_KEY"),
-    reason="需要 GLM_API_KEY"
+    not os.getenv("DEEPSEEK_API_KEY"),
+    reason="需要 DEEPSEEK_API_KEY"
 )
 
 
