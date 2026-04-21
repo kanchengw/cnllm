@@ -183,7 +183,7 @@ for chunk in client.chat.create(...):  # 异步客户端迭代 async for chunk i
 支持同步/异步、流式/非流式的批量调用，支持**进度回调、自定义请求 ID 、遇错停止**等高级功能，支持配置**并发控制**。
 
 ```python
-results = client.chat.batch(
+resp = client.chat.batch(
     ["你好", "今天天气怎么样", "你是谁"]
 )
 ```
@@ -247,9 +247,9 @@ print(result)
 
 **to_dict():**
 ```python
-result.to_dict()                        # 只保留 results (默认)
-result.to_dict(stats=True)              # 包含 results + 统计字段（request_counts、elapsed）
-result.to_dict(stats=True, think=True, still=True, tools=True, raw=True)  # results + 任意字段
+resp.to_dict()                        # 只保留 results (默认)
+resp.to_dict(stats=True)              # 包含 results + 统计字段（request_counts、elapsed）
+resp.to_dict(stats=True, think=True, still=True, tools=True, raw=True)  # results + 任意字段
 ```
 
 ### 2.3 Embeddings 调用
@@ -260,14 +260,14 @@ result.to_dict(stats=True, think=True, still=True, tools=True, raw=True)  # resu
 #### 2.3.1 单条调用
 
 ```python
-result = client.embeddings.create(input="Hello world")
+resp = client.embeddings.create(input="Hello world")
 # 返回: Dict (OpenAI 标准 Embeddings 格式)
 ```
 
 #### 2.3.2 Embeddings 批量调用
 
 ```python
-results = client.embeddings.batch(
+resp = client.embeddings.batch(
     input=["Hello", "world", "你好"]
 )
 ```
@@ -322,8 +322,8 @@ print(result)
 
 **to_dict():**
 ```python
-result.to_dict()                        # 只保留 results (默认)
-result.to_dict(stats=True)              # 包含 results + 统计字段（request_counts、elapsed）
+resp.to_dict()                        # 只保留 results (默认)
+resp.to_dict(stats=True)              # 包含 results + 统计字段（request_counts、elapsed）
 ```
 
 ### 2.4 批量调用控制参数
@@ -339,7 +339,8 @@ result.to_dict(stats=True)              # 包含 results + 统计字段（reques
 | `max_retries` | `int` | 3 | 最大重试次数 |
 | `retry_delay` | `float` | 1.0 | 重试延迟（秒）|
 
-**batch_size**：仅支持批量 Embeddings 调用时配置，建议使用动态适应默认值。
+**batch_size**：
+仅支持批量 Embeddings 调用时配置，默认根据请求数量自适应计算，不建议手动配置。
 
 ### 2.5 批量调用高级功能
 
