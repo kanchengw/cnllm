@@ -8,7 +8,7 @@
 
 ***
 
-## 1. Project Background
+## Project Background
 
 CNLLM was developed to address two key challenges:
 - How to efficiently integrate Chinese LLMs into mainstream ML and LLM application frameworks like LangChain, LlamaIndex, and LiteLLM
@@ -45,7 +45,7 @@ Project Documentation:
 - [Vendor Development Guide](docs/CONTRIBUTOR_en.md)
 - [Feature Documentation](docs/feature/)
 
-## 2. Changelog
+## Changelog
 
 ### v0.7.0 (2026-04-21)
 
@@ -73,9 +73,9 @@ Project Documentation:
 - ✨ **DeepSeek Adapter** - DeepSeek model adapter, supports `deepseek-chat` and `deepseek-reasoner`, supports native parameter `logit_bias`
 - ✨ **Full Response Field Support** - If vendor responses contain `system_fingerprint` and `choices[0].logprobs` fields, CNLLM standard responses will also include these fields
 
-## 3. Supported Models
+## Supported Models
 
-### 3.1 Chat Completion:
+### Chat Completion:
 
 - **DeepSeek**: deepseek-chat, deepseek-reasoner
 - **KIMI (Moonshot AI)**: kimi-k2.6, kimi-k2.5, kimi-k2-thinking, kimi-k2-thinking-turbo, kimi-k2-turbo-preview, kimi-k2-0905-preview, moonshot-v1-8k, moonshot-v1-32k, moonshot-v1-128k
@@ -84,27 +84,27 @@ Project Documentation:
 - **Xiaomi mimo**: mimo-v2-pro, mimo-v2-omni, mimo-v2-flash
 - **MiniMax**: MiniMax-M2.7, MiniMax-M2.5, MiniMax-M2.1, MiniMax-M2
 
-### 3.2 Embedding:
+### Embedding:
 
 - **MiniMax**: embo-01
 - **GLM**: embedding-2, embedding-3
 
-## 4. Quick Start
+## Quick Start
 
-### 4.1 Installation
+### 1.1 Installation
 
 ```bash
 pip install cnllm
 ```
 
-### 4.2 Client Initialization
+### 1.2 Client Initialization
 
-#### 4.2.1 Sync Client
+#### 1.2.1 Sync Client
 ```python
 client = CNLLM(model="minimax-m2.7", api_key="your_api_key")
 ```
 
-#### 4.2.2 Async Client
+#### 1.2.2 Async Client
 
 Two async client initialization methods for different use cases:
 - **Persistent Session** maintains session state across multiple calls, suitable for context-dependent applications
@@ -125,21 +125,21 @@ async with asyncCNLLM(
     resp = await client.chat.create(...)
 ```
 
-### 4.3 Three Calling Entrypoints (Sync/Async)
+### 1.3 Three Calling Entrypoints (Sync/Async)
 
-**1. Simple Call**
+**Simple Call**
 
 ```python
 resp = client("Introduce yourself in one sentence")
 ```
 
-**2. Standard Call**
+**Standard Call**
 
 ```python
 resp = client.chat.create(prompt="Introduce yourself in one sentence")
 ```
 
-**3. Full Call**
+**Full Call**
 
 ```python
 resp = client.chat.create(
@@ -147,7 +147,9 @@ resp = client.chat.create(
 )
 ```
 
-### 4.4 Streaming Call
+## 2. Call Scenarios
+
+### 2.1 Streaming Call
 
 Supports sync/async streaming calls, returning chunks in OpenAI standard streaming format.
 
@@ -167,7 +169,7 @@ for chunk in client.chat.create(...):  # Async client uses: async for chunk in a
     pass
 ```
 
-#### 4.4.1 Response Access
+#### 2.1.1 Response Access
 
 In streaming calls, responses support **in-stream access** with **real-time accumulation**.
 
@@ -178,7 +180,7 @@ In streaming calls, responses support **in-stream access** with **real-time accu
 | **tools** | `resp.tools` / `client.chat.tools` | `Dict[int, Dict]` | `{0: {"id": "...", "function": {...}}, 1: {...}` |
 | **raw** | `resp.raw` / `client.chat.raw` | `Dict` | `{"id": "...", "choices": [...], ...}` |
 
-### 4.5 Chat Batch Calls
+### 2.2 Chat Batch Calls
 
 Supports sync/async, streaming/non-streaming batch calls with **progress callbacks, custom request IDs, error stopping** and other advanced features, with **concurrency control**.
 
@@ -188,7 +190,7 @@ results = client.chat.batch(
 )
 ```
 
-#### 4.5.1 BatchResponse Structure
+#### 2.2.1 BatchResponse Structure
 
 BatchResponse outer structure, where each response under `results[request_id]` is in OpenAI standard streaming/non-streaming format:
 
@@ -209,7 +211,7 @@ BatchResponse outer structure, where each response under `results[request_id]` i
 }
 ```
 
-#### 4.5.2 Response Access
+#### 2.2.2 Response Access
 
 In streaming/non-streaming batch calls, responses support **in-batch access** with **real-time accumulation**.
 
@@ -250,19 +252,19 @@ result.to_dict(stats=True)              # Results + statistics
 result.to_dict(stats=True, think=True, still=True, tools=True, raw=True)  # Results + any fields
 ```
 
-### 4.6 Embeddings Calls
+### 2.3 Embeddings Calls
 
 Supports sync/async Embeddings calls with **progress callbacks, custom request IDs, error stopping** and other advanced features, with **concurrency control, batch size** configuration.
 Currently supports MiniMax embo-01, GLM embedding-2/embedding-3 models.
 
-#### 4.6.1 Single Call
+#### 2.3.1 Single Call
 
 ```python
 result = client.embeddings.create(input="Hello world")
 # Returns: Dict (OpenAI standard Embeddings format)
 ```
 
-#### 4.6.2 Batch Call
+#### 2.3.2 Batch Call
 
 ```python
 results = client.embeddings.batch(
@@ -270,7 +272,7 @@ results = client.embeddings.batch(
 )
 ```
 
-#### 4.6.3 EmbeddingResponse Structure
+#### 2.3.3 EmbeddingResponse Structure
 
 EmbeddingResponse outer structure, where each response under `results[request_id]` is in OpenAI standard Embeddings format:
 
@@ -293,7 +295,7 @@ EmbeddingResponse outer structure, where each response under `results[request_id
 }
 ```
 
-#### 4.6.4 Response Access
+#### 2.3.4 Response Access
 
 In streaming/non-streaming batch calls, responses support **in-batch access** with **real-time accumulation**.
 
@@ -323,9 +325,9 @@ result.to_dict()                        # Only results (default)
 result.to_dict(stats=True)              # Results + statistics
 ```
 
-### 4.7 Batch Advanced Features
+### 2.4 Batch Advanced Features
 
-#### 4.7.1 Retry Strategy and Concurrency Control Parameters
+#### 2.4.1 Retry Strategy and Concurrency Control Parameters
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
@@ -336,7 +338,7 @@ result.to_dict(stats=True)              # Results + statistics
 | `max_retries` | `int` | 3 | Max retry attempts |
 | `retry_delay` | `float` | 1.0 | Retry delay (seconds) |
 
-#### 4.7.2 Custom Request IDs
+#### 2.4.2 Custom Request IDs
 
 Specify custom IDs for batch requests via `custom_ids` parameter, which will replace original request_ids in batch response.
 
@@ -350,7 +352,7 @@ resp.results["doc_001"]          # Get doc_001's response
 resp.think["doc_002"]            # Get doc_002's reasoning content
 ```
 
-#### 4.7.3 Progress Callbacks
+#### 2.4.3 Progress Callbacks
 
 Callbacks are invoked when **each request completes**, useful for:
 - Real-time progress display
@@ -368,7 +370,7 @@ results = client.chat.batch(
 )
 ```
 
-#### 4.7.4 Stop on Error
+#### 2.4.4 Stop on Error
 
 When the first error occurs in batch requests, subsequent tasks are immediately stopped while returning results of already processed requests:
 
@@ -379,11 +381,11 @@ resp = client.embeddings.batch(
 )
 ```
 
-## 5. CNLLM Standard Response Format
+## 3. CNLLM Standard Response Format
 
 CNLLM single request streaming, non-streaming, and Embeddings response formats fully implement OpenAI standard structure.
 
-### 5.1 Non-Streaming Response Format
+### 3.1 Non-Streaming Response Format
 
 ```python
 {
@@ -415,7 +417,7 @@ CNLLM single request streaming, non-streaming, and Embeddings response formats f
 }
 ```
 
-### 5.2 Streaming Response Format
+### 3.2 Streaming Response Format
 
 ```python
 {'id': 'chatcmpl-xxx', 'object': 'chat.completion.chunk', 'created': 1234567890, 'model': 'minimax-m2.7', 'choices': [{'index': 0, 'delta': {'role': 'assistant'}, 'finish_reason': None}]}
@@ -427,7 +429,7 @@ CNLLM single request streaming, non-streaming, and Embeddings response formats f
 {'id': 'chatcmpl-xxx', 'object': 'chat.completion.chunk', 'created': 1234567890, 'model': 'minimax-m2.7', 'choices': [{'index': 0, 'delta': {}, 'finish_reason': 'stop'}]}
 ```
 
-### 5.3 Embeddings Response Format
+### 3.3 Embeddings Response Format
 
 ```python
 {
@@ -445,7 +447,7 @@ CNLLM single request streaming, non-streaming, and Embeddings response formats f
 }
 ```
 
-## 6. CNLLM Unified Interface Parameters
+## 4. CNLLM Unified Interface Parameters
 
 | Parameter | Type | Required | Default | Client Init | Method Call | Description |
 |-----------|------|----------|---------|:---:|:--:|---|
@@ -478,7 +480,7 @@ CNLLM single request streaming, non-streaming, and Embeddings response formats f
 - CNLLM passes through all parameters supported by specific models. Refer to official documentation for more parameters.
 - For parameters supported by both client initialization and method call, method call parameters override client initialization configuration.
 
-## 7. FallbackManager Design
+## 5. FallbackManager Design
 
 Configure `fallback_models` at client initialization. If the primary model fails for any reason, CNLLM will sequentially try models in `fallback_models`.
 Recommended to configure this for applications requiring stability.
@@ -518,9 +520,9 @@ resp = client.chat.create(
 )
 ```
 
-## 8. Framework Integration
+## 6. Framework Integration
 
-### 8.1 LangChainRunnable Implementation
+### 6.1 LangChainRunnable Implementation
 
 LangChain chain uniformly supports sync/async methods:
 
@@ -557,11 +559,11 @@ async def langchain_demo():
 asyncio.run(langchain_demo())
 ```
 
-## 9. License
+### License
 
 MIT License - See [LICENSE](LICENSE) file
 
-## 10. Contact
+### Contact
 
 - GitHub Issues: <https://github.com/kanchengw/cnllm/issues>
 - Author Email: <wangkancheng1122@163.com>
