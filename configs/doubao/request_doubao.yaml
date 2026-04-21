@@ -13,9 +13,10 @@ required_fields:
 
 one_of:
   messages_or_prompt:
-    adapter: [chat]
-    messages: {adapter: [chat]}
-    prompt: {adapter: [chat]}
+    messages: 
+      adapter: [chat]
+    prompt: 
+      adapter: [chat]
 
 optional_fields:
   base_url:
@@ -45,7 +46,6 @@ optional_fields:
     adapter: [chat]
   max_tokens:
     adapter: [chat]
-    default: 4096
   max_completion_tokens:
     adapter: [chat]
   stream:

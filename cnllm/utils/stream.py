@@ -8,8 +8,11 @@ from typing import Iterator, Dict, Any, Callable, AsyncIterator
 
 
 class SSEDecoder:
+    _seen_data: set = set()
+
     @staticmethod
     def decode_stream(response_iterator) -> Iterator[Dict[str, Any]]:
+        seen_data = set()
         for line in response_iterator:
             if line:
                 line = line.decode('utf-8')
@@ -17,6 +20,9 @@ class SSEDecoder:
                     data = line[6:]
                     if data.strip() == '[DONE]':
                         break
+                    if data in seen_data:
+                        continue
+                    seen_data.add(data)
                     try:
                         yield json.loads(data)
                     except json.JSONDecodeError:

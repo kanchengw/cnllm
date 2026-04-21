@@ -18,7 +18,7 @@ from ..utils.exceptions import (
     InvalidURLError
 )
 from ..utils.stream import StreamHandler, AsyncStreamHandler
-from ..utils.accumulator import NonStreamAccumulator, StreamAccumulator
+from .accumulators.single_accumulator import NonStreamAccumulator, StreamAccumulator
 from ..utils.validator import ParamValidator
 
 logger = logging.getLogger(__name__)
@@ -272,7 +272,8 @@ class BaseAdapter:
                 raw_resp = client.post(api_path, payload, extra_headers)
                 self._check_response_error(raw_resp)
 
-                accumulator = NonStreamAccumulator(raw_resp, self)
+                responder = self._get_responder()
+                accumulator = NonStreamAccumulator(raw_resp, self, responder)
                 result = accumulator.process()
 
                 return result
@@ -310,13 +311,14 @@ class BaseAdapter:
             responder.check_error(raw_response, self.ADAPTER_NAME)
 
     def _accumulate_extra_fields(self, result: Dict[str, Any]) -> None:
-        reasoning_content = result.get("_thinking")
+        delta = result.get("choices", [{}])[0].get("delta", {}) if result.get("choices") else {}
+        
+        reasoning_content = result.get("_thinking") or delta.get("reasoning_content")
         if reasoning_content:
             if "_thinking" not in self._cnllm_extra:
                 self._cnllm_extra["_thinking"] = ""
             self._cnllm_extra["_thinking"] += reasoning_content
 
-        delta = result.get("choices", [{}])[0].get("delta", {}) if result.get("choices") else {}
         content = delta.get("content") or ""
         if content:
             if "_still" not in self._cnllm_extra:
@@ -387,13 +389,7 @@ class BaseAdapter:
                 raw_resp = await client.apost(api_path, payload, extra_headers)
                 self._raw_response = raw_resp
                 self._check_response_error(raw_resp)
-                result = self._to_openai_format(raw_resp, model)
-                responder = self._get_responder()
-                if responder:
-                    self._cnllm_extra = responder._extract_extra_fields(raw_resp)
-                else:
-                    self._cnllm_extra = {}
-                return result
+                return raw_resp
         except (AuthenticationError, ContentFilteredError, ModelBusinessError, CNLLMTimeoutError, NetworkError, RateLimitError, InvalidRequestError, ServerError, InvalidURLError):
             raise
         except Exception as e:
@@ -404,10 +400,6 @@ class BaseAdapter:
             )
 
     async def _ahandle_stream(self, client: BaseHttpClient, api_path: str, payload: Dict[str, Any], extra_headers: Dict[str, str] = None) -> AsyncIterator[Dict[str, Any]]:
-        if self._raw_response is None:
-            self._raw_response = {}
-        if "chunks" not in self._raw_response:
-            self._raw_response["chunks"] = []
         if not self._cnllm_extra:
             self._cnllm_extra = {}
         async for raw_chunk in AsyncStreamHandler.ahandle_stream(client, api_path, payload, extra_headers):

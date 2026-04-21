@@ -15,9 +15,10 @@ required_fields:
 
 one_of:
   messages_or_prompt:
-    adapter: [chat]
-    messages: {adapter: [chat]}
-    prompt: {adapter: [chat]}
+    messages: 
+      adapter: [chat]
+    prompt: 
+      adapter: [chat]
 
 optional_fields:
   base_url:
@@ -46,10 +47,8 @@ optional_fields:
     default: 1.0
   temperature:
     adapter: [chat]
-    default: 0.95
   top_p:
     adapter: [chat]
-    default: 0.7
   max_tokens:
     adapter: [chat]
   stream:
@@ -84,8 +83,6 @@ optional_fields:
     adapter: [chat]
   dimensions:
     adapter: [embedding]
-  enable_search:
-    adapter: [embedding]
 
 model_mapping:
   chat:
@@ -99,6 +96,7 @@ model_mapping:
   embedding:
     embedding-2: "embedding-2"
     embedding-3: "embedding-3"
+    embedding-3-pro: "embedding-3-pro"
 
 error_check:
   code_path: "base_resp.status_code"

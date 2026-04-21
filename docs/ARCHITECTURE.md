@@ -1,5 +1,68 @@
 # CNLLM 架构与设计文档
 
+## 0. 目录结构
+
+```
+cnllm/
+├── entry/                    # 入口层 - 客户端初始化和调用入口
+│   ├── __init__.py
+│   ├── client.py             # CNLLM 主客户端类（同步）
+│   ├── async_client.py       # AsyncCNLLM 异步客户端类
+│   └── http.py               # HTTP 请求客户端（httpx 统一方案）
+├── core/                     # 核心层 - 适配器抽象和厂商实现
+│   ├── __init__.py
+│   ├── adapter.py            # BaseAdapter 基础适配器（Chat）
+│   ├── embedding.py          # BaseEmbeddingAdapter Embedding适配器
+│   ├── responder.py          # Responder 响应格式转换框架
+│   ├── accumulators/         # 字段累积器
+│   │   ├── __init__.py
+│   │   ├── base.py           # 累积器基类
+│   │   ├── single_accumulator.py    # 单条请求累积器
+│   │   ├── batch_accumulator.py     # Chat批量累积器
+│   │   └── embedding_accumulator.py # Embedding批量累积器
+│   ├── framework/
+│   │   ├── __init__.py
+│   │   └── langchain.py      # LangChain Runnable集成
+│   └── vendor/               # 厂商实现
+│       ├── __init__.py
+│       ├── glm.py            # GLM 厂商适配器
+│       ├── kimi.py           # Kimi 厂商适配器
+│       ├── doubao.py         # Doubao 厂商适配器
+│       ├── deepseek.py       # Deepseek 厂商适配器
+│       ├── minimax.py        # MiniMax 厂商适配器
+│       └── xiaomi.py         # Xiaomi 厂商适配器
+└── utils/                    # 工具层 - 通用工具
+    ├── __init__.py
+    ├── exceptions.py         # 异常定义（含 BatchStopOnError）
+    ├── fallback.py           # Fallback 管理器
+    ├── batch.py              # 批量调度器（BatchScheduler, EmbeddingBatchScheduler）
+    ├── stream.py             # 流式处理工具（SSEDecoder, AsyncSSEDecoder）
+    ├── validator.py          # 参数验证器
+    └── vendor_error.py       # 厂商错误处理
+
+configs/
+├── glm/
+│   ├── request_glm.yaml
+│   └── response_glm.yaml
+├── kimi/
+│   ├── request_kimi.yaml
+│   └── response_kimi.yaml
+├── doubao/
+│   ├── request_doubao.yaml
+│   └── response_doubao.yaml
+├── deepseek/
+│   ├── request_deepseek.yaml
+│   └── response_deepseek.yaml
+├── minimax/
+│   ├── request_minimax.yaml
+│   └── response_minimax.yaml
+└── xiaomi/
+    ├── request_xiaomi.yaml
+    └── response_xiaomi.yaml
+```
+
+***
+
 ## 1. 架构设计
 
 ### 1.1 整体架构
@@ -11,108 +74,207 @@ flowchart TD
         A2[AsyncCNLLM<br/>异步客户端]
     end
 
+    subgraph Namespace["Namespace 层"]
+        B[ChatNamespace<br/>EmbeddingsNamespace]
+    end
+
+    subgraph Method["方法层"]
+        C[create / batch]
+    end
+
+    subgraph Scheduler["调度器层"]
+        D[BatchScheduler<br/>EmbeddingBatchScheduler]
+    end
+
     subgraph 请求处理["请求处理"]
-        B[BaseAdapter<br/>请求构建]
+        E[BaseAdapter<br/>Chat请求构建]
+        E2[BaseEmbeddingAdapter<br/>Embedding请求构建]
     end
 
     subgraph HTTP执行["HTTP 执行"]
-        C[BaseHttpClient<br/>httpx 统一方案]
+        F[BaseHttpClient<br/>httpx 统一方案]
     end
 
     subgraph 响应处理["响应处理"]
-        E[Responder<br/>格式转换 + 字段累积]
+        G[Responder<br/>格式转换]
+        H[Accumulator<br/>字段累积]
     end
 
-    A --> B
-    A2 --> B
-    B --> C
-    C --> D((外部 API))
-    D --> E
-    E --> A
-    E --> A2
+    subgraph 响应["响应"]
+        I[BatchResponse<br/>EmbeddingResponse]
+    end
 
-    B -.-> G[/yaml/configs<br/>YAML配置/]
-    E -.-> G
+    A --> Namespace
+    A2 --> Namespace
+    Namespace --> Method
+    Method -->|单条| E & E2
+    Method -->|批量| D
+    D --> E & E2
+    E & E2 --> F
+    F --> API((外部 API))
+    API --> G
+    G --> H
+    H --> I
 
     style 用户层 fill:#e1f5fe
-    style 请求处理 fill:#fff3e0
+    style Namespace fill:#fff3e0
+    style Method fill:#fff9c4
+    style Scheduler fill:#e8f5e9
+    style 请求处理 fill:#f3e5f5
     style HTTP执行 fill:#f3e5f5
     style 响应处理 fill:#e8f5e9
-    style G fill:#f5f5f5,stroke:#ccc
+    style 响应 fill:#c8e6c9
+    style API fill:#ffcdd2
 ```
 
 ### 1.2 通用基类架构
 
-| 通用基类组件     | 文件                               | 职责                   | 示例                                     |
-| ---------- | -------------------------------- | -------------------- | -------------------------------------- |
-| **前端入口**   | `CNLLM` (entry/client.py)        | 客户端初始化、调用入口          | `CNLLM(model='minimax-m2.7')`          |
-| **异步前端入口** | `AsyncCNLLM` (entry/async_client.py) | 异步客户端初始化、调用入口 | `AsyncCNLLM(model='deepseek-chat')`    |
-| **请求预处理**  | `BaseAdapter` (core/adapter.py)  | 请求字段映射、Payload构建     | `_build_payload()`, `validate_model()` |
-| **HTTP执行** | `BaseHttpClient` (entry/http.py) | 通用HTTP请求、重试机制（httpx）   | `post_stream()`, `apost_stream()`      |
-| **响应后处理**  | `Responder` (core/responder.py)  | 响应字段映射，OpenAI 标准格式构建 | `to_openai_stream_format()`            |
+| 通用基类组件       | 文件                               | 职责                   | 示例                                     |
+| ------------ | -------------------------------- | -------------------- | -------------------------------------- |
+| **前端入口**     | `CNLLM` (entry/client.py)        | 客户端初始化、调用入口          | `CNLLM(model='glm-4')`                 |
+| **异步前端入口**   | `AsyncCNLLM` (entry/async_client.py) | 异步客户端初始化、调用入口 | `AsyncCNLLM(model='kimi-k2.6')`         |
+| **Chat适配器**   | `BaseAdapter` (core/adapter.py)  | Chat请求字段映射、Payload构建     | `_build_payload()`, `validate_model()` |
+| **Embedding适配器** | `BaseEmbeddingAdapter` (core/embedding.py) | Embedding请求处理 | `create_batch()`                       |
+| **HTTP执行**   | `BaseHttpClient` (entry/http.py) | 通用HTTP请求、重试机制（httpx）   | `post_stream()`, `apost_stream()`      |
+| **响应后处理**    | `Responder` (core/responder.py)  | 响应字段映射，OpenAI 标准格式构建 | `to_openai_stream_format()`             |
+| **字段累积器**    | `Accumulator` (core/accumulators/) | 统一处理字段累积（非流式/批量）   | `BatchResponse`, `EmbeddingResponse`   |
 
-### 1.2 厂商层架构
+### 1.3 厂商层架构
 
-| 厂商层组件       | 文件                        | 职责                  | 示例                                    |
-| ----------- | ------------------------- | ------------------- | ------------------------------------- |
-| **厂商适配器**   | `core/vendor/{vendor}.py` | 厂商特有请求处理、Payload 构建 | `MiniMaxAdapter.create_completion()`  |
-| **厂商响应转换器** | `core/vendor/{vendor}.py` | 厂商特有响应转换逻辑          | `MiniMaxResponder.to_openai_format()` |
-| **厂商错误解析器** | `core/vendor/{vendor}.py` | 厂商特有错误解析            | `MiniMaxVendorError.parse()`          |
-| **请求端配置**   | `configs/{vendor}/`       | 厂商请求字段映射、错误码映射、参数验证 | `request_{vendor}.yaml`               |
-| **响应端配置**   | `configs/{vendor}/`       | 厂商响应字段映射、流处理配置      | `response_{vendor}.yaml`              |
+| 厂商层组件        | 文件                        | 职责                  | 示例                                    |
+| ------------ | ------------------------- | ------------------- | ------------------------------------- |
+| **厂商Chat适配器** | `core/vendor/{vendor}.py` | 厂商特有Chat请求处理、Payload 构建 | `GLMAdapter.create_completion()`      |
+| **厂商Embedding适配器** | `core/vendor/{vendor}.py` | 厂商Embedding请求处理 | `GLMEmbeddingAdapter.create_batch()`   |
+| **厂商响应转换器**  | `core/vendor/{vendor}.py` | 厂商特有响应转换逻辑          | `GLMResponder.to_openai_format()`       |
+| **厂商错误解析器**  | `core/vendor/{vendor}.py` | 厂商特有错误解析            | `GLMVendorError.parse()`               |
+| **请求端配置**    | `configs/{vendor}/`       | 厂商请求字段映射、错误码映射、参数验证 | `request_{vendor}.yaml`                 |
+| **响应端配置**    | `configs/{vendor}/`       | 厂商响应字段映射、流处理配置      | `response_{vendor}.yaml`               |
 
-### 1.3 工具类架构
+### 1.4 工具类架构
 
-| 工具类         | 文件                      | 职责                   | 示例                                        |
-| ----------- | ----------------------- | -------------------- | ----------------------------------------- |
-| **异常系统**    | `utils/exceptions.py`   | CNLLM 异常基类，统一异常体系    | `raise CNLLMError(msg)`                   |
-| **厂商错误翻译器** | `utils/vendor_error.py` | 厂商错误翻译器，翻译为 CNLLM 异常 | `translator.to_cnllm_error()`             |
-| **回退管理器**   | `utils/fallback.py`     | 回退管理器，处理模型不可用时的回退逻辑  | `execute_with_fallback()`, `aexecute_with_fallback()` |
-| **流式处理工具**  | `utils/stream.py`       | SSE 解码、HTTP 流处理       | `SSEDecoder`, `AsyncSSEDecoder`, `StreamHandler` |
-| **字段累积器**   | `utils/accumulator.py`  | 统一处理字段累积（非流式/流式/批量） | `StreamAccumulator`, `BatchResponse` |
-| **参数验证器**   | `utils/validator.py`    | 参数验证器，验证模型、字段、参数范围   | `validate_model()`, `validate_required()` |
+| 工具类          | 文件                      | 职责                   | 示例                                        |
+| ------------ | ----------------------- | -------------------- | ----------------------------------------- |
+| **异常系统**     | `utils/exceptions.py`   | CNLLM 异常基类，统一异常体系    | `raise CNLLMError(msg)`                   |
+| **批量调度器**    | `utils/batch.py`        | Chat/Embedding批量调度    | `BatchScheduler`, `EmbeddingBatchScheduler` |
+| **批量停止异常**   | `utils/exceptions.py`    | stop_on_error抛出的异常     | `BatchStopOnError`                        |
+| **厂商错误翻译器**  | `utils/vendor_error.py` | 厂商错误翻译器，翻译为 CNLLM 异常 | `translator.to_cnllm_error()`             |
+| **回退管理器**    | `utils/fallback.py`     | 回退管理器，处理模型不可用时的回退逻辑  | `execute_with_fallback()`                 |
+| **流式处理工具**   | `utils/stream.py`       | SSE 解码、HTTP 流处理       | `SSEDecoder`, `AsyncSSEDecoder`           |
+| **参数验证器**    | `utils/validator.py`    | 参数验证器，验证模型、字段、参数范围   | `validate_model()`, `validate_required()` |
+
+***
+
+### 1.5 调用入口层级
+
+```mermaid
+flowchart TB
+    subgraph CNLLM["客户端层"]
+        A["CNLLM / AsyncCNLLM"]
+    end
+
+    subgraph Namespace["Namespace 层"]
+        B["ChatNamespace<br/>/ EmbeddingsNamespace"]
+    end
+
+    subgraph Method["方法层"]
+        C["create()"]
+        D["batch()"]
+    end
+
+    subgraph Scheduler["调度器层"]
+        E["BatchScheduler<br/>/ EmbeddingBatchScheduler"]
+    end
+
+    subgraph Adapter["适配器层"]
+        F["BaseAdapter<br/>/ BaseEmbeddingAdapter"]
+    end
+
+    subgraph Response["响应层"]
+        G["BatchResponse<br/>/ EmbeddingResponse"]
+    end
+
+    A --> Namespace
+    Namespace --> C
+    Namespace --> D
+    C --> F
+    D --> E
+    E --> F
+    F --> G
+
+    style CNLLM fill:#e1f5fe
+    style Namespace fill:#fff3e0
+    style Method fill:#fff9c4
+    style Scheduler fill:#e8f5e9
+    style Adapter fill:#f3e5f5
+    style Response fill:#c8e6c9
+```
+
+| 层 | 示例 |
+| --- | --- |
+| 客户端 | `CNLLM(model='glm-4', api_key='xxx')` |
+| Namespace | `client.chat` / `client.embeddings` |
+| 单条方法 | `client.chat.create(messages=[...])` |
+| 批量方法 | `client.chat.batch(['hi', 'hello'])` / `embeddings.create_batch(['text1', 'text2'])` |
+| 调度器 | `BatchScheduler(client, max_concurrent=5, stop_on_error=True)` |
+| 适配器 | `GLMAdapter(api_key='xxx', model='glm-4')` |
+| 批量响应 | `BatchResponse.total / success / fail / results` |
+| Embedding响应 | `EmbeddingResponse.dimension / results` |
 
 ***
 
-## 2. 目录结构
+## 2. 调用参数链
+
+### 2.1 单条调用参数链
 
 ```
-cnllm/
-├── entry/                    # 入口层 - 客户端初始化和调用入口
-│   ├── __init__.py
-│   ├── client.py             # CNLLM 主客户端类（同步）
-│   ├── async_client.py       # AsyncCNLLM 异步客户端类
-│   └── http.py               # HTTP 请求客户端（httpx 统一方案）
-├── core/                     # 核心层 - 适配器抽象和厂商实现
-│   ├── __init__.py
-│   ├── adapter.py            # BaseAdapter 基础适配器
-│   ├── responder.py          # Responder 响应格式转换框架
-│   ├── framework/
-│   │   ├── __init__.py
-│   │   └── langchain.py      # LangChain Runnable集成
-│   └── vendor/               # 厂商实现
-│       ├── __init__.py
-│       ├── minimax.py        # MiniMax 厂商适配器
-│       └── xiaomi.py         # Xiaomi 厂商适配器
-└── utils/                    # 工具层 - 通用工具
-    ├── __init__.py
-    ├── exceptions.py         # 异常定义
-    ├── fallback.py           # Fallback 管理器
-    ├── stream.py             # 流式处理工具（SSEDecoder, AsyncSSEDecoder）
-    ├── accumulator.py        # 字段累积器（非流式/流式/批量）
-    ├── validator.py          # 参数验证器
-    └── vendor_error.py       # 厂商错误处理
-
-configs/
-├── minimax/
-│   ├── request_minimax.yaml  # 请求配置
-│   └── response_minimax.yaml # 响应配置
-└── xiaomi/
-    ├── request_xiaomi.yaml   # 请求配置
-    └── response_xiaomi.yaml  # 响应配置
+用户调用 client.chat.create(timeout=60)
+    ↓
+Namespace.create(timeout=60)
+    ↓
+BaseAdapter.__init__(timeout=60)
+    ↓
+Adapter.validate_params(timeout=60) → filter_supported_params()
+    ↓
+HTTP 请求使用 self.timeout
 ```
 
-***
+### 2.2 批量调用参数链
+
+```
+用户调用 client.chat.batch(requests, timeout=60, stop_on_error=True, callbacks=[...])
+    ↓
+Namespace.batch(requests, timeout=60, stop_on_error=True, callbacks=[...])
+    ↓
+BatchScheduler(client, timeout=actual_timeout, stop_on_error=True, callbacks=[...])
+    ↓
+scheduler.execute() 使用内部参数
+    ↓
+adapter.create_completion(request) ← 不传递调度器参数
+```
+
+### 2.3 YAML 配置文件中的参数传递机制
+
+> **参数传递顺序说明**：
+>
+> - 用户调用 `chat.create()` 或 `embeddings.create()` 时，adapter 类型（chat/embedding）已确定
+> - `filter_supported_params` 执行后，参数已全部过滤为当前 adapter 支持的参数
+> - 以下逻辑按参数处理顺序排序（从上到下）
+
+| 序号 | 用途 | 访问点 | 判断范围 | 判断依据 | 新增参数 |
+| --- | --- | --- | --- | --- | --- |
+| 1 | 必填参数校验 | `validate_required_params` | required_fields | adapter 标识 + chat/embedding 层级 | - |
+| 2 | 参数支持校验 | `filter_supported_params` | required_fields + optional_fields + one_of | adapter 标识 + chat/embedding 层级 | - |
+| 3 | 互斥参数校验 | `validate_one_of` | one_of | adapter 标识 | - |
+| 4 | 获取默认值 | `get_default_value` | 硬编码：timeout, max_retries, retry_delay | - | timeout, max_retries, retry_delay |
+| 5 | 验证 base_url + 获取完整地址 | `validate_base_url` + `get_api_path` | base_url | chat/embedding 层级 | 可能新增：base_url + api_path |
+| 6 | 请求头映射 | `get_header_mappings` | required_fields + optional_fields + one_of | skip: true | - |
+| 7 | 构建请求体 | `_build_payload` | required_fields + optional_fields + one_of | 字段映射：不含 skip: true 且 {fields}.map | - |
+| 8 | 模型名映射 | `get_vendor_model` | model_mapping | chat/embedding 层级 | - |
+
+**判断依据说明**：
+
+- `adapter`：字段级别的标识，如 `adapter: [chat]` 或 `adapter: [embedding]`
+- `chat`/`embedding` 层级：字段下有 `chat:` 或 `embedding:` 子层级的配置（如 `base_url`）
 
 ## 3. 异常处理系统架构
 
@@ -157,24 +319,6 @@ flowchart LR
 | 模型不支持            | 参数验证阶段      | Responder 层 |
 | 所有模型均失败          | Fallback 机制 | Fallback 层  |
 
-### 3.2 FallbackError 错误聚合
-
-当配置多模型 fallback 且所有模型都失败时，`FallbackError` 会聚合所有错误信息：
-
-```python
-try:
-    client = CNLLM(
-        model="primary-model",
-        api_key="key",
-        fallback_models={"backup-1": "key1", "backup-2": "key2"}
-    )
-    client.chat.create(messages=[...])
-except FallbackError as e:
-    print(e.message)  # "所有模型均失败。已尝试: primary-model, backup-1, backup-2"
-    for i, err in enumerate(e.errors):
-        print(f"[{i+1}] {err}")  # 每个模型的详细错误
-```
-
 ## 4. FallbackManager 流程设计
 
 只有客户端初始化入口接受配置`fallback_models`参数，为追求程序或应用运行时的稳定性建议配置此项。
@@ -202,6 +346,24 @@ flowchart TD
     E -->|否| G{按顺序尝试 fallback_models}
     G -->|全部失败| H[FallbackError]
     G -->|任一成功| I[该模型成功]
+```
+
+### 4.1 FallbackError 错误聚合
+
+当配置多模型 fallback 且所有模型都失败时，`FallbackError` 会聚合所有错误信息：
+
+```python
+try:
+    client = CNLLM(
+        model="primary-model",
+        api_key="key",
+        fallback_models={"backup-1": "key1", "backup-2": "key2"}
+    )
+    client.chat.create(messages=[...])
+except FallbackError as e:
+    print(e.message)  # "所有模型均失败。已尝试: primary-model, backup-1, backup-2"
+    for i, err in enumerate(e.errors):
+        print(f"[{i+1}] {err}")  # 每个模型的详细错误
 ```
 
 ***
@@ -289,7 +451,8 @@ flowchart TD
 | `_filter_supported_params()` | 过滤支持参数 |
 | `get_vendor_model()` | 获取厂商模型名 |
 | `_build_payload()` | 构建请求 Payload |
-| `create_completion()` / `acreate_completion()` | 调用入口 |
+| `create_completion()` | 同步调用入口 |
+| `acreate_completion()` | 异步调用入口 |
 | `_handle_stream()` / `_ahandle_stream()` | 返回原始 chunks 迭代器 |
 
 #### 响应处理（流式）
@@ -320,9 +483,7 @@ flowchart TD
 | **client.chat.tools** | `entry/client.py` / `entry/async_client.py` | 返回 `_tools` |
 | **client.chat.raw** | `entry/client.py` / `entry/async_client.py` | 返回原生响应 chunks |
 
-### 5.3 关键设计决策
-
-#### 5.3.1 实时流式模式
+### 5.3 实时流式模式
 
 `StreamAccumulator` 采用**实时流式**模式，每个 chunk 在到达时立即 yield 给用户：
 
@@ -345,16 +506,12 @@ def __iter__(self):
 - `_cnllm_extra` 和 `_raw_response["chunks"]` 在迭代过程中**实时累积**
 - 适合前端流式渲染等需要实时消费的场景
 
-#### 5.3.2 双层累积机制
-
 累积在**两个地方**同时进行：
 
 1. **StreamAccumulator 层** (`_accumulate_extra_fields`)：累积到 `adapter._cnllm_extra`
    - 供 `client.chat.think/still/tools` 属性访问
 2. **StreamAccumulator 层**：实时存储完整的原始响应到 `adapter._raw_response["chunks"]`
    - 供 `client.chat.raw` 属性访问，保留所有字段，不进行过滤
-
-#### 5.3.3 字段过滤规则
 
 | 字段类型         | 示例                            | 处理规则   | 说明                     |
 | ------------ | ----------------------------- | ------ | ------------------------ |
@@ -365,9 +522,8 @@ def __iter__(self):
 **说明**：
 - `.raw` 属性现在返回完整的原始响应，不进行任何过滤
 - 字段提取仍然进行，为 `.think`、`.still` 和 `.tools` 属性服务
-- 当前的属性名只支持非批量调用
 
-#### 5.3.4 Chunk 后处理规则（StreamAccumulator）
+### 5.4 Chunk 后处理规则（StreamAccumulator）
 
 在迭代过程中逐个 chunk 执行后处理：
 
@@ -420,22 +576,7 @@ def _remove_duplicate_finish_chunks(self):
 - **对外暴露时过滤**：`__next__()` 和 `get_chunks()` 会过滤掉 `[DONE]` 字符串，只返回纯 JSON chunks
 - 这样设计是为了兼容 LangChain、LiteLLM 等 OpenAI 兼容库的期望（它们期望纯 JSON chunks）
 
-#### 5.3.5 统一的字段访问入口
-
-```python
-# 流式
-response = client.chat.create(messages=[...], stream=True, tools=[...])
-for chunk in response:
-    print(chunk)
-
-# 重要字段的访问入口
-print(client.chat.think)  # 思维内容
-print(client.chat.still)  # 回复内容
-print(client.chat.tools)  # 工具调用
-print(client.chat.raw)  # 原生响应 chunks（原样保留 reasoning_content）
-```
-
-### 5.4 同步数据流时序图
+### 5.5 同步数据流时序图
 
 ```mermaid
 sequenceDiagram
@@ -478,7 +619,7 @@ sequenceDiagram
     C-->>U: adapter._raw_response（原生 chunks，保留 reasoning_content）
 ```
 
-### 5.5 异步数据流时序图
+### 5.6 异步数据流时序图
 
 ```mermaid
 sequenceDiagram
@@ -489,18 +630,14 @@ sequenceDiagram
     participant H as HTTP Client
     participant AS as AsyncStreamAccumulator
 
-    U->>AC: await client.chat.acreate(stream=True)
-    Note over AC: acreate 检测 stream=True
-    AC->>AC: acreate_stream()
-    Note over AC: _astream_fallback / _astream_adapter
+    U->>AC: await client.chat.create(stream=True)
+    Note over AC: create 检测 stream=True
 
     alt 指定模型
         AC->>A: _get_adapter(model, ...)
-        AC->>A: _astream_adapter(adapter, ...)
         A->>H: client.apost_stream(...)
     else 降级模型
         AC->>AC: FallbackManager
-        AC->>AC: await _astream_fallback()
         AC->>H: fb_manager.aexecute_with_fallback()
     end
 
@@ -521,24 +658,6 @@ sequenceDiagram
     end
 ```
 
-#### 5.5.1 异步流式调用链
-
-异步流式调用通过以下方法链实现：
-
-1. **`acreate(stream=True)`**：异步创建方法，检测到 `stream=True` 时调用 `acreate_stream`
-2. **`acreate_stream()`**：`async def`，处理流式请求
-   - 指定模型：调用 `_astream_adapter()` 返回 `AsyncStreamAccumulator`
-   - 降级模型：调用 `await _astream_fallback()` 返回 `AsyncStreamAccumulator`
-3. **`_astream_adapter()`**：`def`（同步），直接创建 `AsyncStreamAccumulator`
-4. **`_astream_fallback()`**：`async def`，处理模型降级，创建 `AsyncStreamAccumulator`
-5. **`AsyncStreamAccumulator`**：封装异步迭代器，实现 `async for` 协议
-
-**关键点**：
-- `acreate_stream` 和 `_astream_fallback` 必须正确返回 `AsyncStreamAccumulator` 对象
-- 不能返回协程或异步生成器，否则用户无法使用 `async for` 迭代
-
-***
-
 ## 6. CNLLM 标准响应格式
 
 系统支持 8 种响应类型，根据 3 个维度组合：
@@ -551,16 +670,20 @@ sequenceDiagram
 
 ### 6.1 响应类型总览
 
-| # | 类型 | 调用方式 | 流式模式 | 批量模式 | 返回类型 | 累积器类 |
-|---|------|----------|----------|----------|----------|----------|
-| 1 | 同步非流式非批量 | 同步 | ❌ | ❌ | `Dict` | `NonStreamAccumulator` |
-| 2 | 同步流式非批量 | 同步 | ✅ | ❌ | `Iterator[Dict]` | `StreamAccumulator` |
-| 3 | 同步非流式批量 | 同步 | ❌ | ✅ | `BatchResponse` | `BatchNonStreamAccumulator` |
-| 4 | 同步流式批量 | 同步 | ✅ | ✅ | `Iterator[Dict]` | `BatchStreamAccumulator` |
-| 5 | 异步非流式非批量 | 异步 | ❌ | ❌ | `Dict` | `NonStreamAccumulator` |
-| 6 | 异步流式非批量 | 异步 | ✅ | ❌ | `AsyncIterator[Dict]` | `AsyncStreamAccumulator` |
-| 7 | 异步非流式批量 | 异步 | ❌ | ✅ | `BatchResponse` | `AsyncBatchNonStreamAccumulator` |
-| 8 | 异步流式批量 | 异步 | ✅ | ✅ | `AsyncIterator[Dict]` | `AsyncBatchStreamAccumulator` |
+| # | 类型 | 返回类型 | 累积器类 |
+|---|------|----------|----------|
+| 1 | 同步非流式非批量 | `Dict` | `NonStreamAccumulator` |
+| 2 | 同步流式非批量 | `Iterator[Dict]` | `StreamAccumulator` |
+| 3 | 同步非流式批量 | `BatchResponse` | `BatchNonStreamAccumulator` |
+| 4 | 同步流式批量 | `Iterator[Dict]` | `BatchStreamAccumulator` |
+| 5 | 异步非流式非批量 | `Dict` | `AsyncNonStreamAccumulator` |
+| 6 | 异步流式非批量 | `AsyncIterator[Dict]` | `AsyncStreamAccumulator` |
+| 7 | 异步非流式批量 | `BatchResponse` | `AsyncBatchNonStreamAccumulator` |
+| 8 | 异步流式批量 | `AsyncIterator[Dict]` | `AsyncBatchStreamAccumulator` |
+| 9 | 同步非批量Embeddings | `Dict` | `EmbeddingAccumulator` |
+| 10 | 同步批量Embeddings | `EmbeddingResponse` | `EmbeddingBatchAccumulator` |
+| 11 | 异步非批量Embeddings | `Dict` | `AsyncEmbeddingAccumulator` |
+| 12 | 异步批量Embeddings | `EmbeddingResponse` | `AsyncEmbeddingBatchAccumulator` |
 
 ### 6.2 非批量响应类型
 
@@ -586,12 +709,6 @@ sequenceDiagram
         "total_tokens": 9
     }
 }
-
-# client.chat.think / still / tools / raw 返回:
-client.chat.think   # str: "思维推理内容" 或 ""
-client.chat.still   # str: "回复内容"
-client.chat.tools   # List[Dict]: [{"id": "call_xxx", "type": "function", ...}]
-client.chat.raw     # Dict: 原始响应（保留 reasoning_content 等）
 ```
 
 #### 类型 2、6: 同步/异步流式非批量
@@ -637,24 +754,16 @@ client.chat.raw     # Dict: 原始响应（保留 reasoning_content 等）
         "finish_reason": "stop"
     }]
 }
-
-# client.chat.think / still / tools / raw 返回:
-client.chat.think   # str: "累积的思维内容"
-client.chat.still   # str: "累积的回复内容"
-client.chat.tools   # List[Dict]: 累积的工具调用
-client.chat.raw     # {"chunks": [...]} 所有原始 chunks
 ```
 
 ### 6.3 批量响应类型
-
-#### 批量方法参数
 
 #### 类型 3、7: 同步/异步非流式批量
 ```python
 # 返回格式: BatchResponse
 {
     "success": ["request_0", "request_1"],  # 成功的 request_id 列表
-    "errors": [],                                 # 失败的 request_id 列表
+    "fail": [],                                 # 失败的 request_id 列表
     "request_counts": {
         "success_count": 2,
         "fail_count": 0,
@@ -695,43 +804,13 @@ client.chat.raw     # {"chunks": [...]} 所有原始 chunks
     "raw": {"request_0": {...}, "request_1": {...}}
 }
 
-# 字段访问:
-# 统计字段访问-支持批中查询，实时累积：
-result.total              # int: 总数
-result.success_count      # int: 成功数
-result.fail_count         # int: 失败数
-result.elapsed            # float: 耗时
-result.success            # List[str]: 成功的 request_id 列表
-result.errors             # List[str]: 失败的 request_id 列表
-result.request_counts     # Dict: {"success_count": ..., "fail_count": ..., "total": ...}
-
-# 累积字段访问:
-result.think[0]                  # 推理内容
-result.think["request_0"]     # 同上
-result.still[0]                 # 回复内容
-result.still["request_0"]     # 同上
-result.tools[0]                 # 工具调用
-result.tools["request_0"]     # 同上
-result.raw[0]                   # 原始数据
-result.raw["request_0"]       # 同上
-
-# 批响应访问：
+# 批量响应访问：
 result.results
-
-# 以上所有字段支持批中访问，结果实时累积
-
-# 单个响应访问（四种方式等价）:
-result.results["request_0"]   # OpenAI 格式 dict
-result.results[0]               # 同上
-result["request_0"]           # 同上
-result[0]                       # 同上
+# 所有响应带request_id列表，['request_0': {...}, 'request_1': {...}, ...]
 
 # print 输出（简洁统计，不显示大文本）:
 print(result)
 # BatchResponse(request_counts={...}, elapsed=..., success=[...], errors=[...])
-
-print(result.results)
-# BatchResults(count=2, request_id=['request_0', 'request_1'])
 
 # 转换为标准 JSON:
 result.to_dict()                        # 只保留 results (默认)
@@ -745,7 +824,7 @@ result.to_dict(think=True, still=True, tools=True, raw=True)  # results + 相应
 
 {
     "success": ["request_0"],
-    "errors": ["request_1"],
+    "fail": ["request_1"],
     "request_counts": {"success_count": 1, "fail_count": 1, "total": 2},
     "elapsed": 0.42,
     "results": {
@@ -786,44 +865,15 @@ result.to_dict(think=True, still=True, tools=True, raw=True)  # results + 相应
 accumulator = client.chat.batch(requests, stream=True)
 for chunk in accumulator:
     pass
-batch_response = accumulator.batch_response
+batch_response = accumulator._batch_response
 
-# 统计字段访问：
-batch_response.total              # int: 总数
-batch_response.success_count      # int: 成功数
-batch_response.fail_count         # int: 失败数
-batch_response.elapsed            # float: 耗时
-batch_response.success            # List[str]: 成功的 request_id 列表
-batch_response.errors             # List[str]: 失败的 request_id 列表
-batch_response.request_counts     # Dict: {"success_count": ..., "fail_count": ..., "total": ...}
-
-# 累积字段访问:
-batch_response.think[0]                  # 推理内容
-batch_response.think["request_0"]     # 同上
-batch_response.still[0]                 # 回复内容
-batch_response.still["request_0"]     # 同上
-batch_response.tools[0]                 # 工具调用
-batch_response.tools["request_0"]     # 同上
-batch_response.raw[0]                   # 原始数据
-batch_response.raw["request_0"]       # 同上
-
-# 批响应访问：
+# 批量响应访问：
 batch_response.results
-
-# 单个响应访问（四种方式等价）:
-batch_response.results["request_0"]  # List[chunk]
-batch_response.results[0]              # 同上
-batch_response["request_0"]          # 同上
-batch_response[0]                      # 同上
-
-# 以上所有字段支持批中访问，结果实时累积
+# 所有响应带request_id列表，['request_0': {...}, 'request_1': {...}, ...]
 
 # print 输出（简洁统计，不显示大文本）:
 print(batch_response)
 # BatchResponse(request_counts={...}, elapsed=..., success=[...], errors=[...])
-
-print(batch_response.results)
-# BatchResults(count=2, request_id=['request_0', 'request_1'])
 
 # 转换为标准 JSON:
 batch_response.to_dict()                        # 只保留 results (默认)
@@ -831,66 +881,60 @@ batch_response.to_dict(stats=True)              # results + 统计字段 (succes
 batch_response.to_dict(think=True, still=True,...)  # results + think/still/tools/raw
 ```
 
-### 6.4 BatchResponse 数据结构
+### 6.5 字段访问
 
-```python
-@dataclass
-class BatchResponse:
-    _results: Dict[str, Any]              # {request_id: OpenAI 格式}
-    elapsed: float = 0.0                   # 耗时（秒）
+### 非批量调用 类型1/2/5/6 字段详情
 
-    _think: Dict[str, str]                # {request_id: think_str}
-    _still: Dict[str, str]                # {request_id: still_str}
-    _tools: Dict[str, List[Dict]]         # {request_id: tools_list}
-    _raw: Dict[str, Dict]                 # {request_id: raw_data}
+| 类别 | 访问方式 | 返回格式 | 返回示例 |
+|------|---------|---------|---------|
+| **think** | `resp.think` / `client.chat.think` | `str` | `"推理内容..."` |
+| **still** | `resp.still` / `client.chat.still` | `str` | `"回复内容..."` |
+| **tools** | `resp.tools` / `client.chat.tools` | `Dict[int, Dict]` | `{0: {"id": "...", "function": {...}}, 1: {...}` |
+| **raw** | `resp.raw` / `client.chat.raw` | `Dict` | `{"id": "...", "choices": [...], ...}` |
 
-    @property
-    def results(self) -> BatchResults
-    @property
-    def think(self) -> Dict[str, str]
-    @property
-    def still(self) -> Dict[str, str]
-    @property
-    def tools(self) -> Dict[str, List]
-    @property
-    def raw(self) -> Dict[str, Dict]
-    @property
-    def success(self) -> List[str]
-    @property
-    def errors(self) -> List[str]
-    @property
-    def request_counts(self) -> Dict
-    @property
-    def success_count(self) -> int
-    @property
-    def fail_count(self) -> int
-    @property
-    def total(self) -> int
-    def __getitem__(key) -> Any
-    def to_dict(self) -> Dict
+### 批量调用 类型3/4/7/8 字段详情
 
+| 类别 | 访问方式 | 返回格式 | 返回示例 |
+|------|---------|---------|---------|
+| **统计字段** | `resp.success` / `batch_result.success` | `List[str]` | `["request_0", "request_1"]` |
+| | `resp.fail` / `batch_result.fail` | `List[str]` | `[]` |
+| | `resp.request_counts` / `batch_result.request_counts` | `Dict` | `{"success_count": 2, "fail_count": 0, "total": 2}` |
+| | `resp.elapsed` / `batch_result.elapsed` | `float` | `1.23` |
+| **results** | `resp.results` / `batch_result.results` | `Dict[str, Dict]` | `{"request_0": {...}, "request_1": {...}}` |
+| | `resp.results[0]` / `batch_result.results[0]` | `Dict` | `{"id": "...", "choices": [...], ...}` |
+| | `resp.results["request_0"]` / `batch_result.results["request_0"]` | `Dict` | 同上 |
+| **think** | `resp.think` / `batch_result.think` | `Dict[str, str]` | `{"request_0": "...", "request_1": "..."}` |
+| | `resp.think[0]` / `batch_result.think[0]` | `str` | `"推理内容..."` |
+| | `resp.think["request_0"]` / `batch_result.think["request_0"]` | `str` | `"推理内容..."` |
+| **still** | `resp.still` / `batch_result.still` | `Dict[str, str]` | `{"request_0": "...", "request_1": "..."}` |
+| | `resp.still[0]` / `batch_result.still[0]` | `str` | `"回复内容..."` |
+| | `resp.still["request_0"]` / `batch_result.still["request_0"]` | `str` | `"回复内容..."` |
+| **tools** | `resp.tools` / `batch_result.tools` | `Dict[str, Dict[int, Dict]]` | `{"request_0": {...}, "request_1": {...}}` |
+| | `resp.tools[0]` / `batch_result.tools[0]` | `Dict[int, Dict]` | `{0: {"id": "...", "function": {...}}, 1: {...}` |
+| | `resp.tools["request_0"]` / `batch_result.tools["request_0"]` | `Dict[int, Dict]` | 同上 |
+| **raw** | `resp.raw` / `batch_result.raw` | `Dict[str, Dict]` | `{"request_0": {...}, "request_1": {...}}` |
+| | `resp.raw[0]` / `batch_result.raw[0]` | `Dict` | `{"id": "...", "choices": [...], ...}` |
+| | `resp.raw["request_0"]` / `batch_result.raw["request_0"]` | `Dict` | 同上 |
 
-class BatchResults:
-    def __getitem__(key) -> Any
-    def items(self) -> Iterator
-    def keys(self) -> Iterator
-    def values(self) -> Iterator
+### 批量调用类型 10/12 Embedding 响应字段详情
 
-**关键变更**：results 直接存储标准 OpenAI 格式
-
-### 8.5 批量方法功能参数
-
-```python
-# 同步/异步适用
-result = client.chat.batch(
-    requests,                    # List[str | dict]: 请求列表
-    stream=False,               # bool: 是否流式，默认 False
-    max_concurrent=3,         # int: 最大并发数
-    timeout=None,               # float: 单请求超时（秒）
-    stop_on_error=False,        # bool: 遇错是否停止
-    callbacks=None              # List[Callable]: 进度回调
-)
-```
+| 类别 | 访问方式 | 返回格式 | 返回示例 |
+|------|---------|---------|---------|
+| **统计字段** | `resp.success` / `batch_result.success` | `List[str]` | `["request_0", "request_1"]` |
+| | `resp.fail` / `batch_result.fail` | `List[str]` | `["request_2"]` |
+| | `resp.success_count` / `batch_result.success_count` | `int` | `2` |
+| | `resp.fail_count` / `batch_result.fail_count` | `int` | `1` |
+| | `resp.request_counts` / `batch_result.request_counts` | `Dict` | `{"total": 2, "success_count": 2, "fail_count": 0, "dimension": 1024}` |
+| | `resp.elapsed` / `batch_result.elapsed` | `float` | `1.23` |
+| | `resp.total` / `batch_result.total` | `int` | `2` |
+| | `resp.dimension` / `batch_result.dimension` | `int` | `1024` |
+| **results** | `resp.results` / `batch_result.results` | `Dict[str, Dict]` | `{"request_0": {...}, "request_1": {...}}` |
+| | `resp.results[0]` / `batch_result.results[0]` | `Dict` | `{"object": "list", "data": [...], ...}` |
+| | `resp.results["request_0"]` / `batch_result.results["request_0"]` | `Dict` | 同上 |
+| **repr** | `repr(resp)` / `repr(batch_result)` | `str` | `EmbeddingResponse(success=['request_0'], fail=['request_2'], request_counts={'total': 2, 'dimension': 1024}, elapsed=1.23)` |
+| **to_dict** | `resp.to_dict()` | `Dict` | `{"results": {...}}` |
+| | `resp.to_dict(results=False)` | `Dict` | `{}` |
+| | `resp.to_dict(stats=True)` | `Dict` | `{"results": {...}, "request_counts": {...}, "elapsed": ..., "success": [...], "fail": [...]}` |
 
 ## 7. 批量调用系统架构
 

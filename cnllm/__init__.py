@@ -1,5 +1,5 @@
 from .entry.client import CNLLM
-from .entry.async_client import AsyncCNLLM
+from .entry.async_client import asyncCNLLM
 from .utils.exceptions import (
     CNLLMError,
     AuthenticationError,
@@ -16,15 +16,15 @@ from .utils.exceptions import (
     FallbackError,
     ErrorCode
 )
-from .utils.accumulator import EmbeddingResponse
+from .core.accumulators.embedding_accumulator import EmbeddingResponse
 
 from .core import vendor
 
-__version__ = "0.4.3"
+__version__ = "0.7.0"
 
 __all__ = [
     "CNLLM",
-    "AsyncCNLLM",
+    "asyncCNLLM",
     "EmbeddingResponse",
     "CNLLMError",
     "AuthenticationError",
