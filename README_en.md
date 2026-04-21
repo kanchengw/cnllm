@@ -241,7 +241,7 @@ In streaming/non-streaming batch calls, responses support **in-batch access** wi
 
 **repr():**
 ```python
-print(result)
+print(resp)
 # BatchResponse(request_counts={...}, elapsed=..., success=[...], fail=[...])
 ```
 
@@ -315,7 +315,7 @@ In streaming/non-streaming batch calls, responses support **in-batch access** wi
 
 **repr():**
 ```python
-print(result)
+print(resp)
 # EmbeddingResponse(request_counts={...}, elapsed=..., success=[...], fail=[...])
 ```
 

@@ -241,7 +241,7 @@ resp = client.chat.batch(
 **repr():**
 ```python
 # 简洁统计，不显示大文本:
-print(result)
+print(resp)
 # BatchResponse(request_counts={...}, elapsed=..., success=[...], errors=[...])
 ```
 
@@ -316,7 +316,7 @@ resp = client.embeddings.batch(
 **repr():**
 ```python
 # 简洁统计，不显示大文本:
-print(result)
+print(resp)
 # BatchResponse(request_counts={...}, elapsed=..., success=[...], errors=[...])
 ```
 
