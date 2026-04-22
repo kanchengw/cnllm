@@ -101,6 +101,8 @@ pip install cnllm
 
 #### 1.2.1 Sync Client
 ```python
+from cnllm import CNLLM
+
 client = CNLLM(model="minimax-m2.7", api_key="your_api_key")
 ```
 
@@ -112,6 +114,8 @@ Two async client initialization methods for different use cases:
 
 **Persistent Session:**
 ```python
+from cnllm import asyncCNLLM
+
 client = asyncCNLLM(
     model="minimax-m2.7", api_key="your_api_key")
 resp = await client.chat.create(...)
@@ -120,6 +124,8 @@ await client.aclose()  # Manual close
 
 **Temporary Session:**
 ```python
+from cnllm import asyncCNLLM
+
 async with asyncCNLLM(
     model="deepseek-chat", api_key="your_api_key") as client:
     resp = await client.chat.create(...)
@@ -536,8 +542,8 @@ LangChain chain uniformly supports sync/async methods:
 from cnllm import CNLLM
 from cnllm.core.framework import LangChainRunnable
 from langchain_core.prompts import ChatPromptTemplate
-import asyncio
 
+# Create CNLLM client (has async engine internally)
 client = CNLLM(model="deepseek-chat", api_key="your_key")
 runnable = LangChainRunnable(client)
 
@@ -546,23 +552,20 @@ prompt = ChatPromptTemplate.from_messages([
     ("human", "{input}")
 ])
 
+# Build LangChain chain
 chain = prompt | runnable
 
-async def langchain_demo():
-    # Async non-streaming call
+# Async call example
+async with client:
     result = await chain.ainvoke({"input": "What is 2+2?"})
     print(result.content)
 
-    # Async streaming call
     async for chunk in chain.astream({"input": "Count to 5"}):
         print(chunk, end="", flush=True)
 
-    # Batch call (async)
     results = await chain.batch(["Hello", "How are you?"])
     for r in results:
         print(r.content)
-
-asyncio.run(langchain_demo())
 ```
 
 ### License

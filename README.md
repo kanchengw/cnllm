@@ -101,6 +101,8 @@ pip install cnllm
 
 #### 1.2.1 同步客户端
 ```python
+from cnllm import CNLLM
+
 client = CNLLM(model="minimax-m2.7", api_key="your_api_key")
 ```
 
@@ -112,17 +114,21 @@ client = CNLLM(model="minimax-m2.7", api_key="your_api_key")
 
 **持久化会话**：
 ```python
+from cnllm import asyncCNLLM
+
 client = asyncCNLLM(
     model="minimax-m2.7", api_key="your_api_key")
 resp = await client.chat.create(...)
-await client.aclose()  # 手动关闭
+await client.aclose()                        # 手动关闭
 ```
 
 **临时会话**：
 ```python
+from cnllm import asyncCNLLM
+
 async with asyncCNLLM(
     model="deepseek-chat", api_key="your_api_key") as client:
-    resp = await client.chat.create(...)
+    resp = await client.chat.create(...)     # 自动关闭会话
 ```
 
 ### 1.3 三种调用入口（支持同步/异步）
@@ -538,9 +544,8 @@ LangChain chain 统一支持同步/异步方法：
 from cnllm import CNLLM
 from cnllm.core.framework import LangChainRunnable
 from langchain_core.prompts import ChatPromptTemplate
-import asyncio
 
-# 创建 CNLLM 客户端（内部持有异步引擎）
+# 创建 CNLLM 客户端 (内部持有异步引擎)
 client = CNLLM(model="deepseek-chat", api_key="your_key")
 runnable = LangChainRunnable(client)
 
@@ -552,21 +557,17 @@ prompt = ChatPromptTemplate.from_messages([
 # 构建 LangChain chain
 chain = prompt | runnable
 
-async def langchain_demo():
-    # 异步非流式调用
+# 异步调用示例
+async with client:
     result = await chain.ainvoke({"input": "2+2等于几？"})
     print(result.content)
 
-    # 异步流式调用
     async for chunk in chain.astream({"input": "数到5"}):
         print(chunk, end="", flush=True)
 
-    # 异步批量调用
     results = await chain.batch(["Hello", "How are you?"])
     for r in results:
         print(r.content)
-
-asyncio.run(langchain_demo())
 ```
 
 ### 许可证
