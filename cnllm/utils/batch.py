@@ -18,13 +18,107 @@ from cnllm.core.accumulators.batch_accumulator import (
 from cnllm.core.accumulators.embedding_accumulator import EmbeddingResponse
 
 
+
+
+def _extract_batch_item(response):
+    """从批量单项响应中提取 (raw, formatted, extras) 元组
+
+    chat.create() 可能返回:
+    - dict: 原生/已格式化的字典 → raw 和 formatted 相同
+    - NonStreamAccumulator: 累积器对象 (.process() 返回 self)
+      → raw = _response(原生), formatted = _data(OpenAI格式)
+    - StreamAccumulator: 流式累积器 (finalize() 返回 dict)
+      → raw = _accumulated_raw(原生), formatted = finalize() 的合并结果
+
+    Returns:
+        (raw_resp, formatted_dict, extras)
+    """
+    extras = {}
+    if isinstance(response, dict):
+        return response, response, extras
+
+    if hasattr(response, 'finalize') and hasattr(response, '_accumulated_raw'):
+        raw = response._accumulated_raw
+        if not raw:
+            try:
+                for _ in response:
+                    pass
+            except Exception:
+                pass
+            raw = response._accumulated_raw
+        if hasattr(response, 'think'):
+            try:
+                t = response.think
+                if t:
+                    extras["_thinking"] = t
+            except Exception:
+                pass
+        if hasattr(response, 'still'):
+            try:
+                s = response.still
+                if s:
+                    extras["_still"] = s
+            except Exception:
+                pass
+        if hasattr(response, 'tools'):
+            try:
+                t = response.tools
+                if t:
+                    extras["_tools"] = t
+            except Exception:
+                pass
+        formatted = response.finalize()
+        if not isinstance(formatted, dict):
+            formatted = raw
+        return raw, formatted, extras
+
+    if hasattr(response, '_response') and hasattr(response, 'process'):
+        raw = response._response
+        while not isinstance(raw, dict) and hasattr(raw, '_response'):
+            raw = raw._response
+        if hasattr(response, 'think'):
+            try:
+                t = response.think
+                if t:
+                    extras["_thinking"] = t
+            except Exception:
+                pass
+        if hasattr(response, 'still'):
+            try:
+                s = response.still
+                if s:
+                    extras["_still"] = s
+            except Exception:
+                pass
+        if hasattr(response, 'tools'):
+            try:
+                t = response.tools
+                if t:
+                    extras["_tools"] = t
+            except Exception:
+                pass
+        formatted = getattr(response, '_data', None)
+        if formatted is None:
+            try:
+                import inspect
+                if inspect.iscoroutinefunction(response.process):
+                    formatted = response._response
+                else:
+                    formatted = response.process()
+                    if not isinstance(formatted, dict):
+                        formatted = response._response
+            except Exception:
+                formatted = response._response
+        return raw, formatted, extras
+    return response, response, extras
+
+
 @dataclass
 class BatchItem:
     """批量任务项"""
     request: Any
     index: int
     priority: int = 0  # 优先级，数值越大优先级越高
-    retry_count: int = 0  # 重试次数
     request_id: str = ""  # 请求 ID
 
 
@@ -120,6 +214,7 @@ class BatchScheduler:
         self._adapter = None
         self.max_retries = max_retries
         self.retry_delay = retry_delay
+        self._execute_batch_response = None
 
     def _get_adapter(self):
         """获取 adapter 用于字段提取"""
@@ -148,14 +243,20 @@ class BatchScheduler:
     def execute(self, requests: List[Any], priorities: Optional[List[int]] = None) -> BatchResponse:
         """执行批量任务，支持优先级和重试"""
         from cnllm.core.accumulators.batch_accumulator import BatchResponse
-        
-        batch_response = BatchResponse()
+
+        if self._execute_batch_response is not None:
+            batch_response = self._execute_batch_response
+        else:
+            batch_response = BatchResponse()
+            self._execute_batch_response = batch_response
         start_time = time.time()
         batch_response._start_time = start_time
         
         if not requests:
             batch_response.set_total(0)
             batch_response._end_time = time.time()
+            batch_response.mark_done()
+            self._execute_batch_response = None
             return batch_response
 
         batch_items = []
@@ -178,7 +279,7 @@ class BatchScheduler:
                     if elapsed_since_last < self._min_interval:
                         time.sleep(self._min_interval - elapsed_since_last)
                 last_submit_time = time.time()
-                future = executor.submit(self._execute_with_retry, item)
+                future = executor.submit(self._execute_single, item.index, item.request)
                 future_to_item[future] = item
 
             for future in as_completed(future_to_item):
@@ -188,8 +289,15 @@ class BatchScheduler:
                 try:
                     result = future.result(timeout=self.timeout)
                     if result.status == "success":
-                        batch_response.set_raw(request_id, result.response)
-                        batch_response.add_result(request_id, result.response)
+                        raw_resp, formatted_resp, extras = _extract_batch_item(result.response)
+                        batch_response.set_raw(request_id, raw_resp)
+                        batch_response.add_result(request_id, formatted_resp)
+                        if "_thinking" in extras:
+                            batch_response.set_think(request_id, extras["_thinking"])
+                        if "_still" in extras:
+                            batch_response.set_still(request_id, extras["_still"])
+                        if "_tools" in extras:
+                            batch_response.set_tools(request_id, extras["_tools"])
                     else:
                         error_data = {"error": str(result.error) if result.error else "unknown error"}
                         batch_response.add_result(request_id, error_data)
@@ -213,6 +321,8 @@ class BatchScheduler:
 
         batch_response.set_total(len(requests))
         batch_response._end_time = time.time()
+        batch_response.mark_done()
+        self._execute_batch_response = None
         
         if first_error:
             from cnllm.utils.exceptions import BatchStopOnError
@@ -274,35 +384,37 @@ class BatchScheduler:
                             f.cancel()
                         break
 
-    def _execute_with_retry(self, item: BatchItem) -> BatchItemResult:
-        """执行单个任务，支持重试"""
-        retries = 0
-        while retries <= self.max_retries:
-            try:
-                return self._execute_single(item.index, item.request)
-            except Exception as e:
-                if retries >= self.max_retries:
-                    raise
-                retries += 1
-                item.retry_count = retries
-                time.sleep(self.retry_delay)
-
     def _execute_single(self, index: int, request: Any) -> BatchItemResult:
         """执行单个请求"""
         start = time.time()
         try:
             if isinstance(request, str):
-                response = self.client.chat.create(prompt=request, timeout=self.timeout)
-            elif isinstance(request, dict):
-                # 合并 timeout 参数
-                request_with_timeout = request.copy()
+                kwargs = {}
                 if self.timeout is not None:
-                    request_with_timeout['timeout'] = self.timeout
-                response = self.client.chat.create(**request_with_timeout)
+                    kwargs['timeout'] = self.timeout
+                if self.max_retries is not None:
+                    kwargs['max_retries'] = self.max_retries
+                if self.retry_delay is not None:
+                    kwargs['retry_delay'] = self.retry_delay
+                response = self.client.chat.create(prompt=request, **kwargs)
+            elif isinstance(request, dict):
+                request_with_batch = {k: v for k, v in request.items() if k != "_input_type"}
+                if 'timeout' not in request_with_batch and self.timeout is not None:
+                    request_with_batch['timeout'] = self.timeout
+                if 'max_retries' not in request_with_batch and self.max_retries is not None:
+                    request_with_batch['max_retries'] = self.max_retries
+                if 'retry_delay' not in request_with_batch and self.retry_delay is not None:
+                    request_with_batch['retry_delay'] = self.retry_delay
+                response = self.client.chat.create(**request_with_batch)
             elif hasattr(request, 'to_dict'):
                 request_dict = request.to_dict()
-                if self.timeout is not None:
+                request_dict.pop("_input_type", None)
+                if 'timeout' not in request_dict and self.timeout is not None:
                     request_dict['timeout'] = self.timeout
+                if 'max_retries' not in request_dict and self.max_retries is not None:
+                    request_dict['max_retries'] = self.max_retries
+                if 'retry_delay' not in request_dict and self.retry_delay is not None:
+                    request_dict['retry_delay'] = self.retry_delay
                 response = self.client.chat.create(**request_dict)
             else:
                 raise ValueError(f"Invalid request type: {type(request).__name__}")
@@ -448,10 +560,12 @@ class EmbeddingBatchScheduler:
                 logging.error(f"Callback error: {e}")
 
     def execute(self, input: List[str], **kwargs) -> EmbeddingResponse:
+        start_time = time.time()
         response = EmbeddingResponse(
             _request_counts={"total": len(input), "dimension": 0},
             _custom_ids=list(self.custom_ids) if self.custom_ids else []
         )
+        response._start_time = start_time
         if not input:
             response.finish()
             return response
@@ -475,13 +589,14 @@ class EmbeddingBatchScheduler:
                 future = executor.submit(self._execute_pack, chunk, ids, start_idx, **kwargs)
                 future_to_pack[future] = (chunk, ids, start_idx)
 
+            first_error = None
             for future in as_completed(future_to_pack):
                 if has_error and self.stop_on_error:
                     for f in future_to_pack:
                         f.cancel()
                     from cnllm.utils.exceptions import BatchStopOnError
                     response.finish()
-                    raise BatchStopOnError(batch_response=response, error=e)
+                    raise BatchStopOnError(batch_response=response, error=first_error)
 
                 chunk, ids, start_idx = future_to_pack[future]
                 try:
@@ -505,7 +620,11 @@ class EmbeddingBatchScheduler:
                         self._notify_callback(item_result)
                         if self.stop_on_error:
                             has_error = True
+                            if first_error is None:
+                                first_error = error
                 except Exception as e:
+                    if first_error is None:
+                        first_error = e
                     for rid in ids:
                         response.add_error(rid, e)
                         item_result = EmbeddingBatchItemResult(
@@ -522,7 +641,14 @@ class EmbeddingBatchScheduler:
         return response
 
     def _execute_pack(self, chunk: List[str], ids: List[str], start_idx: int, **kwargs) -> Dict[str, Any]:
-        raw = self.adapter.create_batch(chunk, custom_ids=ids, **kwargs)
+        raw = self.adapter.create_batch(
+            chunk,
+            custom_ids=ids,
+            timeout=self.timeout,
+            max_retries=self.max_retries,
+            retry_delay=self.retry_delay,
+            **kwargs
+        )
         return raw
 
     def _merge_pack_result(self, response: EmbeddingResponse, pack_result: Any, ids: List[str]) -> Dict[str, Any]:
@@ -613,10 +739,12 @@ class AsyncEmbeddingBatchScheduler:
                 logging.error(f"Callback error: {e}")
 
     async def execute(self, input: List[str], **kwargs):
+        start_time = time.time()
         response = EmbeddingResponse(
             _request_counts={"total": len(input), "dimension": 0},
             _custom_ids=list(self.custom_ids) if self.custom_ids else []
         )
+        response._start_time = start_time
         if not input:
             response.finish()
             yield response
@@ -692,7 +820,14 @@ class AsyncEmbeddingBatchScheduler:
         loop = asyncio.get_event_loop()
         raw = await loop.run_in_executor(
             None,
-            lambda: self.adapter.create_batch(chunk, custom_ids=ids, **kwargs)
+            lambda: self.adapter.create_batch(
+                chunk,
+                custom_ids=ids,
+                timeout=self.timeout,
+                max_retries=self.max_retries,
+                retry_delay=self.retry_delay,
+                **kwargs
+            )
         )
         return raw
 
@@ -780,8 +915,22 @@ class AsyncBatchScheduler:
             return self.custom_ids[index]
         return f"request_{index}"
 
-    async def execute(self, requests: List[Any], priorities: Optional[List[int]] = None) -> BatchResult:
-        """执行异步批量任务，支持优先级和重试"""
+    async def execute(self, requests: List[Any], priorities: Optional[List[int]] = None) -> BatchResponse:
+        """执行异步批量任务，支持优先级和重试，每个请求完成后实时更新统计并触发回调"""
+        from cnllm.core.accumulators.batch_accumulator import BatchResponse
+
+        batch_response = BatchResponse()
+        self._execute_batch_response = batch_response
+        start_time = time.time()
+        batch_response._start_time = start_time
+
+        if not requests:
+            batch_response.set_total(0)
+            batch_response._end_time = time.time()
+            batch_response.mark_done()
+            self._execute_batch_response = None
+            return batch_response
+
         # 构建任务列表
         batch_items = []
         for i, request in enumerate(requests):
@@ -793,15 +942,17 @@ class AsyncBatchScheduler:
         # 按优先级排序（优先级高的先执行）
         batch_items.sort(key=lambda x: -x.priority)
 
-        # 执行任务
-        results = [BatchItemResult(index=item.index, request=item.request, status="pending")
-                   for item in batch_items]
-
-        start_time = time.time()
-        errors = []
         self._semaphore = asyncio.Semaphore(self.max_concurrent)
 
-        # 为每个任务创建任务
+        async def _execute_wrapper(item: BatchItem):
+            """包装执行以保留 item 身份标识"""
+            try:
+                result = await self._execute_single(item.index, item.request)
+                return item, result
+            except Exception as e:
+                return item, e
+
+        # 创建所有任务（带速率限制）
         tasks = []
         last_submit_time = 0
         for item in batch_items:
@@ -810,60 +961,68 @@ class AsyncBatchScheduler:
                 if elapsed_since_last < self._min_interval:
                     await asyncio.sleep(self._min_interval - elapsed_since_last)
             last_submit_time = time.time()
-            task = self._execute_with_retry(item)
+            task = asyncio.create_task(_execute_wrapper(item))
             tasks.append(task)
 
-        # 收集所有任务结果
-        task_results = await asyncio.gather(*tasks, return_exceptions=True)
+        first_error = None
 
-        # 处理结果
-        for i, result in enumerate(task_results):
+        # 按完成顺序逐个处理（实时更新统计）
+        for coro in asyncio.as_completed(tasks):
+            item, result = await coro
+            request_id = item.request_id
+
             if isinstance(result, Exception):
-                # 区分异常类型
                 from cnllm.utils.exceptions import ModelAPIError, InvalidRequestError, TimeoutError as CNLLMTimeoutError
                 if isinstance(result, ValueError):
                     error = InvalidRequestError(message=str(result), provider="unknown")
                 elif isinstance(result, asyncio.TimeoutError):
                     error = CNLLMTimeoutError(message=str(result), provider="unknown")
-                    error.__cause__ = result  # 保留原始异常的traceback
+                    error.__cause__ = result
                 else:
                     error = ModelAPIError(message=str(result), provider="unknown")
-                    error.__cause__ = result  # 保留原始异常的traceback
-                results[i].status = "error"
-                results[i].error = error
-                errors.append(error)
-                self._notify_callback(results[i])
-
+                    error.__cause__ = result
+                error_data = {"error": str(error) if error else "unknown error", "error_type": type(error).__name__}
+                batch_response.add_result(request_id, error_data)
+                self._notify_callback(BatchItemResult(
+                    index=item.index, request=item.request, error=error,
+                    elapsed=0.0, status="error"
+                ))
                 if self.stop_on_error:
+                    first_error = error
+                    for t in tasks:
+                        t.cancel()
                     break
+            elif result.status == "success":
+                raw_resp, formatted_resp, extras = _extract_batch_item(result.response)
+                batch_response.set_raw(request_id, raw_resp)
+                batch_response.add_result(request_id, formatted_resp)
+                if "_thinking" in extras:
+                    batch_response.set_think(request_id, extras["_thinking"])
+                if "_still" in extras:
+                    batch_response.set_still(request_id, extras["_still"])
+                if "_tools" in extras:
+                    batch_response.set_tools(request_id, extras["_tools"])
+                self._notify_callback(result)
             else:
-                results[i] = result
-                self._notify_callback(results[i])
+                error_data = {"error": str(result.error) if result.error else "unknown error"}
+                batch_response.add_result(request_id, error_data)
+                self._notify_callback(result)
 
-        elapsed = time.time() - start_time
-        # 清理资源
+        batch_response._end_time = time.time()
+        batch_response.set_elapsed(time.time() - start_time)
+        batch_response.set_total(len(requests))
+        batch_response.mark_done()
+        self._execute_batch_response = None
         self._semaphore = None
-        return BatchResult(
-            results=results,
-            total=len(requests),
-            success_count=sum(1 for r in results if r.status == "success"),
-            error_count=sum(1 for r in results if r.status == "error"),
-            elapsed=elapsed,
-            errors=errors
-        )
 
-    async def _execute_with_retry(self, item: BatchItem) -> BatchItemResult:
-        """执行单个任务，支持重试"""
-        retries = 0
-        while retries <= self.max_retries:
-            try:
-                return await self._execute_single(item.index, item.request)
-            except Exception as e:
-                if retries >= self.max_retries:
-                    raise
-                retries += 1
-                item.retry_count = retries
-                await asyncio.sleep(self.retry_delay)
+        if first_error:
+            from cnllm.utils.exceptions import BatchStopOnError
+            raise BatchStopOnError(
+                batch_response=batch_response,
+                error=first_error
+            )
+
+        return batch_response
 
     async def _execute_single(self, index: int, request: Any) -> BatchItemResult:
         """执行单个请求"""
@@ -872,17 +1031,32 @@ class AsyncBatchScheduler:
             try:
                 async def execute_request():
                     if isinstance(request, str):
-                        return await self.client.chat.create(prompt=request, timeout=self.timeout)
-                    elif isinstance(request, dict):
-                        # 合并 timeout 参数
-                        request_with_timeout = request.copy()
+                        kwargs = {}
                         if self.timeout is not None:
-                            request_with_timeout['timeout'] = self.timeout
-                        return await self.client.chat.create(**request_with_timeout)
+                            kwargs['timeout'] = self.timeout
+                        if self.max_retries is not None:
+                            kwargs['max_retries'] = self.max_retries
+                        if self.retry_delay is not None:
+                            kwargs['retry_delay'] = self.retry_delay
+                        return await self.client.chat.create(prompt=request, **kwargs)
+                    elif isinstance(request, dict):
+                        request_with_batch = {k: v for k, v in request.items() if k != "_input_type"}
+                        if 'timeout' not in request_with_batch and self.timeout is not None:
+                            request_with_batch['timeout'] = self.timeout
+                        if 'max_retries' not in request_with_batch and self.max_retries is not None:
+                            request_with_batch['max_retries'] = self.max_retries
+                        if 'retry_delay' not in request_with_batch and self.retry_delay is not None:
+                            request_with_batch['retry_delay'] = self.retry_delay
+                        return await self.client.chat.create(**request_with_batch)
                     elif hasattr(request, 'to_dict'):
                         request_dict = request.to_dict()
-                        if self.timeout is not None:
+                        request_dict.pop("_input_type", None)
+                        if 'timeout' not in request_dict and self.timeout is not None:
                             request_dict['timeout'] = self.timeout
+                        if 'max_retries' not in request_dict and self.max_retries is not None:
+                            request_dict['max_retries'] = self.max_retries
+                        if 'retry_delay' not in request_dict and self.retry_delay is not None:
+                            request_dict['retry_delay'] = self.retry_delay
                         return await self.client.chat.create(**request_dict)
                     else:
                         raise ValueError(f"Invalid request type: {type(request).__name__}")
@@ -957,6 +1131,102 @@ class AsyncBatchScheduler:
                 logging.error(f"Callback error: {e}")
 
 
+BATCH_LEVEL_KEYS = frozenset({
+    "max_concurrent", "rps", "stop_on_error",
+    "callbacks", "custom_ids", "requests",
+})
+
+
+def _normalize_batch_requests(
+    requests_arg=None,
+    prompt=None,
+    messages=None,
+    per_request_defaults=None,
+):
+    """
+    将用户输入规范化为统一的请求对象列表。
+
+    三种输入模式：
+    1. requests=[{...}, {...}]        → 直接使用，合并 per-request 全局默认值
+    2. prompt=["A", "B"]              → 包装成 [{prompt: "A"}, {prompt: "B"}]
+    3. messages=[[{...}], [{...}]]     → 包装成 [{messages: [...]}, ...]
+
+    Args:
+        requests_arg: 请求对象列表（per-request 独立参数）
+        prompt: prompt 字符串列表
+        messages: 消息列表
+        per_request_defaults: Per-Request 全局默认参数（如 tools, thinking 等）
+    """
+    if requests_arg is not None:
+        if prompt is not None or messages is not None:
+            raise TypeError(
+                "batch() 只能使用 requests 或 prompt/messages 其中一种，不能同时使用"
+            )
+        if len(requests_arg) == 0:
+            raise TypeError("requests 列表不能为空")
+
+        final_requests = []
+        for i, req in enumerate(requests_arg):
+            if not isinstance(req, dict):
+                raise TypeError(f"requests[{i}] 必须是 dict 类型")
+
+            for batch_key in BATCH_LEVEL_KEYS:
+                if batch_key in req and batch_key != "requests":
+                    import logging
+                    logger = logging.getLogger(__name__)
+                    logger.warning(
+                        f"batch() 参数 '{batch_key}' 在 requests[{i}] 中未生效。"
+                        f"请在 batch() 全局参数中配置 '{batch_key}'，"
+                        f"例如: batch(..., {batch_key}={req[batch_key]})"
+                    )
+                    req = {k: v for k, v in req.items() if k != batch_key}
+
+            if "prompt" not in req and "messages" not in req:
+                raise TypeError(f"requests[{i}] 必须包含 'prompt' 或 'messages' 字段")
+
+            if req.get("prompt") == "":
+                raise TypeError(f"requests[{i}] 的 prompt 不能为空字符串")
+            if req.get("messages") == []:
+                raise TypeError(f"requests[{i}] 的 messages 不能为空列表")
+
+            per_request = req.copy()
+            if per_request_defaults:
+                defaults = {k: v for k, v in per_request_defaults.items()
+                             if k not in per_request}
+                per_request = {**defaults, **per_request}
+
+            per_request["_input_type"] = "prompt" if "prompt" in per_request else "messages"
+            final_requests.append(per_request)
+
+        return final_requests
+
+    if prompt is not None and messages is not None:
+        raise TypeError(
+            "batch() 只接受 prompt 或 messages 其中之一，不能同时提供"
+        )
+    if prompt is None and messages is None:
+        raise TypeError("batch() 需要提供 requests 或 prompt 或 messages 参数")
+
+    defaults = per_request_defaults or {}
+    if prompt is not None:
+        prompt = [p for p in prompt if p != ""]
+        if len(prompt) == 0:
+            raise TypeError("prompt 列表不能为空且不能全为空字符串")
+        return [
+            {**defaults, "prompt": p, "_input_type": "prompt"}
+            for p in prompt
+        ]
+    else:
+        messages = [m for m in messages if m and len(m) > 0]
+        if len(messages) == 0:
+            raise TypeError("messages 列表不能为空")
+        return [
+            {**defaults, "messages": m, "_input_type": "messages"}
+            for m in messages
+        ]
+
+
+
 class StreamBatchScheduler(BatchScheduler):
     """同步流式批量调度器"""
 
@@ -977,15 +1247,37 @@ class StreamBatchScheduler(BatchScheduler):
             adapter = None
             try:
                 if isinstance(item.request, str):
-                    result = self.client.chat.create(prompt=item.request, stream=True)
+                    kwargs = {'stream': True}
+                    if self.timeout is not None:
+                        kwargs['timeout'] = self.timeout
+                    if self.max_retries is not None:
+                        kwargs['max_retries'] = self.max_retries
+                    if self.retry_delay is not None:
+                        kwargs['retry_delay'] = self.retry_delay
+                    result = self.client.chat.create(prompt=item.request, **kwargs)
                     adapter = getattr(result, '_adapter', None)
                     stream = iter(result)
                 elif isinstance(item.request, dict):
-                    result = self.client.chat.create(**{**item.request, "stream": True})
+                    req_with_batch = {k: v for k, v in item.request.items() if k != "_input_type"}
+                    if 'timeout' not in req_with_batch and self.timeout is not None:
+                        req_with_batch['timeout'] = self.timeout
+                    if 'max_retries' not in req_with_batch and self.max_retries is not None:
+                        req_with_batch['max_retries'] = self.max_retries
+                    if 'retry_delay' not in req_with_batch and self.retry_delay is not None:
+                        req_with_batch['retry_delay'] = self.retry_delay
+                    result = self.client.chat.create(**{**req_with_batch, "stream": True})
                     adapter = getattr(result, '_adapter', None)
                     stream = iter(result)
                 elif hasattr(item.request, 'to_dict'):
-                    result = self.client.chat.create(**{**item.request.to_dict(), "stream": True})
+                    req_dict = item.request.to_dict()
+                    req_dict.pop("_input_type", None)
+                    if 'timeout' not in req_dict and self.timeout is not None:
+                        req_dict['timeout'] = self.timeout
+                    if 'max_retries' not in req_dict and self.max_retries is not None:
+                        req_dict['max_retries'] = self.max_retries
+                    if 'retry_delay' not in req_dict and self.retry_delay is not None:
+                        req_dict['retry_delay'] = self.retry_delay
+                    result = self.client.chat.create(**{**req_dict, "stream": True})
                     adapter = getattr(result, '_adapter', None)
                     stream = iter(result)
                 else:
@@ -1030,10 +1322,13 @@ class StreamBatchScheduler(BatchScheduler):
                 future_to_item[future] = item
 
             all_chunks = {}
+            per_request_extras = {}
             for future in as_completed(future_to_item):
                 try:
                     index, chunks_iter, adapter = future.result(timeout=self.timeout)
                     all_chunks[index] = chunks_iter
+                    if adapter and hasattr(adapter, '_cnllm_extra'):
+                        per_request_extras[index] = dict(adapter._cnllm_extra)
                 except Exception as e:
                     item = future_to_item[future]
                     from cnllm.utils.exceptions import ModelAPIError, InvalidRequestError, TimeoutError as CNLLMTimeoutError
@@ -1061,9 +1356,11 @@ class StreamBatchScheduler(BatchScheduler):
                     request_id = request_ids[idx]
                     try:
                         chunk = next(all_chunks[idx])
+                        extras = per_request_extras.get(idx, {})
                         yield {
                             "request_id": request_id,
-                            "chunk": chunk
+                            "chunk": chunk,
+                            "extras": extras
                         }
                         self._notify_callback_stream(BatchItemStreamResult(
                             index=idx,
@@ -1108,6 +1405,7 @@ class AsyncStreamBatchScheduler(AsyncBatchScheduler):
         max_queue_size = 100
         queue = asyncio.Queue(maxsize=max_queue_size)
         active_streams = len(batch_items)
+        per_request_extras = {}
 
         async def process_stream(item):
             """处理单个异步流式请求"""
@@ -1116,15 +1414,37 @@ class AsyncStreamBatchScheduler(AsyncBatchScheduler):
             adapter = None
             try:
                 if isinstance(item.request, str):
-                    result = await self.client.chat.create(prompt=item.request, stream=True)
+                    kwargs = {'stream': True}
+                    if self.timeout is not None:
+                        kwargs['timeout'] = self.timeout
+                    if self.max_retries is not None:
+                        kwargs['max_retries'] = self.max_retries
+                    if self.retry_delay is not None:
+                        kwargs['retry_delay'] = self.retry_delay
+                    result = await self.client.chat.create(prompt=item.request, **kwargs)
                     adapter = getattr(result, '_adapter', None)
                     stream = result
                 elif isinstance(item.request, dict):
-                    result = await self.client.chat.create(**{**item.request, "stream": True})
+                    req_with_batch = {k: v for k, v in item.request.items() if k != "_input_type"}
+                    if 'timeout' not in req_with_batch and self.timeout is not None:
+                        req_with_batch['timeout'] = self.timeout
+                    if 'max_retries' not in req_with_batch and self.max_retries is not None:
+                        req_with_batch['max_retries'] = self.max_retries
+                    if 'retry_delay' not in req_with_batch and self.retry_delay is not None:
+                        req_with_batch['retry_delay'] = self.retry_delay
+                    result = await self.client.chat.create(**{**req_with_batch, "stream": True})
                     adapter = getattr(result, '_adapter', None)
                     stream = result
                 elif hasattr(item.request, 'to_dict'):
-                    result = await self.client.chat.create(**{**item.request.to_dict(), "stream": True})
+                    req_dict = item.request.to_dict()
+                    req_dict.pop("_input_type", None)
+                    if 'timeout' not in req_dict and self.timeout is not None:
+                        req_dict['timeout'] = self.timeout
+                    if 'max_retries' not in req_dict and self.max_retries is not None:
+                        req_dict['max_retries'] = self.max_retries
+                    if 'retry_delay' not in req_dict and self.retry_delay is not None:
+                        req_dict['retry_delay'] = self.retry_delay
+                    result = await self.client.chat.create(**{**req_dict, "stream": True})
                     adapter = getattr(result, '_adapter', None)
                     stream = result
                 else:
@@ -1133,9 +1453,13 @@ class AsyncStreamBatchScheduler(AsyncBatchScheduler):
                 async for chunk in stream:
                     if chunk is None:
                         continue
+                    extras = {}
+                    if adapter and hasattr(adapter, '_cnllm_extra'):
+                        extras = dict(adapter._cnllm_extra)
                     await queue.put({
                         "request_id": item.request_id,
-                        "chunk": chunk
+                        "chunk": chunk,
+                        "extras": extras
                     })
 
             except CNLLMError as e:

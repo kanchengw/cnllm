@@ -145,12 +145,15 @@ class TestGLM5FieldAccumulation:
     def test_nonstream_batch(self):
         _print_section("GLM-5 非流式批量 (2个请求)")
         client = CNLLM(model=self.MODEL, api_key=self.API_KEY)
-        requests = [
-            {"messages": [{"role": "user", "content": "1+1等于几？"}], "thinking": True},
-            {"messages": [{"role": "user", "content": "2+2等于几？"}], "thinking": True},
-        ]
 
-        result = client.chat.batch(requests, stream=False)
+        result = client.chat.batch(
+            messages=[
+                [{"role": "user", "content": "1+1等于几？"}],
+                [{"role": "user", "content": "2+2等于几？"}],
+            ],
+            stream=False,
+            thinking=True
+        )
         batch_resp = client.chat._batch_response
 
         raw = client.chat.raw
@@ -281,12 +284,15 @@ class TestGLM5FieldAccumulation:
     def test_stream_batch(self):
         _print_section("GLM-5 流式批量 (2个请求)")
         client = CNLLM(model=self.MODEL, api_key=self.API_KEY)
-        requests = [
-            {"messages": [{"role": "user", "content": "什么是AI？"}], "thinking": True},
-            {"messages": [{"role": "user", "content": "什么是机器学习？"}], "thinking": True},
-        ]
 
-        accumulator = client.chat.batch(requests, stream=True)
+        accumulator = client.chat.batch(
+            messages=[
+                [{"role": "user", "content": "什么是AI？"}],
+                [{"role": "user", "content": "什么是机器学习？"}],
+            ],
+            stream=True,
+            thinking=True
+        )
 
         raw = client.chat.raw
         still = client.chat.still
@@ -425,12 +431,14 @@ class TestKimiK25FieldAccumulation:
     def test_nonstream_batch(self):
         _print_section("Kimi-k2.5 非流式批量 (2个请求)")
         client = CNLLM(model=self.MODEL, api_key=self.API_KEY)
-        requests = [
-            {"messages": [{"role": "user", "content": "1+1等于几？"}]},
-            {"messages": [{"role": "user", "content": "2+2等于几？"}]},
-        ]
 
-        result = client.chat.batch(requests, stream=False)
+        result = client.chat.batch(
+            messages=[
+                [{"role": "user", "content": "1+1等于几？"}],
+                [{"role": "user", "content": "2+2等于几？"}],
+            ],
+            stream=False
+        )
         batch_resp = client.chat._batch_response
 
         raw = client.chat.raw
@@ -510,12 +518,14 @@ class TestKimiK25FieldAccumulation:
     def test_stream_batch(self):
         _print_section("Kimi-k2.5 流式批量 (2个请求)")
         client = CNLLM(model=self.MODEL, api_key=self.API_KEY)
-        requests = [
-            {"messages": [{"role": "user", "content": "什么是AI？"}]},
-            {"messages": [{"role": "user", "content": "什么是机器学习？"}]},
-        ]
 
-        accumulator = client.chat.batch(requests, stream=True)
+        accumulator = client.chat.batch(
+            messages=[
+                [{"role": "user", "content": "什么是AI？"}],
+                [{"role": "user", "content": "什么是机器学习？"}],
+            ],
+            stream=True
+        )
 
         raw = client.chat.raw
         still = client.chat.still
@@ -585,7 +595,11 @@ class TestDeepSeekFieldAccumulation:
             if chunk_count <= 3:
                 delta = chunk.get("choices", [{}])[0].get("delta", {})
                 print(f"  [chunk-{chunk_count}] delta_content={repr(delta.get('content','')[:30])}")
-                print(f"              raw.message.content={repr(raw_now['choices'][0]['message']['content'][:30]) if raw_now else 'N/A'}")
+                raw_content_preview = ""
+                if raw_now and "choices" in raw_now:
+                    c0 = raw_now["choices"][0]
+                    raw_content_preview = repr(c0.get("delta", {}).get("content", "")[:30]) if "delta" in c0 else repr(c0.get("message", {}).get("content", "")[:30])
+                print(f"              raw.delta.content={raw_content_preview if raw_now else 'N/A'}")
 
         print(f"\n[完成] 共 {chunk_count} chunks")
 
@@ -600,22 +614,32 @@ class TestDeepSeekFieldAccumulation:
         checks.append(("1. .raw 类型是 dict", is_dict, f"实际类型={type(final_raw).__name__}"))
         print(f"\n  核查 1: .raw 类型检查 - {'✓ PASS' if is_dict else '✗ FAIL'}")
 
-        has_message = is_dict and "choices" in final_raw and "message" in final_raw["choices"][0]
-        checks.append(("2. .raw.choices[0].message 存在", has_message, "message 不存在"))
-        print(f"  核查 2: .raw.choices[0].message - {'✓ PASS' if has_message else '✗ FAIL'}")
+        has_content_in_raw = is_dict and "choices" in final_raw
+        if has_content_in_raw:
+            c0 = final_raw["choices"][0]
+            has_content_in_raw = "delta" in c0 or "message" in c0
+        checks.append(("2. .raw.choices[0] 包含内容字段", has_content_in_raw, "无内容字段"))
+        print(f"  核查 2: .raw.choices[0] 内容字段 - {'✓ PASS' if has_content_in_raw else '✗ FAIL'}")
 
-        if has_message:
-            msg_content = final_raw["choices"][0]["message"].get("content", "")
-            still_match = still_now == msg_content if final_still else False
-            checks.append(("3. .raw.message.content == .still", still_match, f".still={final_still[:50]} .raw.message.content={msg_content[:50]}"))
-            print(f"  核查 3: .raw.message.content == .still - {'✓ PASS' if still_match else '✗ FAIL'}")
+        raw_content = ""
+        if has_content_in_raw:
+            c0 = final_raw["choices"][0]
+            raw_content = c0.get("delta", {}).get("content", "") or c0.get("message", {}).get("content", "")
 
-            content_match_still = final_still == msg_content if final_still else (msg_content == "")
-            checks.append(("4. .still 和 .raw.message.content 一致", content_match_still, "不一致"))
-            print(f"  核查 4: .still 和 .raw.message.content 一致 - {'✓ PASS' if content_match_still else '✗ FAIL'}")
+        still_match_still = (final_still or "") == raw_content
+        checks.append(("3. .raw内容 == .still", still_match_still, f".still={final_still[:50] if final_still else ''} .raw={raw_content[:50]}"))
+        print(f"  核查 3: .raw内容 == .still - {'✓ PASS' if still_match_still else '✗ FAIL'}")
 
+        content_match_still = (final_still or "") == raw_content
+        checks.append(("4. .still 和 .raw内容 一致", content_match_still, "不一致"))
+        print(f"  核查 4: .still 和 .raw内容 一致 - {'✓ PASS' if content_match_still else '✗ FAIL'}")
+
+        def _get_raw_content(r):
+            if not r or "choices" not in r: return ""
+            c0 = r["choices"][0]
+            return c0.get("delta", {}).get("content", "") or c0.get("message", {}).get("content", "")
         increasing_raw = all(
-            (raw_samples[i]["choices"][0]["message"]["content"] or "") <= (raw_samples[j]["choices"][0]["message"]["content"] or "")
+            _get_raw_content(raw_samples[i]) <= _get_raw_content(raw_samples[j])
             for i in range(len(raw_samples) - 1)
             for j in [i + 1]
         )
@@ -623,7 +647,7 @@ class TestDeepSeekFieldAccumulation:
         print(f"  核查 5: .raw.message.content 递增累积 - {'✓ PASS' if increasing_raw else '✗ FAIL'}")
 
         print(f"\n  .raw 类型: {type(final_raw).__name__}")
-        print(f"  .raw.choices[0].message.content 长度: {len(final_raw['choices'][0]['message']['content']) if final_raw else 0}")
+        print(f"  .raw 内容长度: {len(raw_content)}")
         print(f"  .still 长度: {len(final_still) if final_still else 0}")
         print(f"  .think 长度: {len(final_think) if final_think else 0}")
 
@@ -771,36 +795,59 @@ class TestDeepSeekFieldAccumulation:
         print(f"  核查 2: .tools 不为空 - {'✓ PASS' if has_tools else '✗ FAIL'}")
 
         if has_tools:
-            first_idx = min(final_tools.keys())
-            first_tool = final_tools[first_idx]
+            if isinstance(final_tools, dict):
+                first_idx = min(final_tools.keys())
+                first_tool = final_tools[first_idx]
+            elif isinstance(final_tools, list) and len(final_tools) > 0:
+                first_tool = final_tools[0]
+                first_idx = 0
+            else:
+                first_tool = {}
+                first_idx = 0
             has_arguments = "function" in first_tool and "arguments" in first_tool["function"]
             complete_args = has_arguments and len(first_tool["function"]["arguments"]) > 0
             checks.append(("3. 第一个工具的 arguments 不为空", complete_args, f"arguments={first_tool.get('function',{}).get('arguments','(空)')}"))
             print(f"  核查 3: 工具 arguments 不为空 - {'✓ PASS' if complete_args else '✗ FAIL'}")
 
-            is_merged = len(final_tools) == len(tool_call_indices_seen) or len(final_tools) <= 2
-            checks.append(("4. tools 数量合理 (非连续chunks)", is_merged, f"tools数={len(final_tools)} seen_indices={tool_call_indices_seen}"))
+            tools_count = len(final_tools)
+            is_merged = tools_count == len(tool_call_indices_seen) or tools_count <= 2
+            checks.append(("4. tools 数量合理 (非连续chunks)", is_merged, f"tools数={tools_count} seen_indices={tool_call_indices_seen} type={type(final_tools).__name__}"))
             print(f"  核查 4: tools 已合并 - {'✓ PASS' if is_merged else '✗ FAIL'}")
 
-        has_raw_tools = final_raw and "tool_calls" in final_raw.get("choices", [{}])[0].get("message", {})
-        checks.append(("5. .raw.message.tool_calls 存在", has_raw_tools, "不存在"))
-        print(f"  核查 5: .raw.message.tool_calls - {'✓ PASS' if has_raw_tools else '✗ FAIL'}")
+        has_raw_tools = False
+        if final_raw and "choices" in final_raw:
+            c0 = final_raw["choices"][0]
+            msg = c0.get("message", c0.get("delta", {}))
+            has_raw_tools = "tool_calls" in msg
+        checks.append(("5. .raw中 tool_calls 存在", has_raw_tools, "不存在"))
+        print(f"  核查 5: .raw中 tool_calls - {'✓ PASS' if has_raw_tools else '✗ FAIL'}")
 
         raw_tools_match = False
         if has_raw_tools and has_tools:
-            raw_tools = final_raw["choices"][0]["message"]["tool_calls"]
-            raw_idx = min(raw_tools.keys()) if isinstance(raw_tools, dict) else 0
-            raw_args = raw_tools[raw_idx]["function"]["arguments"] if raw_tools else ""
-            final_idx = min(final_tools.keys()) if isinstance(final_tools, dict) else 0
-            final_args = final_tools[final_idx]["function"]["arguments"] if final_tools else ""
-            raw_tools_match = raw_args == final_args
+            c0 = final_raw["choices"][0]
+            msg = c0.get("message", c0.get("delta", {}))
+            raw_tools_list = msg.get("tool_calls", [])
+            if raw_tools_list:
+                first_raw_tc = raw_tools_list[0]
+                raw_args = first_raw_tc.get("function", {}).get("arguments", "")
+                final_idx = 0
+                if isinstance(final_tools, dict):
+                    final_idx = min(final_tools.keys())
+                    final_args = final_tools[final_idx].get("function", {}).get("arguments", "") if final_tools else ""
+                elif isinstance(final_tools, list) and len(final_tools) > 0:
+                    final_args = final_tools[0].get("function", {}).get("arguments", "")
+                raw_tools_match = raw_args == final_args
             checks.append(("6. .raw.tool_calls == .tools", raw_tools_match, f"不一致"))
             print(f"  核查 6: .raw.tool_calls == .tools - {'✓ PASS' if raw_tools_match else '✗ FAIL'}")
 
         print(f"\n  .tools 数量: {len(final_tools) if final_tools else 0}")
         if final_tools:
-            first_idx = min(final_tools.keys())
-            print(f"  第一个工具: id={final_tools[first_idx].get('id')} name={final_tools[first_idx].get('function',{}).get('name')} args={final_tools[first_idx].get('function',{}).get('arguments','')[:50]}")
+            if isinstance(final_tools, dict):
+                first_idx = min(final_tools.keys())
+                first_tool_display = final_tools[first_idx]
+            else:
+                first_tool_display = final_tools[0]
+            print(f"  第一个工具: id={first_tool_display.get('id')} name={first_tool_display.get('function',{}).get('name')} args={first_tool_display.get('function',{}).get('arguments','')[:50]}")
 
         return {
             "chunk_count": chunk_count,
@@ -852,7 +899,7 @@ class TestDeepSeekFieldAccumulation:
         raw_is_dict = isinstance(raw, dict)
         still_is_str = isinstance(still, str) or still is None
         think_is_str = isinstance(think, str) or think is None
-        tools_is_dict = isinstance(tools_list, dict) or tools_list is None
+        tools_is_dict = isinstance(tools_list, (dict, list)) or tools_list is None
 
         checks.append(("1. .raw 是 dict", raw_is_dict, type(raw).__name__))
         checks.append(("2. .still 是 str", still_is_str, type(still).__name__))
@@ -864,12 +911,22 @@ class TestDeepSeekFieldAccumulation:
         print(f"  .think 类型: {type(think).__name__} {'✓' if think_is_str else '✗'}")
         print(f"  .tools 类型: {type(tools_list).__name__} {'✓' if tools_is_dict else '✗'}")
 
-        raw_content = raw["choices"][0]["message"]["content"] if raw and "choices" in raw else ""
-        still_raw_match = (still or "") == raw_content
-        checks.append(("5. .still == .raw.message.content", still_raw_match, f".still={(still or '')[:30]} raw.content={raw_content[:30]}"))
-        print(f"\n  .still == .raw.message.content: {'✓' if still_raw_match else '✗'}")
+        def _extract_raw_content(r):
+            if not r or "choices" not in r: return ""
+            c0 = r["choices"][0]
+            return c0.get("delta", {}).get("content", "") or c0.get("message", {}).get("content", "")
 
-        raw_tools = raw["choices"][0]["message"].get("tool_calls", {}) if raw else {}
+        raw_content = _extract_raw_content(raw)
+        still_raw_match = (still or "") == raw_content
+        checks.append(("5. .still == .raw内容", still_raw_match, f".still={(still or '')[:30]} raw={raw_content[:30]}"))
+        print(f"\n  .still == .raw内容: {'✓' if still_raw_match else '✗'}")
+
+        def _extract_raw_tools(r):
+            if not r or "choices" not in r: return {}
+            c0 = r["choices"][0]
+            msg = c0.get("message", c0.get("delta", {}))
+            return msg.get("tool_calls", {})
+        raw_tools = _extract_raw_tools(raw)
         tools_match = (tools_list or {}) == raw_tools
         checks.append(("6. .tools == .raw.message.tool_calls", tools_match, f"长度: tools={len(tools_list)} raw={len(raw_tools)}"))
         print(f"  .tools == .raw.message.tool_calls: {'✓' if tools_match else '✗'}")

@@ -1,10 +1,11 @@
 """
 CNLLM LangChainRunnable 测试 - 模拟测试验证 Runnable 集成
 
-测试目标：
-1. 异步调用 (ainvoke)
-2. 流式调用 (stream)
-3. 批量调用 (batch)
+测试覆盖 6 个标准方法：
+- invoke / stream / batch   （同步，走 CNLLM）
+- ainvoke / astream / abatch（异步，走 asyncCNLLM）
+
+所有输入均使用 LangChain 标准格式（List[dict] 或 BaseMessage）。
 """
 import os
 import sys
@@ -14,223 +15,152 @@ from unittest.mock import MagicMock, AsyncMock
 sys.stdout.reconfigure(encoding='utf-8')
 
 from cnllm.core.framework.langchain import LangChainRunnable
+from langchain_core.messages import HumanMessage
 
 
-class MockChatCreate:
-    """模拟 chat.create 响应"""
-    def __init__(self, stream=False, chunks=None):
-        self.stream = stream
-        self.chunks = chunks or []
+class MockStreamIterator:
+    """同步流迭代器"""
+    def __init__(self, chunks):
+        self._chunks = list(chunks)
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        if not self._chunks:
+            raise StopIteration
+        return self._chunks.pop(0)
+
+
+class MockAsyncStreamIterator:
+    """异步流迭代器"""
+    def __init__(self, chunks):
+        self._chunks = list(chunks)
 
     def __aiter__(self):
         return self
 
     async def __anext__(self):
-        if not self.chunks:
+        if not self._chunks:
             raise StopAsyncIteration
-        return self.chunks.pop(0)
-
-    def __iter__(self):
-        if self.stream:
-            return iter(self.chunks)
-        return iter([self.chunks])
-
-    def __getitem__(self, key):
-        if isinstance(self.chunks, dict):
-            return self.chunks[key]
-        raise TypeError("Not a dict")
+        return self._chunks.pop(0)
 
 
 class TestLangChainRunnable:
-    """LangChainRunnable 模拟测试"""
+    """LangChainRunnable 6 方法测试"""
 
-    def test_batch(self):
-        """批量调用测试"""
-        print(f"\n{'='*60}")
-        print(f"[Test] Batch 批量调用")
-        print(f"{'='*60}")
-
-        import asyncio
-
-        mock_async_client = MagicMock()
-        mock_async_client.chat.create = AsyncMock(return_value={
-            "choices": [{
-                "message": {
-                    "content": "Batch response"
-                }
-            }]
-        })
-
-        mock_batch_result = MagicMock()
-        mock_batch_result.results = [
-            MagicMock(
-                status="success",
-                response={
-                    "choices": [{
-                        "message": {
-                            "content": "Batch 1"
-                        }
-                    }]
-                }
-            ),
-            MagicMock(
-                status="success",
-                response={
-                    "choices": [{
-                        "message": {
-                            "content": "Batch 2"
-                        }
-                    }]
-                }
-            ),
-            MagicMock(
-                status="success",
-                response={
-                    "choices": [{
-                        "message": {
-                            "content": "Batch 3"
-                        }
-                    }]
-                }
-            ),
-        ]
-        mock_async_client.chat.batch = AsyncMock(return_value=mock_batch_result)
-
+    def setup_mocks(self):
         mock_client = MagicMock()
+        mock_async_client = MagicMock()
         mock_client.async_client = mock_async_client
+        return mock_client, mock_async_client
 
+    # ── 同步方法 ──
+
+    def test_invoke(self):
+        mock_client, _ = self.setup_mocks()
+        mock_client.chat.create.return_value = {
+            "choices": [{"message": {"content": "Hello"}}]
+        }
         runnable = LangChainRunnable(mock_client)
-
-        inputs = ["Hello", "How are you?", "What is 2+2?"]
-
-        async def run_batch():
-            return await runnable.batch(inputs)
-
-        results = asyncio.run(run_batch())
-
-        print(f"  输入数量: {len(inputs)}")
-        print(f"  输出数量: {len(results)}")
-        print(f"  结果内容: {[r.content for r in results]}")
-
-        assert len(results) == 3, f"期望 3 个结果，得到 {len(results)}"
-        for i, result in enumerate(results):
-            assert hasattr(result, 'content'), f"结果 {i} 没有 content 属性"
-        print(f"[PASS] Batch 批量调用通过")
+        result = runnable.invoke([{"role": "user", "content": "Hi"}])
+        assert result.content == "Hello"
 
     def test_stream(self):
-        """流式调用测试"""
-        print(f"\n{'='*60}")
-        print(f"[Test] Stream 流式调用")
-        print(f"{'='*60}")
-
-        import asyncio
-
-        mock_async_client = MagicMock()
-
+        mock_client, _ = self.setup_mocks()
         chunks = [
-            {"choices": [{"delta": {"content": "Hello"}, "index": 0}]},
-            {"choices": [{"delta": {"content": " world"}, "index": 0}]},
-            {"choices": [{"delta": {"content": "!"}, "index": 0}]},
+            {"choices": [{"index": 0, "delta": {"content": "A"}}]},
+            {"choices": [{"index": 0, "delta": {"content": "B"}}]},
         ]
-
-        mock_async_client.chat.create = AsyncMock(return_value=MockChatCreate(stream=True, chunks=chunks))
-
-        mock_client = MagicMock()
-        mock_client.async_client = mock_async_client
-
+        mock_client.chat.create.return_value = MockStreamIterator(chunks)
         runnable = LangChainRunnable(mock_client)
+        result = list(runnable.stream([{"role": "user", "content": "Hi"}]))
+        assert "".join(result) == "AB"
 
-        async def run_stream():
-            result_chunks = []
-            async for chunk in runnable.stream("Hello"):
-                result_chunks.append(chunk)
-                print(f"  [Chunk] {chunk}")
-            return result_chunks
-
-        result_chunks = asyncio.run(run_stream())
-
-        full_content = "".join(result_chunks)
-        print(f"\n  完整内容: {full_content}")
-        print(f"  Chunk 数量: {len(result_chunks)}")
-
-        assert full_content == "Hello world!", f"期望 'Hello world!'，得到 '{full_content}'"
-        assert len(result_chunks) == 3, f"期望 3 个 chunks，得到 {len(result_chunks)}"
-        print(f"[PASS] Stream 流式调用通过")
-
-    def test_astream(self):
-        """异步流式调用测试"""
-        print(f"\n{'='*60}")
-        print(f"[Test] AStream 异步流式调用")
-        print(f"{'='*60}")
-
-        import asyncio
-
-        mock_async_client = MagicMock()
-
-        chunks = [
-            {"choices": [{"delta": {"content": "Async"}, "index": 0}]},
-            {"choices": [{"delta": {"content": " stream"}, "index": 0}]},
-            {"choices": [{"delta": {"content": " test"}, "index": 0}]},
+    def test_batch(self):
+        mock_client, _ = self.setup_mocks()
+        mock_batch_result = MagicMock()
+        mock_batch_result.results = [
+            {"choices": [{"message": {"content": "R1"}}]},
+            {"choices": [{"message": {"content": "R2"}}]},
         ]
-
-        mock_async_client.chat.create = AsyncMock(return_value=MockChatCreate(stream=True, chunks=chunks))
-
-        mock_client = MagicMock()
-        mock_client.async_client = mock_async_client
-
+        mock_client.chat.batch.return_value = mock_batch_result
         runnable = LangChainRunnable(mock_client)
+        results = runnable.batch([
+            [{"role": "user", "content": "A"}],
+            [{"role": "user", "content": "B"}],
+        ])
+        assert len(results) == 2
+        assert results[0].content == "R1"
+        assert results[1].content == "R2"
 
-        async def run_async_stream():
-            result_chunks = []
-            async for chunk in runnable.stream("Async test"):
-                result_chunks.append(chunk)
-                print(f"  [Chunk] {chunk}")
-            return result_chunks
-
-        result_chunks = asyncio.run(run_async_stream())
-
-        full_content = "".join(result_chunks)
-        print(f"\n  完整内容: {full_content}")
-        print(f"  Chunk 数量: {len(result_chunks)}")
-
-        assert full_content == "Async stream test", f"期望 'Async stream test'，得到 '{full_content}'"
-        assert len(result_chunks) == 3, f"期望 3 个 chunks，得到 {len(result_chunks)}"
-        print(f"[PASS] AStream 异步流式调用通过")
+    # ── 异步方法 ──
 
     def test_ainvoke(self):
-        """异步调用测试"""
-        print(f"\n{'='*60}")
-        print(f"[Test] AInvoke 异步调用")
-        print(f"{'='*60}")
-
         import asyncio
-
-        mock_async_client = MagicMock()
+        mock_client, mock_async_client = self.setup_mocks()
         mock_async_client.chat.create = AsyncMock(return_value={
-            "choices": [{
-                "message": {
-                    "content": "AInvoke response content"
-                }
-            }]
+            "choices": [{"message": {"content": "Async Hello"}}]
         })
-
-        mock_client = MagicMock()
-        mock_client.async_client = mock_async_client
-
         runnable = LangChainRunnable(mock_client)
 
-        async def run_async_invoke():
-            return await runnable.invoke("Test input")
+        async def run():
+            return await runnable.ainvoke([{"role": "user", "content": "Hi"}])
 
-        result = asyncio.run(run_async_invoke())
+        assert asyncio.run(run()).content == "Async Hello"
 
-        print(f"  输入: Test input")
-        print(f"  输出: {result.content}")
+    def test_astream(self):
+        import asyncio
+        mock_client, mock_async_client = self.setup_mocks()
+        chunks = [
+            {"choices": [{"index": 0, "delta": {"content": "X"}}]},
+            {"choices": [{"index": 0, "delta": {"content": "Y"}}]},
+        ]
+        mock_async_client.chat.create = AsyncMock(
+            return_value=MockAsyncStreamIterator(chunks)
+        )
+        runnable = LangChainRunnable(mock_client)
 
-        assert hasattr(result, 'content'), "结果没有 content 属性"
-        assert result.content == "AInvoke response content", f"期望 'AInvoke response content'，得到 '{result.content}'"
-        print(f"[PASS] AInvoke 异步调用通过")
+        async def run():
+            result = []
+            async for chunk in runnable.astream([{"role": "user", "content": "Hi"}]):
+                result.append(chunk)
+            return result
 
+        assert "".join(asyncio.run(run())) == "XY"
 
-if __name__ == "__main__":
-    pytest.main([__file__, "-v", "-s"])
+    def test_abatch(self):
+        import asyncio
+        mock_client, mock_async_client = self.setup_mocks()
+        mock_batch_result = MagicMock()
+        mock_batch_result.results = [
+            {"choices": [{"message": {"content": "AR1"}}]},
+            {"choices": [{"message": {"content": "AR2"}}]},
+        ]
+        mock_async_client.chat.batch = AsyncMock(return_value=mock_batch_result)
+        runnable = LangChainRunnable(mock_client)
+
+        async def run():
+            return await runnable.abatch([
+                [{"role": "user", "content": "A"}],
+                [{"role": "user", "content": "B"}],
+            ])
+
+        results = asyncio.run(run())
+        assert len(results) == 2
+        assert results[0].content == "AR1"
+        assert results[1].content == "AR2"
+
+    # ── 非标准输入应报错 ──
+
+    def test_invoke_str_raises(self):
+        mock_client, _ = self.setup_mocks()
+        runnable = LangChainRunnable(mock_client)
+        with pytest.raises(TypeError):
+            runnable.invoke("Hi")
+
+    def test_batch_str_list_raises(self):
+        mock_client, _ = self.setup_mocks()
+        runnable = LangChainRunnable(mock_client)
+        with pytest.raises(TypeError):
+            runnable.batch(["A", "B"])

@@ -2,6 +2,7 @@ from typing import Optional, Dict, Any, AsyncIterator, List, Union, Callable
 import logging
 import os
 import inspect
+import asyncio
 
 from ..utils.exceptions import ModelNotSupportedError, MissingParameterError
 from ..utils.fallback import FallbackManager
@@ -11,7 +12,209 @@ from ..core.embedding import EmbeddingsNamespace
 logger = logging.getLogger(__name__)
 
 
+class _SyncProxy:
+    def __init__(self, **kwargs):
+        self._kwargs = kwargs
+        self._client = None
+
+    def _ensure_client(self):
+        if self._client is None:
+            instance = super(asyncCNLLM, asyncCNLLM).__new__(asyncCNLLM)
+            instance.__init__(**self._kwargs)
+            self._client = instance
+        return self._client
+
+    def __enter__(self):
+        client = self._ensure_client()
+
+        async def _run():
+            await client.__aenter__()
+            return client
+
+        asyncio.run(_run())
+        return _SyncContext(self)
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.aclose()
+        return False
+
+    def aclose(self):
+        client = self._ensure_client()
+
+        async def _close():
+            await client.aclose()
+
+        try:
+            loop = asyncio.get_running_loop()
+            if loop.is_running():
+                import concurrent.futures
+                with concurrent.futures.ThreadPoolExecutor() as pool:
+                    pool.submit(asyncio.run, _close()).result()
+                    return
+        except RuntimeError:
+            pass
+
+        asyncio.run(_close())
+
+    @property
+    def chat(self):
+        client = self._ensure_client()
+        return _SyncChatNamespace(client)
+
+
+class _SyncStreamResponse:
+    def __init__(self, async_stream, client):
+        self._async_stream = async_stream
+        self._client = client
+        self._chunks = []
+        self._snapshots = []
+        self._pos = -1
+        self._consumed = False
+
+    def _ensure_consumed(self):
+        if not self._consumed:
+            result = asyncio.run(self._consume_all())
+            self._chunks = result["chunks"]
+            self._snapshots = result["snapshots"]
+            self._consumed = True
+
+    async def _consume_all(self):
+        import copy as _copy
+        chunks = []
+        snapshots = []
+        async for chunk in self._async_stream:
+            chunks.append(chunk)
+            acc_raw = getattr(self._async_stream, '_accumulated_raw', None) or {}
+            snapshots.append({
+                "raw": dict(acc_raw),
+                "think": self._client.chat.think or "",
+                "still": self._client.chat.still or "",
+                "tools": _copy.deepcopy(self._client.chat.tools) if self._client.chat.tools else {},
+            })
+        return {"chunks": chunks, "snapshots": snapshots}
+
+    def __iter__(self):
+        self._ensure_consumed()
+        self._pos = -1
+        return self
+
+    def __next__(self):
+        self._pos += 1
+        if self._pos >= len(self._chunks):
+            raise StopIteration
+        return self._chunks[self._pos]
+
+    @property
+    def raw(self):
+        self._ensure_consumed()
+        if self._pos < 0 or not self._snapshots:
+            return {}
+        return self._snapshots[min(self._pos, len(self._snapshots) - 1)]["raw"]
+
+    @property
+    def think(self):
+        self._ensure_consumed()
+        if self._pos < 0 or not self._snapshots:
+            return ""
+        return self._snapshots[min(self._pos, len(self._snapshots) - 1)]["think"]
+
+    @property
+    def still(self):
+        self._ensure_consumed()
+        if self._pos < 0 or not self._snapshots:
+            return ""
+        return self._snapshots[min(self._pos, len(self._snapshots) - 1)]["still"]
+
+    @property
+    def tools(self):
+        self._ensure_consumed()
+        if self._pos < 0 or not self._snapshots:
+            return {}
+        return self._snapshots[min(self._pos, len(self._snapshots) - 1)]["tools"]
+
+
+class _SyncChatNamespace:
+    def __init__(self, client):
+        self._client = client
+
+    def create(self, *args, **kwargs):
+        stream = kwargs.get('stream', False) or getattr(self._client, 'stream', False)
+
+        async def _create():
+            result = await self._client.chat.create(*args, **kwargs)
+            if stream:
+                return _SyncStreamResponse(result, self._client)
+            return result
+
+        try:
+            loop = asyncio.get_running_loop()
+            if loop.is_running():
+                import concurrent.futures
+                with concurrent.futures.ThreadPoolExecutor() as pool:
+                    return pool.submit(asyncio.run, _create()).result()
+        except RuntimeError:
+            pass
+
+        return asyncio.run(_create())
+
+    def batch(
+        self,
+        prompt: Optional[List[str]] = None,
+        messages: Optional[List[List[Dict[str, str]]]] = None,
+        **kwargs
+    ):
+        stream = kwargs.get('stream', False)
+        async def _batch():
+            result = await self._client.chat.batch(prompt=prompt, messages=messages, **kwargs)
+            if stream:
+                return _SyncStreamResponse(result, self._client)
+            return result
+
+        try:
+            loop = asyncio.get_running_loop()
+            if loop.is_running():
+                import concurrent.futures
+                with concurrent.futures.ThreadPoolExecutor() as pool:
+                    return pool.submit(asyncio.run, _batch()).result()
+        except RuntimeError:
+            pass
+
+        return asyncio.run(_batch())
+
+    @property
+    def think(self):
+        return self._client.chat.think
+
+    @property
+    def still(self):
+        return self._client.chat.still
+
+    @property
+    def tools(self):
+        return self._client.chat.tools
+
+    @property
+    def raw(self):
+        return self._client.chat.raw
+
+
+class _SyncContext:
+    def __init__(self, proxy: _SyncProxy):
+        self._proxy = proxy
+
+    @property
+    def chat(self):
+        return self._proxy.chat
+
+
 class asyncCNLLM:
+    def __new__(cls, *args, **kwargs):
+        try:
+            asyncio.get_running_loop()
+            return super().__new__(cls)
+        except RuntimeError:
+            return _SyncProxy(**kwargs)
+
     async def __aenter__(self):
         return self
 
@@ -76,16 +279,17 @@ class asyncCNLLM:
 
         adapter_name = BaseAdapter.get_adapter_name_for_model(model)
         if not adapter_name:
+            available = BaseAdapter.get_all_adapter_names()
             raise ModelNotSupportedError(
-                message=f"暂不支持模型: {model}",
-                provider="minimax"
+                message=f"暂不支持模型: {model}，可用厂商: {', '.join(available)}",
+                provider="unknown"
             )
 
         adapter_class = BaseAdapter.get_adapter_class(adapter_name)
         if not adapter_class:
             raise ModelNotSupportedError(
                 message=f"模型 {model} 的 Adapter {adapter_name} 不可用",
-                provider="minimax"
+                provider=adapter_name
             )
 
         adapter_key = f"{model}:{api_key}:{base_url}"
@@ -117,6 +321,7 @@ class asyncCNLLM:
             self.parent = parent
             self._last_response = None
             self._batch_response = None
+            self._active_scheduler = None
 
         def _prompt_to_messages(self, prompt: str) -> List[Dict[str, str]]:
             return self.parent._prompt_to_messages(prompt)
@@ -165,7 +370,13 @@ class asyncCNLLM:
         @property
         def batch_result(self) -> Optional[Any]:
             """批量调用的结果对象"""
-            return self._batch_response
+            if self._batch_response is not None:
+                return self._batch_response
+            if self._active_scheduler is not None:
+                live = getattr(self._active_scheduler, '_execute_batch_response', None)
+                if live is not None:
+                    return live
+            return None
 
         async def create(
             self,
@@ -262,7 +473,9 @@ class asyncCNLLM:
 
         async def batch(
             self,
-            requests: list,
+            requests: Optional[List[Dict[str, Any]]] = None,
+            prompt: Optional[List[str]] = None,
+            messages: Optional[List[List[Dict[str, str]]]] = None,
             *,
             stream: bool = False,
             max_concurrent: int = 3,
@@ -273,31 +486,45 @@ class asyncCNLLM:
             stop_on_error: bool = False,
             callbacks: Optional[List[Callable]] = None,
             custom_ids: Optional[List[str]] = None,
+            **kwargs,
         ):
             """
             异步批量执行多个请求
 
             Args:
-                requests: 请求列表，支持 str / dict
+                requests: 请求对象列表，每个请求包含独立参数（prompt/messages, tools, thinking 等）
+                prompt: 批量 prompt 列表，如 ["你好", "Python是什么"]
+                messages: 批量 messages 列表，如 [[{"role": "user", "content": "你好"}], ...]
                 stream: 是否使用流式处理，默认 False
                 max_concurrent: 最大并发数，默认 3
-                rps: 每秒请求数限制，默认 0（不限制）
+                rps: 每秒请求数限制，默认 2
                 timeout: 单个请求超时（秒），默认 None（使用客户端级默认值）
                 max_retries: 最大重试次数，默认 None（使用客户端级默认值）
                 retry_delay: 重试延迟（秒），默认 None（使用客户端级默认值）
                 stop_on_error: 遇到错误是否停止，默认 False
                 callbacks: 进度回调列表，默认 None
                 custom_ids: 自定义请求 ID 列表，默认 None（使用 request_0, request_1...）
+                **kwargs: 额外参数，如 tools, thinking 等，作为 per-request 全局默认值
 
             Returns:
                 流式: AsyncIterator[Dict] - 流式 chunks
                 非流式: BatchResponse - 批量响应对象
             """
-            from cnllm.utils.batch import AsyncBatchScheduler, AsyncStreamBatchScheduler
+            from cnllm.utils.batch import AsyncBatchScheduler, AsyncStreamBatchScheduler, _normalize_batch_requests, BATCH_LEVEL_KEYS
             from cnllm.core.accumulators.batch_accumulator import (
                 BatchResponse,
                 AsyncBatchStreamAccumulator,
                 AsyncBatchNonStreamAccumulator,
+            )
+
+            batch_level_kwargs = {k: v for k, v in kwargs.items() if k in BATCH_LEVEL_KEYS}
+            per_request_defaults = {k: v for k, v in kwargs.items() if k not in BATCH_LEVEL_KEYS}
+
+            batch_requests = _normalize_batch_requests(
+                requests_arg=requests,
+                prompt=prompt,
+                messages=messages,
+                per_request_defaults=per_request_defaults,
             )
 
             actual_timeout = timeout if timeout is not None else self.parent.timeout
@@ -317,14 +544,11 @@ class asyncCNLLM:
                     custom_ids=custom_ids,
                 )
 
-                chunks_iterator = scheduler.execute(requests)
+                chunks_iterator = scheduler.execute(batch_requests)
 
-                if len(requests) > 0:
-                    first_request = requests[0]
-                    if isinstance(first_request, str):
-                        result = await self.parent.chat.create(prompt=first_request, stream=True)
-                    else:
-                        result = await self.parent.chat.create(**{**first_request, "stream": True})
+                if len(batch_requests) > 0:
+                    req_clean = {k: v for k, v in batch_requests[0].items() if k != "_input_type"}
+                    result = await self.parent.chat.create(**{**req_clean, "stream": True})
                     adapter = getattr(result, '_adapter', None)
                 else:
                     adapter = None
@@ -332,7 +556,7 @@ class asyncCNLLM:
                 if adapter is None:
                     adapter = scheduler._get_adapter()
 
-                accumulator = AsyncBatchStreamAccumulator(chunks_iterator, adapter, total=len(requests))
+                accumulator = AsyncBatchStreamAccumulator(chunks_iterator, adapter, total=len(batch_requests))
                 self._batch_response = accumulator._batch_response
                 return accumulator
             else:
@@ -347,26 +571,47 @@ class asyncCNLLM:
                     callbacks=callbacks,
                     custom_ids=custom_ids,
                 )
-                batch_result = await scheduler.execute(requests)
 
-                if len(requests) > 0:
-                    first_request = requests[0]
-                    if isinstance(first_request, str):
-                        result = await self.parent.chat.create(prompt=first_request, stream=False)
-                    else:
-                        result = await self.parent.chat.create(**first_request)
-                    adapter = getattr(result, '_adapter', None)
-                else:
-                    adapter = None
+                import time as _time
+                from cnllm.core.accumulators.batch_accumulator import BatchResponse
+                from cnllm.entry.client import CNLLM as SyncCNLLM
+                from cnllm.utils.batch import BatchScheduler as SyncBatchScheduler
 
-                if adapter is None:
-                    adapter = scheduler._get_adapter()
+                batch_response = BatchResponse()
+                batch_response._total = len(batch_requests)
+                batch_response._start_time = _time.time()
 
-                accumulator = AsyncBatchNonStreamAccumulator(
-                    batch_result,
-                    adapter,
-                    elapsed=batch_result.elapsed,
-                    responder=adapter._get_responder()
-                )
-                self._batch_response = accumulator._batch_response
-                return await accumulator.process()
+                def _bg_run():
+                    try:
+                        sync_client = SyncCNLLM(
+                            model=self.parent.model,
+                            api_key=self.parent.api_key,
+                            base_url=self.parent.base_url,
+                            timeout=actual_timeout,
+                            max_retries=actual_max_retries,
+                            retry_delay=actual_retry_delay,
+                        )
+                        sync_scheduler = SyncBatchScheduler(
+                            client=sync_client,
+                            max_concurrent=max_concurrent,
+                            rps=rps,
+                            timeout=actual_timeout,
+                            max_retries=actual_max_retries,
+                            retry_delay=actual_retry_delay,
+                            stop_on_error=stop_on_error,
+                            callbacks=callbacks,
+                            custom_ids=custom_ids,
+                        )
+                        sync_scheduler._execute_batch_response = batch_response
+                        sync_scheduler.execute(batch_requests)
+                    except BaseException:
+                        pass
+                    finally:
+                        batch_response.mark_done()
+
+                import threading
+                thread = threading.Thread(target=_bg_run, daemon=True)
+                thread.start()
+
+                self._batch_response = batch_response
+                return batch_response

@@ -4,14 +4,14 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "cnllm"
-version = "0.7.0"
-description = "中文大模型统一接口，将 API 响应封装为 OpenAI 标准格式，无缝协作 LangChain、LlamaIndex、LiteLLM 等机器学习框架"
+version = "0.8.0"
+description = "中文大模型适配库，将 API 响应封装为 OpenAI 标准格式，无缝协作 LangChain、LlamaIndex、LiteLLM 等机器学习应用框架"
 readme = "README.md"
 license = "MIT"
 authors = [
     {name = "kanchengw", email = "wangkancheng1122@163.com"}
 ]
-keywords = ["ai", "llm", "openai", "langchain", "minimax", "chinese-llm", "adapter", "doubao", "kimi"]
+keywords = ["ai", "llm", "openai", "langchain", "llamaindex", "minimax", "chinese-llm", "adapter", "doubao", "kimi", "deepseek", "glm", "xiaomi", "mimo", "embedding", "batch-processing", "async", "streaming", "chinese-models", "openai-compatible"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",

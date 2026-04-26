@@ -1,4 +1,5 @@
 from typing import Dict, Any, Optional
+import os
 import logging
 from ..adapter import BaseAdapter
 from ..responder import Responder
@@ -172,6 +173,23 @@ from ..embedding import BaseEmbeddingAdapter, EmbeddingResponder
 
 class GLMEmbeddingResponder(EmbeddingResponder):
     CONFIG_DIR = "glm"
+
+    def _load_config(self) -> Dict[str, Any]:
+        import yaml
+        config_path = os.path.join(
+            os.path.dirname(__file__),
+            "..", "..", "..", "configs", self.config_dir,
+            f"response_{self.config_dir}.yaml"
+        )
+        try:
+            with open(config_path, 'r', encoding='utf-8') as f:
+                return yaml.safe_load(f) or {}
+        except FileNotFoundError:
+            logger.warning(f"Embedding response config not found: {config_path}")
+            return {}
+        except Exception as e:
+            logger.error(f"Failed to load embedding response config: {e}")
+            return {}
 
 
 class GLMEmbeddingAdapter(BaseEmbeddingAdapter):

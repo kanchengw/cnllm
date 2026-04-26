@@ -21,7 +21,12 @@ stream_fields:
   index: 0
   role: "assistant"
   finish_reason: null
-  content_path: "choices[0].delta.content"
-  tool_calls_path: "choices[0].delta.tool_calls"
-  reasoning_content_path: "choices[0].delta.reasoning_content"
-
+  content_path:
+    path: "choices[0].delta.content"
+    accumulate: true
+  tool_calls_path:
+    path: "choices[0].delta.tool_calls"
+    accumulate: true
+  reasoning_content_path:
+    path: "choices[0].delta.reasoning_content"
+    accumulate: true

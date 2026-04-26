@@ -8,6 +8,8 @@ test_venv/
 .venv_test3/
 .venv_test4/
 backup*/
+scripts/
+CLAUDE.md
 # IDE / Editor
 .trae/
 test_*/

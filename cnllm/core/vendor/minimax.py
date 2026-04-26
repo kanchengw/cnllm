@@ -52,6 +52,51 @@ VendorErrorRegistry.register(MiniMaxVendorError.VENDOR_NAME, MiniMaxVendorError)
 class MiniMaxResponder(Responder):
     CONFIG_DIR = "minimax"
 
+    def __init__(self):
+        super().__init__("minimax")
+        self._stream_prev_had_finish = False
+
+    def _reset_stream_state(self):
+        self._stream_prev_had_finish = False
+
+    def to_openai_stream_format(self, raw: Dict[str, Any], model: str) -> Optional[Dict[str, Any]]:
+        choices = raw.get("choices", [])
+        is_new_stream = (
+            self._stream_prev_had_finish
+            and any(
+                c.get("delta", {}).get("role") for c in choices
+            )
+        )
+        if is_new_stream:
+            self._reset_stream_state()
+
+        if self._stream_prev_had_finish and not is_new_stream:
+            return None
+
+        if self._stream_prev_had_finish and self._is_raw_effectively_empty(raw):
+            return None
+
+        result = super().to_openai_stream_format(raw, model)
+        for choice in result.get("choices", []):
+            if "message" in choice:
+                del choice["message"]
+
+        for choice in result.get("choices", []):
+            if choice.get("finish_reason"):
+                self._stream_prev_had_finish = True
+
+        return result
+
+    def _is_raw_effectively_empty(self, raw: Dict[str, Any]) -> bool:
+        for choice in raw.get("choices", []):
+            delta = choice.get("delta", {})
+            has_content = bool(delta.get("content"))
+            has_tool_calls = bool(delta.get("tool_calls"))
+            has_role = bool(delta.get("role"))
+            if has_content or has_tool_calls or has_role:
+                return False
+        return True
+
 
 class MiniMaxAdapter(BaseAdapter):
     ADAPTER_NAME = "minimax"
@@ -79,15 +124,50 @@ class MiniMaxAdapter(BaseAdapter):
             **kwargs
         )
         self.responder = MiniMaxResponder()
+        self._stream_prev_had_finish = False
+        self._last_content = ""
 
     def _get_responder(self):
         return self.responder
 
+    def _reset_stream_state(self):
+        self._stream_prev_had_finish = False
+        self.responder._reset_stream_state()
+
+    def _accumulate_extra_fields(self, result: Dict[str, Any]) -> None:
+        choices = result.get("choices", [])
+        delta = choices[0].get("delta", {}) if choices else {}
+        content = delta.get("content", "")
+        if content and content == self._last_content:
+            return
+        if content:
+            self._last_content = content
+        super()._accumulate_extra_fields(result)
+        for choice in choices:
+            choice.pop("message", None)
+
     def _to_openai_format(self, raw: Dict[str, Any], model: str) -> Dict[str, Any]:
         return self.responder.to_openai_format(raw, model)
 
-    def _do_to_openai_stream_format(self, raw: Dict[str, Any], model: str) -> Dict[str, Any]:
-        return self.responder.to_openai_stream_format(raw, model)
+    def _do_to_openai_stream_format(self, raw: Dict[str, Any], model: str) -> Optional[Dict[str, Any]]:
+        choices = raw.get("choices", [])
+        is_new_stream = (
+            self._stream_prev_had_finish
+            and any(
+                c.get("delta", {}).get("role") for c in choices
+            )
+        )
+        if is_new_stream:
+            self._reset_stream_state()
+
+        result = self.responder.to_openai_stream_format(raw, model)
+
+        if result is not None:
+            for choice in result.get("choices", []):
+                if choice.get("finish_reason"):
+                    self._stream_prev_had_finish = True
+
+        return result
 
 
 MiniMaxAdapter._register()
@@ -151,6 +231,65 @@ class MiniMaxEmbeddingAdapter(BaseEmbeddingAdapter):
 
     def _get_responder(self) -> MiniMaxEmbeddingResponder:
         return MiniMaxEmbeddingResponder(self.CONFIG_DIR)
+
+    def create_batch(
+        self,
+        input,
+        custom_ids=None,
+        model=None,
+        timeout=None,
+        max_retries=None,
+        retry_delay=None,
+        **kwargs
+    ):
+        from cnllm.core.accumulators.embedding_accumulator import EmbeddingResponse
+        if isinstance(input, str):
+            inputs = [input]
+        else:
+            inputs = input
+        custom_ids = custom_ids or [f"request_{i}" for i in range(len(inputs))]
+
+        params = self._prepare_params(inputs, model, **kwargs)
+        payload = self._build_payload(params)
+        url = self._get_request_url(**params)
+        start_time = time.time()
+
+        response = EmbeddingResponse(_request_counts={"total": len(inputs), "dimension": 0})
+        response._start_time = start_time
+        try:
+            raw_response = self._post(url, payload, **params)
+        except Exception as e:
+            response._elapsed = time.time() - start_time
+            for rid in custom_ids:
+                response.add_error(rid, str(e))
+            return response
+
+        base_resp = raw_response.get("base_resp", {})
+        status_code = base_resp.get("status_code")
+        if status_code and status_code != 0:
+            error_msg = base_resp.get("status_msg", f"API error: {status_code}")
+            response._elapsed = time.time() - start_time
+            for rid in custom_ids:
+                response.add_error(rid, error_msg)
+            return response
+
+        vectors = raw_response.get("vectors", [])
+        total_tokens = raw_response.get("total_tokens", 0)
+        dimension = 0
+
+        for i, (rid, vector) in enumerate(zip(custom_ids, vectors)):
+            if not isinstance(vector, list):
+                vector = []
+            result_data = self._to_openai_format({"vectors": [vector], "total_tokens": total_tokens}, self.model)
+            response.add_result(rid, result_data)
+            if vector and dimension == 0:
+                dimension = len(vector)
+
+        if dimension > 0:
+            response._request_counts["dimension"] = dimension
+
+        response._elapsed = time.time() - start_time
+        return response
 
     def _prepare_params(self, input_data: Union[str, List[str]], model: str = None, **kwargs) -> Dict[str, Any]:
         params = {

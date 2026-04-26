@@ -62,6 +62,35 @@ class Responder:
                 return default
         return value if value is not None else default
 
+    def _resolve_path_config(self, config_value, default_path: str = "") -> str:
+        if config_value is None:
+            return default_path
+        if isinstance(config_value, dict):
+            return config_value.get("path", default_path)
+        return config_value
+
+    def get_stream_accumulable_paths(self):
+        stream_fields = self._get_config_value("stream_fields", default={})
+        if not stream_fields:
+            return []
+        result = []
+        for key in stream_fields:
+            if key.endswith("_path"):
+                config = stream_fields[key]
+                if isinstance(config, dict):
+                    result.append({
+                        "key": key,
+                        "path": config.get("path", ""),
+                        "accumulate": config.get("accumulate", False)
+                    })
+                else:
+                    result.append({
+                        "key": key,
+                        "path": config if config else "",
+                        "accumulate": False
+                    })
+        return result
+
     def _get_by_path(self, data: Dict[str, Any], path: str, default=None):
         import re
         keys = re.split(r'\.(?!\d)', path)
@@ -115,6 +144,39 @@ class Responder:
             else:
                 return False
         return True
+
+    def _set_by_path(self, data: Dict[str, Any], path: str, value: Any) -> None:
+        import re
+        keys = re.split(r'\.(?!\d)', path)
+        current = data
+        for i, key in enumerate(keys[:-1]):
+            match = re.match(r'(\w+)\[(\d+)\]', key)
+            if match:
+                dict_key, index = match.groups()
+                index = int(index)
+                if dict_key not in current:
+                    current[dict_key] = []
+                if not isinstance(current[dict_key], list):
+                    current[dict_key] = [current[dict_key]]
+                while len(current[dict_key]) <= index:
+                    current[dict_key].append({})
+                current = current[dict_key][index]
+            else:
+                if key not in current or not isinstance(current.get(key), dict):
+                    current[key] = {}
+                current = current[key]
+        last_key = keys[-1]
+        match = re.match(r'(\w+)\[(\d+)\]', last_key)
+        if match:
+            dict_key, index = match.groups()
+            index = int(index)
+            if dict_key not in current:
+                current[dict_key] = []
+            while len(current[dict_key]) <= index:
+                current[dict_key].append({})
+            current[dict_key][index] = value
+        else:
+            current[last_key] = value
 
     def _build_defaults(self) -> Dict[str, Any]:
         return {
@@ -228,28 +290,33 @@ class Responder:
         return cnllm_extra
 
     def _extract_stream_extra_fields(self, raw: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        从流式原生 chunk 中提取额外字段
-        适用于流式调用的实时累积
-        """
         if not raw:
             return {}
 
         cnllm_extra = {}
 
-        reasoning_content_path = self._get_config_value("stream_fields", "reasoning_content_path")
+        reasoning_content_path = self._resolve_path_config(
+            self._get_config_value("stream_fields", "reasoning_content_path"),
+            "choices[0].delta.reasoning_content"
+        )
         if reasoning_content_path and self._path_exists(raw, reasoning_content_path):
             reasoning_content = self._get_by_path(raw, reasoning_content_path)
             if reasoning_content:
                 cnllm_extra["_thinking"] = reasoning_content
 
-        content_path = self._get_config_value("stream_fields", "content_path")
+        content_path = self._resolve_path_config(
+            self._get_config_value("stream_fields", "content_path"),
+            "choices[0].delta.content"
+        )
         if content_path and self._path_exists(raw, content_path):
             content = self._get_by_path(raw, content_path)
             if content:
                 cnllm_extra["_still"] = content
 
-        tool_calls_path = self._get_config_value("stream_fields", "tool_calls_path")
+        tool_calls_path = self._resolve_path_config(
+            self._get_config_value("stream_fields", "tool_calls_path"),
+            "choices[0].delta.tool_calls"
+        )
         if tool_calls_path and self._path_exists(raw, tool_calls_path):
             tool_calls = self._get_by_path(raw, tool_calls_path)
             if tool_calls:
@@ -274,9 +341,18 @@ class Responder:
             }
 
         stream_fields = self._get_config_value("stream_fields", default={})
-        content_path = stream_fields.get("content_path", "choices[0].delta.content")
-        tool_calls_path = stream_fields.get("tool_calls_path", "choices[0].delta.tool_calls")
-        reasoning_content_path = stream_fields.get("reasoning_content_path", "choices[0].delta.reasoning_content")
+        content_path = self._resolve_path_config(
+            stream_fields.get("content_path", "choices[0].delta.content"),
+            "choices[0].delta.content"
+        )
+        tool_calls_path = self._resolve_path_config(
+            stream_fields.get("tool_calls_path", "choices[0].delta.tool_calls"),
+            "choices[0].delta.tool_calls"
+        )
+        reasoning_content_path = self._resolve_path_config(
+            stream_fields.get("reasoning_content_path", "choices[0].delta.reasoning_content"),
+            "choices[0].delta.reasoning_content"
+        )
 
         try:
             choices = raw.get("choices")

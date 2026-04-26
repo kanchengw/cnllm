@@ -66,6 +66,17 @@ class ParamValidator:
             return list(mapping.keys())
         return []
 
+    def get_vendor_model_names(self) -> List[str]:
+        mapping = self._get_config_value("model_mapping", default={})
+        if isinstance(mapping, dict):
+            type_mapping = mapping.get(self.adapter_type)
+            if isinstance(type_mapping, dict):
+                return list(type_mapping.values())
+            if self.adapter_type in mapping:
+                return []
+            return list(mapping.values())
+        return []
+
     def validate_model(self, model: str) -> bool:
         if os.getenv("CNLLM_SKIP_MODEL_VALIDATION") == "true":
             logger.warning(f"[测试模式] 跳过模型验证: {model}")
@@ -73,7 +84,8 @@ class ParamValidator:
         if model is None or model == '':
             raise MissingParameterError(parameter="model", provider=self.config_dir)
         supported = self.get_supported_models()
-        if model not in supported:
+        vendor_names = self.get_vendor_model_names()
+        if model not in supported and model not in vendor_names:
             raise ModelNotSupportedError(
                 message=f"暂不支持模型: {model}\n支持的模型: {', '.join(supported)}",
                 provider=self.config_dir

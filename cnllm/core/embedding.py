@@ -326,19 +326,21 @@ class BaseEmbeddingAdapter:
                 headers[header_key] = kwargs[user_key]
         return headers
 
-    def _post(self, url: str, payload: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+    def _post(self, url: str, payload: Dict[str, Any], timeout: int = None, **kwargs) -> Dict[str, Any]:
         import httpx
         headers = self._build_headers(**kwargs)
-        with httpx.Client(timeout=self.timeout) as client:
+        actual_timeout = timeout if timeout is not None else self.timeout
+        with httpx.Client(timeout=actual_timeout) as client:
             response = client.post(url=url, headers=headers, json=payload)
             if response.status_code >= 400:
                 raise Exception(f"HTTP {response.status_code}: {response.text[:200]}")
             return response.json()
 
-    async def _apost(self, url: str, payload: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+    async def _apost(self, url: str, payload: Dict[str, Any], timeout: int = None, **kwargs) -> Dict[str, Any]:
         import httpx
         headers = self._build_headers(**kwargs)
-        async with httpx.AsyncClient(timeout=self.timeout) as client:
+        actual_timeout = timeout if timeout is not None else self.timeout
+        async with httpx.AsyncClient(timeout=actual_timeout) as client:
             response = await client.post(url=url, headers=headers, json=payload)
             if response.status_code >= 400:
                 raise Exception(f"HTTP {response.status_code}: {response.text[:200]}")
@@ -368,7 +370,7 @@ class BaseEmbeddingAdapter:
         params = self._prepare_params(input_list, model, **kwargs)
         payload = self._build_payload(params)
         url = self._get_request_url(**params)
-        raw_response = self._post(url, payload, **params)
+        raw_response = self._post(url, payload, timeout=self.timeout, **params)
         accumulator = EmbeddingAccumulator(raw_response, self)
         return accumulator.process()
 
@@ -416,7 +418,7 @@ class BaseEmbeddingAdapter:
         start_time = time.time()
 
         try:
-            raw_response = self._post(url, payload, **params)
+            raw_response = self._post(url, payload, timeout=actual_timeout, **params)
         except Exception as e:
             elapsed = time.time() - start_time
             response._elapsed = elapsed

@@ -77,13 +77,13 @@ class TestSchedulerVsRequestParams:
         
         这解释了为什么这些参数不需要在 yml 中定义：
         它们是调度器内部控制流程的参数，不是 API 请求参数
+        
+        timeout/max_retries/retry_delay 已是 per-request 参数（在 yml 中有定义），
+        因此不再被列入调度器参数。
         """
         scheduler_params = [
             'stop_on_error',
             'callbacks',
-            'max_retries',
-            'retry_delay',
-            'timeout',
             'max_concurrent',
             'custom_ids'
         ]
