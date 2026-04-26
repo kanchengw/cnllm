@@ -47,6 +47,15 @@ class BaseAdapter:
         for adapter_name, adapter_class in _ADAPTER_REGISTRY.items():
             if model in adapter_class.get_supported_models():
                 return adapter_name
+        for adapter_name, adapter_class in _ADAPTER_REGISTRY.items():
+            config = adapter_class._load_class_config()
+            mapping = config.get("model_mapping", {})
+            if isinstance(mapping, dict) and "chat" in mapping:
+                mapping = mapping["chat"]
+            if isinstance(mapping, dict):
+                for short_name, vendor_name in mapping.items():
+                    if vendor_name == model:
+                        return adapter_name
         return None
 
     @classmethod
@@ -328,8 +337,24 @@ class BaseAdapter:
         tool_calls = delta.get("tool_calls")
         if tool_calls:
             if "_tools" not in self._cnllm_extra:
-                self._cnllm_extra["_tools"] = []
-            self._cnllm_extra["_tools"].extend(tool_calls)
+                self._cnllm_extra["_tools"] = {}
+            tools_dict: Dict[int, Dict[str, Any]] = self._cnllm_extra["_tools"]
+            for tc in tool_calls:
+                idx = tc.get("index", len(tools_dict))
+                if idx in tools_dict:
+                    existing = tools_dict[idx]
+                    for k, v in tc.items():
+                        if k == "function" and isinstance(v, dict) and "function" in existing:
+                            fn_existing = existing["function"]
+                            for fk, fv in v.items():
+                                if fk == "arguments" and "arguments" in fn_existing:
+                                    fn_existing["arguments"] += fv
+                                else:
+                                    fn_existing[fk] = fv
+                        else:
+                            existing[k] = v
+                else:
+                    tools_dict[idx] = dict(tc)
 
     async def acreate_completion(
         self,

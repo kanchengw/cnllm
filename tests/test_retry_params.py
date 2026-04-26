@@ -127,7 +127,7 @@ class TestChatBatchParameterPassing:
         with patch.object(client.chat, 'batch') as mock_batch:
             try:
                 client.chat.batch(
-                    requests=["test1", "test2"],
+                    prompt=["test1", "test2"],
                     timeout=None,
                     max_retries=None,
                     retry_delay=None
@@ -300,7 +300,7 @@ class TestParameterPassingChain:
         with patch.object(client.chat, 'batch') as mock_batch:
             try:
                 client.chat.batch(
-                    requests=["test1", "test2"],
+                    prompt=["test1", "test2"],
                     timeout=60,
                     max_retries=5,
                     retry_delay=2.0
@@ -521,7 +521,7 @@ class TestStopOnErrorAndCallbacks:
         with patch.object(client.chat, 'batch') as mock_batch:
             try:
                 client.chat.batch(
-                    requests=["test1", "test2"],
+                    prompt=["test1", "test2"],
                     stop_on_error=True,
                     callbacks=[my_callback]
                 )

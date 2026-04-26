@@ -276,6 +276,137 @@ adapter.create_completion(request) ← 不传递调度器参数
 - `adapter`：字段级别的标识，如 `adapter: [chat]` 或 `adapter: [embedding]`
 - `chat`/`embedding` 层级：字段下有 `chat:` 或 `embedding:` 子层级的配置（如 `base_url`）
 
+### 2.4 Batch 参数验证链条
+
+Batch 调用支持三种输入模式，其参数验证分为 Batch 层 → Scheduler 层 → Create 层三层职责，各司其职。
+
+#### 2.4.1 三层职责划分
+
+```mermaid
+flowchart TB
+    subgraph batch_layer["Batch 层（_normalize_batch_requests — batch.py）"]
+        direction TB
+        BL_INPUT[batch kwargs: thinking, tools, max_concurrent, timeout...]
+        BL_SPLIT{按 BATCH_LEVEL_KEYS 分离}
+        BL_PER[per_request_defaults<br/>thinking, tools, temperature...]
+        BL_BATCH_LEVEL[batch_level_kwargs<br/>max_concurrent, rps, timeout...]
+        BL_VALIDATE[互斥验证 / 空值过滤 / 必填检查 / 误传警告]
+        BL_OUTPUT[规范化的 per-request 列表]
+        BL_INPUT --> BL_SPLIT
+        BL_SPLIT --> BL_PER
+        BL_SPLIT --> BL_BATCH_LEVEL
+        BL_VALIDATE --> BL_OUTPUT
+    end
+
+    subgraph scheduler_layer["Scheduler 层（_execute_single — batch.py）"]
+        direction TB
+        SCH_MERGE[合并 timeout / max_retries / retry_delay<br/>per-request 优先]
+        SCH_INPUT[per_request_defaults]
+        SCH_FILTER[_input_type 过滤]
+        SCH_BATCH[batch_level_kwargs → BatchScheduler]
+        SCH_OUTPUT[完整请求参数]
+        SCH_INPUT --> SCH_MERGE --> SCH_FILTER --> SCH_OUTPUT
+        SCH_BATCH
+    end
+
+    subgraph create_layer["Create 层（client.py → adapter.py → validator.py）"]
+        direction TB
+        CR_ADAPTER[adapter.create_completion]
+        CR_YAML[YAML 验证流水线]
+        CR_HTTP[HTTP 请求]
+        SCH_OUTPUT --> CR_ADAPTER --> CR_YAML --> CR_HTTP
+        SCH_BATCH -.->|不进入此路径| CR_ADAPTER
+    end
+
+    batch_kwargs["batch kwargs"] --> BL_INPUT
+    requests_arg[requests=[{...}, {...}]] --> BL_VALIDATE
+    prompt["prompt=[...]"] --> BL_VALIDATE
+    messages["messages=[...]"] --> BL_VALIDATE
+
+    style BL_BATCH fill:#f9f,stroke:#333,stroke-width:1px
+    style SCH_BATCH fill:#f9f,stroke:#333,stroke-width:1px
+    style create_layer fill:#d4f1be,stroke:#333,stroke-width:1px
+    style batch_layer fill:#ffe4b5,stroke:#333,stroke-width:1px
+    style scheduler_layer fill:#bde0fe,stroke:#333,stroke-width:1px
+```
+
+#### 2.4.2 Batch 参数分类
+
+Batch 参数分为两类，**性质完全不同**，处理方式也完全不同：
+
+| 类别 | 参数 | 性质 | 处理方式 |
+|------|------|------|---------|
+| **Per-Request** | `prompt`/`messages`、`thinking`、`tools`、`temperature`、`max_tokens`、`top_p`、`stop`、`model`、`stream`、`timeout`、`max_retries`、`retry_delay` | 描述「发给 API 的数据」 | 进入请求 dict → create() → YAML 验证 |
+| **Batch-Level** | `max_concurrent`、`rps`、`stop_on_error`、`callbacks`、`custom_ids` | 描述「如何调度这些请求」 | **不进请求 dict** → 直接用于 BatchScheduler，不传给 create() |
+
+> **关键原则**：Batch-Level 参数不需要、不应该、不必要进入 YAML。YAML 描述的是「外部 API 接口规范」，Batch-Level 参数描述的是「客户端调度行为」，两者职责不同。
+
+#### 2.4.3 源头分离机制
+
+所有 `kwargs` 在 `batch()` 入口处按 `BATCH_LEVEL_KEYS` 集合分为两组：
+
+```python
+BATCH_LEVEL_KEYS = frozenset({
+    "max_concurrent", "rps", "stop_on_error",
+    "callbacks", "custom_ids",
+})
+
+per_request_defaults = {k: v for k, v in kwargs.items() if k not in BATCH_LEVEL_KEYS}
+batch_level_kwargs  = {k: v for k, v in kwargs.items() if k in BATCH_LEVEL_KEYS}
+
+# per_request_defaults 进入请求 dict → create() → YAML 验证
+# batch_level_kwargs 用于 BatchScheduler → 绝不进入请求 dict
+```
+
+#### 2.4.4 Per-Request 参数优先级
+
+每个请求的最终参数由三层优先级决定：
+
+```
+Per-Request 独立参数（requests[i]） > Batch 全局默认值（batch kwargs） > Adapter YAML 默认值
+```
+
+实现逻辑（Scheduler 层）：
+
+```python
+# 仅在 per-request 不存在时才填入 batch 级默认值
+if 'timeout' not in request and self.timeout is not None:
+    request['timeout'] = self.timeout
+if 'max_retries' not in request and self.max_retries is not None:
+    request['max_retries'] = self.max_retries
+```
+
+#### 2.4.5 内部字段过滤（_input_type）
+
+`_normalize_batch_requests()` 为每个请求添加 `_input_type` 内部字段（`"prompt"` / `"messages"`），用于标识输入类型。
+
+此字段在传入 `create()` 前通过字典推导式过滤：
+
+```python
+# Scheduler 层（_execute_single）
+request_clean = {k: v for k, v in request.items() if k != "_input_type"}
+response = self.client.chat.create(**request_clean)
+```
+
+#### 2.4.6 Per-Request 误传 Batch-Level 参数的警告
+
+如果用户在 `requests` 列表的 dict 中误传了 Batch-Level 参数（如 `requests=[{"prompt": "A", "max_concurrent": 5}]`），会在 `normalize_batch_requests()` 中产生**引导性警告**，而非通用的"参数不支持"警告：
+
+```
+WARNING: batch() 参数 'max_concurrent' 在 requests[0] 中未生效。
+请在 batch() 全局参数中配置 'max_concurrent'，例如: batch(..., max_concurrent=5)
+```
+
+这使用户能正确理解参数应该放在 batch() 的哪个层级配置。
+
+#### 2.4.7 三种输入模式
+
+| 模式 | 示例 | 内部处理 |
+|------|------|---------|
+| `prompt=["A", "B"]` | 老用法，向后兼容 | 包装成 `[{prompt: "A"}, {prompt: "B"}]` |
+| `messages=[[{...}], [{...}]]` | 老用法，向后兼容 | 包装成 `[{messages: [...]}, ...]` |
+| `requests=[{...}, {...}]` | **新用法** | 直接使用，合并 per-request 默认值 |
+
 ## 3. 异常处理系统架构
 
 ```mermaid

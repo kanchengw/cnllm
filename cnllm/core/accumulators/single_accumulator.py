@@ -75,25 +75,28 @@ class StreamAccumulator(StreamBaseAccumulator):
         if self._done:
             raise StopIteration
         
-        try:
-            chunk = next(self._raw_iterator)
-            if chunk is None:
+        while True:
+            try:
+                chunk = next(self._raw_iterator)
+                if chunk is None:
+                    self._done = True
+                    raise StopIteration
+                
+                self.accumulate_chunk(chunk)
+                result = self._adapter._to_openai_stream_format(chunk)
+                if result is None:
+                    continue
+                filter_stream_chunk(
+                    result,
+                    self._seen_choice_indices,
+                    self._seen_tool_call_indices,
+                    self._seen_finish_indices
+                )
+                return result
+            except StopIteration:
                 self._done = True
-                raise StopIteration
-            
-            filter_stream_chunk(
-                chunk,
-                self._seen_choice_indices,
-                self._seen_tool_call_indices,
-                self._seen_finish_indices
-            )
-            
-            self.accumulate_chunk(chunk)
-            return chunk
-        except StopIteration:
-            self._done = True
-            self.finalize()
-            raise
+                self.finalize()
+                raise
 
     @property
     def chunks(self) -> List[Dict[str, Any]]:
@@ -114,25 +117,28 @@ class AsyncStreamAccumulator(StreamBaseAccumulator):
         if self._done:
             raise StopAsyncIteration
         
-        try:
-            chunk = await self._raw_iterator.__anext__()
-            if chunk is None:
+        while True:
+            try:
+                chunk = await self._raw_iterator.__anext__()
+                if chunk is None:
+                    self._done = True
+                    raise StopAsyncIteration
+                
+                self.accumulate_chunk(chunk)
+                result = self._adapter._to_openai_stream_format(chunk)
+                if result is None:
+                    continue
+                filter_stream_chunk(
+                    result,
+                    self._seen_choice_indices,
+                    self._seen_tool_call_indices,
+                    self._seen_finish_indices
+                )
+                return result
+            except StopAsyncIteration:
                 self._done = True
-                raise StopAsyncIteration
-            
-            filter_stream_chunk(
-                chunk,
-                self._seen_choice_indices,
-                self._seen_tool_call_indices,
-                self._seen_finish_indices
-            )
-            
-            self.accumulate_chunk(chunk)
-            return chunk
-        except StopAsyncIteration:
-            self._done = True
-            self.finalize()
-            raise
+                self.finalize()
+                raise
 
     @property
     def chunks(self) -> List[Dict[str, Any]]:

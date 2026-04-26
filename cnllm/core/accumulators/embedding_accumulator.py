@@ -35,6 +35,16 @@ class EmbeddingResults:
     def __len__(self):
         return len(self._results)
 
+    def __contains__(self, key: Union[str, int]) -> bool:
+        if isinstance(key, int):
+            if self._custom_ids and key < len(self._custom_ids):
+                request_id = self._custom_ids[key]
+            else:
+                request_id = f"request_{key}"
+        else:
+            request_id = key
+        return request_id in self._results
+
     def get(self, key: Union[str, int], default=None):
         if isinstance(key, int):
             if self._custom_ids and key < len(self._custom_ids):
@@ -65,6 +75,7 @@ class EmbeddingResponse:
     _error_ids: List[str] = field(default_factory=list)
     _request_counts: Dict[str, Any] = field(default_factory=lambda: {"total": 0, "dimension": 0})
     _custom_ids: List[str] = field(default_factory=list)
+    _elapsed: Optional[float] = None
 
     @property
     def results(self) -> EmbeddingResults:
@@ -92,6 +103,8 @@ class EmbeddingResponse:
 
     @property
     def elapsed(self) -> float:
+        if self._elapsed is not None:
+            return self._elapsed
         if self._start_time is None:
             return 0.0
         end = self._end_time if self._end_time else time.time()
@@ -220,7 +233,10 @@ class EmbeddingBatchAccumulator:
         self._adapter = adapter
         self._batch_response = EmbeddingResponse()
         self._batch_response._elapsed = elapsed
-        self._batch_response._total = len(batch_result.results) if hasattr(batch_result, 'results') else 0
+        if hasattr(batch_result, 'total'):
+            self._batch_response._request_counts["total"] = batch_result.total
+        elif hasattr(batch_result, 'results'):
+            self._batch_response._request_counts["total"] = len(batch_result.results)
 
     def process(self) -> EmbeddingResponse:
         if hasattr(self._batch_result, 'results'):
@@ -259,7 +275,10 @@ class AsyncEmbeddingBatchAccumulator:
         self._adapter = adapter
         self._batch_response = EmbeddingResponse()
         self._batch_response._elapsed = elapsed
-        self._batch_response._total = len(batch_result.results) if hasattr(batch_result, 'results') else 0
+        if hasattr(batch_result, 'total'):
+            self._batch_response._request_counts["total"] = batch_result.total
+        elif hasattr(batch_result, 'results'):
+            self._batch_response._request_counts["total"] = len(batch_result.results)
 
     async def process(self) -> EmbeddingResponse:
         if hasattr(self._batch_result, 'results'):

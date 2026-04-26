@@ -7,6 +7,7 @@ import time
 from ..utils.exceptions import ModelNotSupportedError, MissingParameterError
 from ..utils.fallback import FallbackManager
 from ..core.accumulators.batch_accumulator import BatchResponse
+from ..core.accumulators.single_accumulator import NonStreamAccumulator, StreamAccumulator
 from .async_client import asyncCNLLM
 from ..core.embedding import EmbeddingsNamespace
 
@@ -77,6 +78,14 @@ class CNLLM:
         self.close()
         return False
 
+    async def __aenter__(self):
+        await self._async_engine.__aenter__()
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        await self._async_engine.__aexit__(exc_type, exc_val, exc_tb)
+        return False
+
     def close(self):
         if self.adapter and hasattr(self.adapter, 'http_client'):
             self.adapter.http_client.close()
@@ -116,16 +125,17 @@ class CNLLM:
 
             adapter_name = BaseAdapter.get_adapter_name_for_model(model)
             if not adapter_name:
+                available = BaseAdapter.get_all_adapter_names()
                 raise ModelNotSupportedError(
-                    message=f"暂不支持模型: {model}",
-                    provider="minimax"
+                    message=f"暂不支持模型: {model}，可用厂商: {', '.join(available)}",
+                    provider="unknown"
                 )
 
             adapter_class = BaseAdapter.get_adapter_class(adapter_name)
             if not adapter_class:
                 raise ModelNotSupportedError(
                     message=f"模型 {model} 的 Adapter {adapter_name} 不可用",
-                    provider="minimax"
+                    provider=adapter_name
                 )
 
             adapter = adapter_class(
@@ -150,6 +160,7 @@ class CNLLM:
             self.parent = parent
             self._last_response = None
             self._batch_response = None
+            self._active_scheduler = None
 
         @property
         def still(self) -> str:
@@ -185,7 +196,13 @@ class CNLLM:
         @property
         def batch_result(self) -> Optional[Any]:
             """批量调用的结果对象"""
-            return self._batch_response
+            if self._batch_response is not None:
+                return self._batch_response
+            if self._active_scheduler is not None:
+                live = getattr(self._active_scheduler, '_execute_batch_response', None)
+                if live is not None:
+                    return live
+            return None
 
         def create(
             self,
@@ -238,7 +255,13 @@ class CNLLM:
                     **merged_kwargs
                 )
                 self._last_response = resp
-                return resp
+                if actual_stream:
+                    return StreamAccumulator(resp, adapter)
+                if hasattr(resp, 'raw') and hasattr(resp, 'still'):
+                    return resp
+                responder = adapter._get_responder()
+                accumulator = NonStreamAccumulator(resp, adapter, responder)
+                return accumulator.process()
 
             fb_manager = FallbackManager(
                 fallback_config=self.parent.fallback_models,
@@ -261,11 +284,19 @@ class CNLLM:
             )
             self.parent._last_adapter = fb_manager._last_adapter
             self._last_response = resp
-            return resp
+            if actual_stream:
+                return StreamAccumulator(resp, fb_manager._last_adapter)
+            if hasattr(resp, 'raw') and hasattr(resp, 'still'):
+                return resp
+            responder = fb_manager._last_adapter._get_responder()
+            accumulator = NonStreamAccumulator(resp, fb_manager._last_adapter, responder)
+            return accumulator.process()
 
         def batch(
             self,
-            requests: list,
+            requests: Optional[List[Dict[str, Any]]] = None,
+            prompt: Optional[List[str]] = None,
+            messages: Optional[List[List[Dict[str, str]]]] = None,
             *,
             stream: bool = False,
             max_concurrent: int = 3,
@@ -276,30 +307,44 @@ class CNLLM:
             stop_on_error: bool = False,
             callbacks: Optional[List[Callable]] = None,
             custom_ids: Optional[List[str]] = None,
+            **kwargs,
         ):
             """
             批量执行多个请求
 
             Args:
-                requests: 请求列表，支持 str / dict
+                requests: 请求对象列表，每个请求包含独立参数（prompt/messages, tools, thinking 等）
+                prompt: 批量 prompt 列表，如 ["你好", "Python是什么"]
+                messages: 批量 messages 列表，如 [[{"role": "user", "content": "你好"}], ...]
                 stream: 是否使用流式处理，默认 False
                 max_concurrent: 最大并发数，默认 3
-                rps: 每秒请求数限制，默认 0（不限制）
+                rps: 每秒请求数限制，默认 2
                 timeout: 单个请求超时（秒），默认 None（使用客户端级默认值）
                 max_retries: 最大重试次数，默认 None（使用客户端级默认值）
                 retry_delay: 重试延迟（秒），默认 None（使用客户端级默认值）
                 stop_on_error: 遇到错误是否停止，默认 False
                 callbacks: 进度回调列表，默认 None
                 custom_ids: 自定义请求 ID 列表，默认 None（使用 request_0, request_1...）
+                **kwargs: 额外参数，如 tools, thinking 等，作为 per-request 全局默认值
 
             Returns:
                 BatchResponse: 批量响应对象（非流式/流式都返回）
             """
-            from cnllm.utils.batch import BatchScheduler, StreamBatchScheduler
+            from cnllm.utils.batch import BatchScheduler, StreamBatchScheduler, _normalize_batch_requests, BATCH_LEVEL_KEYS
             from cnllm.core.accumulators.batch_accumulator import (
                 BatchResponse,
                 BatchStreamAccumulator,
                 BatchNonStreamAccumulator,
+            )
+
+            batch_level_kwargs = {k: v for k, v in kwargs.items() if k in BATCH_LEVEL_KEYS}
+            per_request_defaults = {k: v for k, v in kwargs.items() if k not in BATCH_LEVEL_KEYS}
+
+            batch_requests = _normalize_batch_requests(
+                requests_arg=requests,
+                prompt=prompt,
+                messages=messages,
+                per_request_defaults=per_request_defaults,
             )
 
             actual_timeout = timeout if timeout is not None else self.parent.timeout
@@ -319,14 +364,11 @@ class CNLLM:
                     custom_ids=custom_ids,
                 )
 
-                chunks_iterator = scheduler.execute(requests)
+                chunks_iterator = scheduler.execute(batch_requests)
 
-                if len(requests) > 0:
-                    first_request = requests[0]
-                    if isinstance(first_request, str):
-                        result = self.parent.chat.create(prompt=first_request, stream=True)
-                    else:
-                        result = self.parent.chat.create(**{**first_request, "stream": True})
+                if len(batch_requests) > 0:
+                    req_clean = {k: v for k, v in batch_requests[0].items() if k != "_input_type"}
+                    result = self.parent.chat.create(**{**req_clean, "stream": True})
                     adapter = getattr(result, '_adapter', None)
                 else:
                     adapter = None
@@ -334,7 +376,7 @@ class CNLLM:
                 if adapter is None:
                     adapter = scheduler._get_adapter()
 
-                accumulator = BatchStreamAccumulator(chunks_iterator, adapter, total=len(requests))
+                accumulator = BatchStreamAccumulator(chunks_iterator, adapter, total=len(batch_requests))
                 self._batch_response = accumulator._batch_response
 
                 return accumulator
@@ -351,12 +393,9 @@ class CNLLM:
                     custom_ids=custom_ids,
                 )
 
-                if len(requests) > 0:
-                    first_request = requests[0]
-                    if isinstance(first_request, str):
-                        result = self.parent.chat.create(prompt=first_request, stream=False)
-                    else:
-                        result = self.parent.chat.create(**first_request)
+                if len(batch_requests) > 0:
+                    req_clean = {k: v for k, v in batch_requests[0].items() if k != "_input_type"}
+                    result = self.parent.chat.create(**req_clean)
                     adapter = getattr(result, '_adapter', None)
                 else:
                     adapter = None
@@ -364,13 +403,25 @@ class CNLLM:
                 if adapter is None:
                     adapter = scheduler._get_adapter()
 
-                batch_result = scheduler.execute(requests)
+                import time as _time
+                batch_response = BatchResponse()
+                batch_response._total = len(batch_requests)
+                batch_response._start_time = _time.time()
+                scheduler._execute_batch_response = batch_response
 
-                responder = adapter._get_responder()
-                accumulator = BatchNonStreamAccumulator(batch_result, adapter, elapsed=batch_result.elapsed, responder=responder)
-                batch_response = accumulator.process()
+                def _bg_run():
+                    try:
+                        scheduler.execute(batch_requests)
+                    except Exception:
+                        pass
+                    finally:
+                        batch_response.mark_done()
+
+                import threading
+                thread = threading.Thread(target=_bg_run, daemon=True)
+                thread.start()
+
                 self._batch_response = batch_response
-
                 return batch_response
 
 

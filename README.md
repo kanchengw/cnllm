@@ -11,6 +11,7 @@
 ## 项目背景
 
 CNLLM 的开发始于两个问题：
+
 - 如何将中文大模型更高效地接入 langchain、LlamaIndex、LiteLLM 等**主流机器学习和大模型应用框架**
 - 如何基于 OpenAI 标准统一中文大模型的**接口、参数与响应规范**
 
@@ -34,18 +35,28 @@ CNLLM 致力于解决这一两难困境——通过提供一个**统一的 OpenA
 
 | 方向           | 说明                            |
 | ------------ | ----------------------------- |
-| 🌐 **新厂商适配** | 接入更多中文大模型（如阿里千问、百度文心一言、腾讯混元等）  |
+| 🌐 **新厂商适配** | 接入更多中文大模型（如阿里千问、百度文心一言、腾讯混元等） |
 | 🔗 **框架适配**  | 深化与 LlamaIndex、LiteLLM 等框架的集成 |
-| 🐛 **能力扩展**  | 多模态功能的适配框架开发       |
+| 🐛 **能力扩展**  | 多模态功能的适配框架开发                  |
 | 📖 **文档完善**  | 补充使用案例、优化开发指南                 |
-| 💡 **功能建议**  | 提出您的想法与需求                     | 
+| 💡 **功能建议**  | 提出您的想法与需求                     |
 
 项目开发文档：
+
 - [系统架构](docs/ARCHITECTURE.md)
 - [厂商适配](docs/CONTRIBUTOR.md)
 - [功能性文档](docs/feature/)
 
 ## 更新日志
+
+### v0.8.0 (2026-04-26)
+
+- ✨ **定制化批量任务** 
+  - 支持`request`参数，支持对于批量任务中的单个请求进行独立配置，如model、thinking、stream 策略等
+- ✨ **模型支持** 
+  - 新增 deepseek-v4-pro、deepseek-v4-flash、kimi-k2.6、mimo-v2.5-pro、mimo-v2.5 模型适配
+- 🔧 **bug 修复** 
+  - 修复批量非流式任务中，统计字段实时更新失效的问题
 
 ### v0.7.0 (2026-04-21)
 
@@ -55,14 +66,14 @@ CNLLM 致力于解决这一两难困境——通过提供一个**统一的 OpenA
 - ✨ **批量调用** - 支持 `CNLLM.chat.batch()` 同步批量调用，`asyncCNLLM.chat.batch()` 异步批量调用
   - 实时统计：`request_counts` 字段实时显示当前请求状态
   - 错误隔离：单个请求失败不影响其他请求
-  - 自定义 ID：支持 `custom_ids` 参数配置自定义 request_id
+  - 自定义 ID：支持 `custom_ids` 参数配置自定义 request\_id
   - 进度回调：`callbacks` 自定义回调函数
   - 快速失败：任意一个请求失败即抛出异常，避免大批量请求失败
   - OpenAI 兼容：批量响应中的每个请求返回标准 OpenAI chat completion 格式
 - ✨ **Embedding 调用** - 支持 `client.embeddings.create()` 和 `client.embeddings.batch()` 的同步/异步版本
   - 实时统计：`request_counts` 字段实时显示当前请求状态
   - 错误隔离：单个请求失败不影响其他请求
-  - 自定义 ID：支持 `custom_ids` 参数配置自定义 request_id
+  - 自定义 ID：支持 `custom_ids` 参数配置自定义 request\_id
   - 进度回调：`callbacks` 自定义回调函数
   - 快速失败：任意一个请求失败即抛出异常，避免大批量请求失败
   - OpenAI 兼容：批量响应中的每个请求返回标准 OpenAI embedding 格式
@@ -77,11 +88,11 @@ CNLLM 致力于解决这一两难困境——通过提供一个**统一的 OpenA
 
 ### chat completion 支持：
 
-- **DeepSeek**：deepseek-chat、deepseek-reasoner
+- **DeepSeek**：deepseek-chat、deepseek-reasoner、deepseek-v4-pro、deepseek-v4-flash
 - **KIMI (Moonshot AI)**：kimi-k2.6、kimi-k2.5、kimi-k2-thinking、kimi-k2-thinking-turbo、kimi-k2-turbo-preview、kimi-k2-0905-preview、moonshot-v1-8k、moonshot-v1-32k、moonshot-v1-128k
 - **豆包Doubao**：doubao-seed-2-0-pro、doubao-seed-2-0-mini、doubao-seed-2-0-lite、doubao-seed-2-0-code、doubao-seed-1-8、doubao-seed-1-6、doubao-seed-1-6-lite、doubao-seed-1-6-flash
 - **智谱GLM**：glm-4.6、glm-4.7、glm-4.7-flash、glm-4.7-flashx、glm-5、glm-5-turbo、glm-5.1
-- **小米mimo**：mimo-v2-pro、mimo-v2-omni、mimo-v2-flash
+- **小米mimo**：mimo-v2-pro、mimo-v2-omni、mimo-v2-flash、mimo-v2.5-pro、mimo-v2.5
 - **MiniMax**：MiniMax-M2.7、MiniMax-M2.5、MiniMax-M2.1、MiniMax-M2
 
 ### Embeddings 支持：
@@ -100,110 +111,161 @@ pip install cnllm
 ### 1.2 客户端初始化
 
 #### 1.2.1 同步客户端
+
 ```python
 from cnllm import CNLLM
 
 client = CNLLM(model="minimax-m2.7", api_key="your_api_key")
+resp = client.chat.create(...)  
 ```
 
 #### 1.2.2 异步客户端
 
-支持两种异步客户端的初始化方式，分别对应不同的使用场景：
-- **持久化会话** 会在多个调用之间保持会话状态，适合需要维护上下文的应用场景
-- **临时会话** 单次会话，不保持会话状态，自动关闭会话。
+**无感异步调用**：
+异步客户端封装了`asyncio.run()`，支持使用**同步语法实现异步调用**，也支持用户主动包裹`asyncio.run()`并使用异步语法来管理事件循环。
 
-**持久化会话**：
 ```python
 from cnllm import asyncCNLLM
 
 client = asyncCNLLM(
     model="minimax-m2.7", api_key="your_api_key")
-resp = await client.chat.create(...)
-await client.aclose()                        # 手动关闭
+resp = client.chat.create(...)
+```
+
+### 1.3 上下文管理
+
+支持两种上下文管理方式：
+
+- **持久化会话** 会在多个调用之间保持会话状态，适合需要维护上下文的应用场景
+- **临时会话** 单次会话，不保持会话状态，自动关闭会话。
+
+**持久化会话**：
+
+```Python
+client = CNLLM(
+    model="minimax-m2.7", api_key="your_api_key")
+resp = client.chat.create(...)
+client.close()                         # 手动关闭，异步客户端使用client.aclose()
 ```
 
 **临时会话**：
-```python
-from cnllm import asyncCNLLM
 
-async with asyncCNLLM(
+```Python
+with CNLLM(
     model="deepseek-chat", api_key="your_api_key") as client:
-    resp = await client.chat.create(...)     # 自动关闭会话
+    resp = client.chat.create(...)     # 自动关闭会话
 ```
 
-### 1.3 三种调用入口（支持同步/异步）
+## 2. 调用场景
 
-**1. 极简调用** 
+### 2.1 chat completion 单条调用
+
+支持三种调用方式，其中**极简调用**不支持除字符串外的其他参数(流式调用可在客户端配置`stream=True`参数)。
+
+**极简调用：** 
 
 ```python
 resp = client("用一句话介绍自己")
 ```
 
-**2. 标准调用** 
+**标准调用：**
 
 ```python
-resp = client.chat.create(prompt="用一句话介绍自己")
+resp = client.chat.create(prompt="用一句话介绍自己", stream=True)
 ```
 
-**3. 完整调用** 
+**完整调用：**
 
 ```python
 resp = client.chat.create(
-    messages=[{"role": "user", "content": "用一句话介绍自己"}]
+    messages=[
+        {"role": "user", "content": "用一句话介绍自己"},
+        {"role": "assistant", "content": "我是一个智能助手"},
+        {"role": "user", "content": "你好"},
+        ]
 )
 ```
-## 2. 调用场景
 
-### 2.1 流式调用
-
-支持同步/异步的流式调用，返回的 chunk 均为 OpenAI 标准流式结构。
+#### 2.1.1 非流式调用
 
 ```python
-response = client.chat.create(
-    messages=[{"role": "user", "content": "数到3"}], 
+resp = client.chat.create(
+    messages=[{"role": "user", "content":"用一句话介绍自己"}],
+)
+```
+
+#### 2.1.2 流式调用
+
+```python
+resp = client.chat.create(
+    prompt="用一句话介绍自己", 
     stream=True
 )
-for chunk in response:  # 异步客户端迭代 async for chunk in await response:
-    pass
-```
-或直接迭代的调用：
-
-```python
-for chunk in client.chat.create(...):  # 异步客户端迭代 async for chunk in await client.chat.create(...):
+for chunk in resp:
     pass
 ```
 
-#### 2.1.1 流式响应访问
+#### 2.1.3 响应访问
 
-流式调用中，响应支持**流中访问**，结果**实时累积**
+特别的，在流式调用中，响应支持**流中访问**，结果**实时累积**：
 
-| 类别 | 访问方式 | 返回格式 | 返回示例 |
-|------|---------|---------|---------|
-| **think** | `resp.think` / `client.chat.think` | `str` | `"推理内容..."` |
-| **still** | `resp.still` / `client.chat.still` | `str` | `"回复内容..."` |
-| **tools** | `resp.tools` / `client.chat.tools` | `Dict[int, Dict]` | `{0: {"id": "...", "function": {...}}, 1: {...}` |
-| **raw** | `resp.raw` / `client.chat.raw` | `Dict` | `{"id": "...", "choices": [...], ...}` |
+| 类别                 | 访问方式      | 返回格式              | 返回示例                                             |
+| ----------------- | ------------- | ----------------- | ------------------------------------------------ |
+| **think**思考过程 | `resp.think`  | `str`             | `"推理内容..."`                                      |
+| **still**回复内容 | `resp.still`  | `str`             | `"回复内容..."`                                      |
+| **tools**工具调用消息 | `resp.tools`  | `Dict[int, Dict]` | `{0: {"id": "...", "function": {...}}, 1: {...}` |
+| **raw**模型原生响应   | `resp.raw`  | `Dict`            | `{"id": "...", "choices": [...], ...}`           |
 
 ### 2.2 chat completion 批量调用
 
-支持同步/异步、流式/非流式的批量调用，支持**进度回调、自定义请求 ID 、遇错停止**等高级功能，支持配置**并发控制**。
+可通过`prompt`和`messages`参数输入并快速配置全局参数，也可以通过`requests`参数为单个请求进行独立配置。
 
+**prompt 参数：**
 ```python
 resp = client.chat.batch(
-    ["你好", "今天天气怎么样", "你是谁"]
+    prompt=["你好", "今天天气怎么样", "你是谁"],
+    stream=True
 )
+```
+
+**messages 参数：**
+```python
+resp = client.chat.batch(
+    messages=[
+        [{"role": "user", "content": "北京天气怎么样"},
+         {"role": "assistant", "content": "北京天气晴朗"},
+         {"role": "user", "content": "那上海呢"}],
+        [{"role": "user", "content": "上海天气怎么样"}],
+    ],
+    tools=[get_weather]
+)
+```
+
+**requests 参数：** 也支持使用`requests.messages`参数管理上下文。
+```python
+resp = client.chat.batch(
+    requests=[
+        {"prompt": "北京天气怎么样", "tools": [get_weather], "stream": True},  # 继承全局参数中配置的 thinking 参数
+        {"prompt": "1+1等于多少", "tools": [calc], "thinking": False},        # 不继承任何全局参数
+        {"prompt": "广州天气怎么样", "model": "deepseek-chat", "api_key": "key"}  # 继承全局参数中配置的 tools 和 thinking 参数
+    ],
+    # 全局参数（per-request 未配置时继承使用）：
+    tools=[default_tool],
+    thinking=True,
+    max_concurrent=2  # batch 层级参数，不被单个请求继承
+)  
 ```
 
 #### 2.2.1 chat completion 批量响应结构
 
- BatchResponse 外层结构，其中 `results[request_id]`字段下的每条响应为 OpenAI 标准流式/非流式结构：
+BatchResponse 外层结构，其中 `results[request_id]`字段下的每条响应为 OpenAI 标准流式/非流式结构：
 
 ```python
 {
-    "success": ["request_0"],  # 成功的 request_id 列表
-    "fail": ["request_1"],   # 失败的 request_id 列表
+    "success": ["request_0"],              # 成功的 request_id 列表
+    "fail": ["request_1"],                 # 失败的 request_id 列表
     "request_counts": {"success_count": 1, "fail_count": 1, "total": 2},  # 统计信息
-    "elapsed": 0.42,  # 耗时
+    "elapsed": 0.42,                       # 耗时
     "results": {
         "request_0": [chunk1, chunk2, chunk3],  # 单个请求中标准结构的流式 chunk 列表
         "request_1": [error_chunk],
@@ -217,41 +279,66 @@ resp = client.chat.batch(
 
 #### 2.2.2 chat completion 批量响应访问
 
-流式/非流式批量调用中，响应支持**批中访问**，结果**实时累积**。
+流式/非流式批量调用中，响应支持**批中访问**，响应结果**实时累积**：
+批量流式调用中的累积为流式累积，累积幅度chunk by chunk；批量非流式调用中的累积幅度为request by request。
+特别地，在混合流式策略的批量调用中，实时累积幅度为request by request。
 
-**两种访问方式**：实时迭代中直接 `for chunk in resp.results` 访问，或迭代结束后通过 `resp.batch_result.results` 访问累积结果。
+**访问方式**：
 
-| 类别 | 访问方式 | 返回格式 | 返回示例 |
-|------|---------|---------|---------|
-| **统计字段** | `resp.success` / `batch_result.success` | `List[str]` | `["request_0", "request_1"]` |
-| | `resp.fail` / `batch_result.fail` | `List[str]` | `[]` |
-| | `resp.request_counts` / `batch_result.request_counts` | `Dict` | `{"success_count": 2, "fail_count": 0, "total": 2}` |
-| | `resp.elapsed` / `batch_result.elapsed` | `float` | `1.23` |
-| **results** | `resp.results` / `batch_result.results` | `Dict[str, Dict]` | `{"request_0": {...}, "request_1": {...}}` |
-| | `resp.results[0]` / `batch_result.results[0]` | `Dict` | `{"id": "...", "choices": [...], ...}` |
-| | `resp.results["request_0"]` / `batch_result.results["request_0"]` | `Dict` | 同上 |
-| **think** | `resp.think` / `batch_result.think` | `Dict[str, str]` | `{"request_0": "...", "request_1": "..."}` |
-| | `resp.think[0]` / `batch_result.think[0]` | `str` | `"推理内容..."` |
-| | `resp.think["request_0"]` / `batch_result.think["request_0"]` | `str` | `"推理内容..."` |
-| **still** | `resp.still` / `batch_result.still` | `Dict[str, str]` | `{"request_0": "...", "request_1": "..."}` |
-| | `resp.still[0]` / `batch_result.still[0]` | `str` | `"回复内容..."` |
-| | `resp.still["request_0"]` / `batch_result.still["request_0"]` | `str` | `"回复内容..."` |
-| **tools** | `resp.tools` / `batch_result.tools` | `Dict[str, Dict[int, Dict]]` | `{"request_0": {...}, "request_1": {...}}` |
-| | `resp.tools[0]` / `batch_result.tools[0]` | `Dict[int, Dict]` | `{0: {"id": "...", "function": {...}}, 1: {...}` |
-| | `resp.tools["request_0"]` / `batch_result.tools["request_0"]` | `Dict[int, Dict]` | 同上 |
-| **raw** | `resp.raw` / `batch_result.raw` | `Dict[str, Dict]` | `{"request_0": {...}, "request_1": {...}}` |
-| | `resp.raw[0]` / `batch_result.raw[0]` | `Dict` | `{"id": "...", "choices": [...], ...}` |
-| | `resp.raw["request_0"]` / `batch_result.raw["request_0"]` | `Dict` | 同上 |
+```python
+resp = client.chat.batch(
+    prompt=["你好", "今天天气怎么样", "你是谁"]
+)
 
+for r in resp:
+    print(resp.request_counts)    # 实时统计信息，request by request实时更新
+
+print(resp.still)                 # 完整批量请求的回复内容
+
+# 或通过batch_result访问：
+
+for r in client.chat.batch(
+    prompt=["你好", "今天天气怎么样", "你是谁"]
+):
+    print(client.batch_result.results)    # 每个请求的标准响应，request by request实时累积
+
+print(client.batch_result.raw)            # 完整批量请求的模型原生响应
+```
+
+**访问字段**：
+
+| 类别          | 访问方式                                                              | 返回格式                         | 返回示例                                                |
+| ----------- | ----------------------------------------------------------------- | ---------------------------- | --------------------------------------------------- |
+| **统计字段**    | `resp.success` / `batch_result.success`                           | `List[str]`                  | `["request_0", "request_1"]`                        |
+| <br />      | `resp.fail` / `batch_result.fail`                                 | `List[str]`                  | `[]`                                                |
+| <br />      | `resp.request_counts` / `batch_result.request_counts`             | `Dict`                       | `{"success_count": 2, "fail_count": 0, "total": 2}` |
+| <br />      | `resp.elapsed` / `batch_result.elapsed`                           | `float`                      | `1.23`                                              |
+| **results** | `resp.results` / `batch_result.results`                           | `Dict[str, Dict]`            | `{"request_0": {...}, "request_1": {...}}`          |
+| <br />      | `resp.results[0]` / `batch_result.results[0]`                     | `Dict`                       | `{"id": "...", "choices": [...], ...}`              |
+| <br />      | `resp.results["request_0"]` / `batch_result.results["request_0"]` | `Dict`                       | 同上                                                  |
+| **think**   | `resp.think` / `batch_result.think`                               | `Dict[str, str]`             | `{"request_0": "...", "request_1": "..."}`          |
+| <br />      | `resp.think[0]` / `batch_result.think[0]`                         | `str`                        | `"推理内容..."`                                         |
+| <br />      | `resp.think["request_0"]` / `batch_result.think["request_0"]`     | `str`                        | `"推理内容..."`                                         |
+| **still**   | `resp.still` / `batch_result.still`                               | `Dict[str, str]`             | `{"request_0": "...", "request_1": "..."}`          |
+| <br />      | `resp.still[0]` / `batch_result.still[0]`                         | `str`                        | `"回复内容..."`                                         |
+| <br />      | `resp.still["request_0"]` / `batch_result.still["request_0"]`     | `str`                        | `"回复内容..."`                                         |
+| **tools**   | `resp.tools` / `batch_result.tools`                               | `Dict[str, Dict[int, Dict]]` | `{"request_0": {...}, "request_1": {...}}`          |
+| <br />      | `resp.tools[0]` / `batch_result.tools[0]`                         | `Dict[int, Dict]`            | `{0: {"id": "...", "function": {...}}, 1: {...}`    |
+| <br />      | `resp.tools["request_0"]` / `batch_result.tools["request_0"]`     | `Dict[int, Dict]`            | 同上                                                  |
+| **raw**     | `resp.raw` / `batch_result.raw`                                   | `Dict[str, Dict]`            | `{"request_0": {...}, "request_1": {...}}`          |
+| <br />      | `resp.raw[0]` / `batch_result.raw[0]`                             | `Dict`                       | `{"id": "...", "choices": [...], ...}`              |
+| <br />      | `resp.raw["request_0"]` / `batch_result.raw["request_0"]`         | `Dict`                       | 同上                                                  |
 
 **repr():**
+
 ```python
 # 简洁统计，不显示大文本:
 print(resp)
 # BatchResponse(request_counts={...}, elapsed=..., success=[...], errors=[...])
 ```
 
-**to_dict():**
+**to\_dict():**
+
 ```python
 resp.to_dict()                        # 只保留 results (默认)
 resp.to_dict(stats=True)              # 包含 results + 统计字段（request_counts、elapsed）
@@ -261,7 +348,7 @@ resp.to_dict(stats=True, think=True, still=True, tools=True, raw=True)  # result
 ### 2.3 Embeddings 调用
 
 支持同步/异步 Embeddings 调用，支持**进度回调、自定义请求 ID 、遇错停止**等高级功能，支持配置**并发控制、批量大小**。
-当前支持 MiniMax embo-01，GLM embedding-2/embedding-3 模型。
+当前支持 MiniMax embo-01，GLM embedding-2/embedding-3/embedding-3-pro 模型。
 
 #### 2.3.1 单条调用
 
@@ -280,7 +367,7 @@ resp = client.embeddings.batch(
 
 #### 2.3.2 Embeddings 批量响应结构
 
- BatchEmbeddingResponse 外层结构，其中 `results[request_id]` 字段下每条响应为 OpenAI 标准 Embeddings 结构：
+BatchEmbeddingResponse 外层结构，其中 `results[request_id]` 字段下每条响应为 OpenAI 标准 Embeddings 结构：
 
 ```python
 {   
@@ -305,28 +392,29 @@ resp = client.embeddings.batch(
 
 流式/非流式批量调用中，响应支持**批中访问**，结果**实时累积**。
 
-**两种访问方式**：实时迭代中直接 `resp.results[request_id]` 访问，或迭代结束后通过 `resp.batch_result.results[request_id]` 访问累积结果。
 
-| 类别 | 访问方式 | 返回格式 | 返回示例 |
-|------|---------|---------|---------|
-| **统计字段** | `resp.success` / `batch_result.success` | `List[str]` | `["request_0", "request_1"]` |
-| | `resp.fail` / `batch_result.fail` | `List[str]` | `["request_2"]` |
-| | `resp.request_counts` / `batch_result.request_counts` | `Dict` | `{"total": 2, "success_count": 2, "fail_count": 0, "dimension": 1024}` |
-| | `resp.elapsed` / `batch_result.elapsed` | `float` | `1.23` |
-| | `resp.total` / `batch_result.total` | `int` | `2` |
-| | `resp.dimension` / `batch_result.dimension` | `int` | `1024` |
-| **results** | `resp.results` / `batch_result.results` | `Dict[str, Dict]` | `{"request_0": {...}, "request_1": {...}}` |
-| | `resp.results[0]` / `batch_result.results[0]` | `Dict` | `{"object": "list", "data": [...], ...}` |
-| | `resp.results["request_0"]` / `batch_result.results["request_0"]` | `Dict` | 同上 |
+| 类别          | 访问方式                                                              | 返回格式              | 返回示例                                                                   |
+| ----------- | ----------------------------------------------------------------- | ----------------- | ---------------------------------------------------------------------- |
+| **统计字段**    | `resp.success` / `batch_result.success`                           | `List[str]`       | `["request_0", "request_1"]`                                           |
+| <br />      | `resp.fail` / `batch_result.fail`                                 | `List[str]`       | `["request_2"]`                                                        |
+| <br />      | `resp.request_counts` / `batch_result.request_counts`             | `Dict`            | `{"total": 2, "success_count": 2, "fail_count": 0, "dimension": 1024}` |
+| <br />      | `resp.elapsed` / `batch_result.elapsed`                           | `float`           | `1.23`                                                                 |
+| <br />      | `resp.total` / `batch_result.total`                               | `int`             | `2`                                                                    |
+| <br />      | `resp.dimension` / `batch_result.dimension`                       | `int`             | `1024`                                                                 |
+| **results** | `resp.results` / `batch_result.results`                           | `Dict[str, Dict]` | `{"request_0": {...}, "request_1": {...}}`                             |
+| <br />      | `resp.results[0]` / `batch_result.results[0]`                     | `Dict`            | `{"object": "list", "data": [...], ...}`                               |
+| <br />      | `resp.results["request_0"]` / `batch_result.results["request_0"]` | `Dict`            | 同上                                                                     |
 
 **repr():**
+
 ```python
 # 简洁统计，不显示大文本:
 print(resp)
 # BatchResponse(request_counts={...}, elapsed=..., success=[...], errors=[...])
 ```
 
-**to_dict():**
+**to\_dict():**
+
 ```python
 resp.to_dict()                        # 只保留 results (默认)
 resp.to_dict(stats=True)              # 包含 results + 统计字段（request_counts、elapsed）
@@ -336,23 +424,25 @@ resp.to_dict(stats=True)              # 包含 results + 统计字段（request_
 
 批量调用支持**重试策略、并发控制**参数配置：
 
-| 参数 | 类型 | 默认值 | 说明 |
-|------|------|--------|------|
-| `batch_size` | `int` | 动态计算 | 批处理大小，仅 Embeddings 调用支持配置 |
-| `max_concurrent` | `int` | `12`/`3` | 最大并发数，Embeddings 默认12，Chat completion 默认3 |
-| `rps` | `float` | `10`/`2` | 每秒请求数，Embeddings 默认10，Chat completion 默认2 |
-| `timeout` | `int` | 30 | 单请求超时（秒） |
-| `max_retries` | `int` | 3 | 最大重试次数 |
-| `retry_delay` | `float` | 1.0 | 重试延迟（秒）|
+| 参数               | 类型      | 默认值      | 说明                                        |
+| ---------------- | ------- | -------- | ----------------------------------------- |
+| `batch_size`     | `int`   | 动态计算     | 批处理大小，仅 Embeddings 调用支持配置                 |
+| `max_concurrent` | `int`   | `12`/`3` | 最大并发数，Embeddings 默认12，Chat completion 默认3 |
+| `rps`            | `float` | `10`/`2` | 每秒请求数，Embeddings 默认10，Chat completion 默认2 |
+| `timeout`        | `int`   | 30       | 单请求超时（秒）                                  |
+| `max_retries`    | `int`   | 3        | 最大重试次数                                    |
+| `retry_delay`    | `float` | 1.0      | 重试延迟（秒）                                   |
 
-**batch_size**：
+**batch\_size**：
 仅支持批量 Embeddings 调用时配置，默认根据请求数量自适应计算，不建议手动配置。
 
 ### 2.5 批量调用高级功能
 
+批量 chat completion/Embeddings 调用都支持**进度回调、自定义请求 ID 、遇错停止**。
+
 #### 2.5.1 自定义请求 ID
 
-通过 `custom_ids` 参数为批量请求指定自定义 ID，批量响应中会替换原 request_id。
+通过 `custom_ids` 参数为批量请求指定自定义 ID，批量响应中会替换原 request\_id。
 
 ```python
 resp = client.embeddings.batch(
@@ -367,6 +457,7 @@ resp.think["doc_002"]            # 获取 doc_002 的推理内容
 #### 2.5.2 进度回调
 
 回调会在**每个请求完成时被调用**，可以用于：
+
 - 实时显示处理进度
 - 记录已完成的任务
 - 动态调整后续任务
@@ -395,7 +486,7 @@ resp = client.embeddings.batch(
 
 ## 3. CNLLM 标准响应格式
 
-CNLLM 单条请求的流式、非流式、 Embeddings 响应格式，完全实现 OpenAI 标准结构。
+CNLLM 单条请求的流式、非流式、 Embeddings 响应格式，完全对齐 OpenAI 标准结构。
 
 ### 3.1 非流式响应格式
 
@@ -524,14 +615,15 @@ flowchart TD
 
 **说明**：
 
-在调用入口传入模型将会覆盖客户端的`model`和`fallback_models`参数配置，不会启用 FallbackManager 。
+在调用入口传入模型将会覆盖客户端的`model`和`fallback_models`参数配置，不会启用 FallbackManager, `batch()` 中按请求独立判断。
 
 ```python
-resp = client.chat.create(
-    prompt="介绍自己",
-    model="minimax-m2.5",  # 覆盖客户端入口传入的模型配置
-    api_key="your_other_api_key"  # 覆盖，或不传入，默认使用客户端入口配置的 API_key
-)
+client = CNLLM(model="minimax-m2.5", api_key="key1", fallback_models={"deepseek-chat": "key2"})
+
+resp = client.chat.batch(requests=[
+    {"prompt": "你好", "model": "deepseek-chat", "api_key": "key2"},     # 有 model → 覆盖客户端配置
+    {"prompt": "天气"},                               # 无 model → 用客户端 minimax-m2.5 + fallback
+])
 ```
 
 ## 6. 应用框架深度集成
@@ -544,9 +636,12 @@ LangChain chain 统一支持同步/异步方法：
 from cnllm import CNLLM
 from cnllm.core.framework import LangChainRunnable
 from langchain_core.prompts import ChatPromptTemplate
+import asyncio
 
-# 创建 CNLLM 客户端 (内部持有异步引擎)
+# 创建 CNLLM 客户端（内部持有异步引擎）
 client = CNLLM(model="deepseek-chat", api_key="your_key")
+
+# 创建 Runnable 实例
 runnable = LangChainRunnable(client)
 
 prompt = ChatPromptTemplate.from_messages([
@@ -557,17 +652,31 @@ prompt = ChatPromptTemplate.from_messages([
 # 构建 LangChain chain
 chain = prompt | runnable
 
-# 异步调用示例
-async with client:
-    result = await chain.ainvoke({"input": "2+2等于几？"})
-    print(result.content)
+# 同步调用 invoke/stream/batch
+resp = chain.invoke({"input": "2+2等于几？"})
+print(resp.content)
 
-    async for chunk in chain.astream({"input": "数到5"}):
-        print(chunk, end="", flush=True)
+for chunk in chain.stream({"input": "数到5"}):
+    print(chunk, end="", flush=True)
 
-    results = await chain.batch(["Hello", "How are you?"])
-    for r in results:
-        print(r.content)
+resp = chain.batch([{"input": "Hello"}, {"input": "How are you?"}])
+for r in resp:
+    print(r.content)
+
+# 异步调用 ainvoke/astream/abatch
+async def main():
+    async with client:
+        resp = await chain.ainvoke({"input": "2+2等于几？"})
+        print(resp.content)
+
+        async for chunk in chain.astream({"input": "数到5"}):
+            print(chunk, end="", flush=True)
+
+        resp = await chain.abatch([{"input": "Hello"}, {"input": "How are you?"}])
+        for r in resp:
+            print(r.content)
+
+asyncio.run(main())
 ```
 
 ### 许可证
@@ -578,3 +687,4 @@ MIT License - 详见 [LICENSE](LICENSE) 文件
 
 - GitHub Issues: <https://github.com/kanchengw/cnllm/issues>
 - 作者邮箱：<wangkancheng1122@163.com>
+
