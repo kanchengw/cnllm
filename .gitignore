@@ -12,10 +12,18 @@ scripts/
 CLAUDE.md
 # IDE / Editor
 .trae/
+# Claude Code — local config (private)
+.claude/settings.local.json
+.claude/credentials.json
+# .claude/skills/ and .claude/rules/ are intentionally committed (shared team assets)
 test_*/
+outputs/
+usercase.md
 # C extensions
 *.so
 skills/
+# But keep .claude/skills/ (team-shared skill files are intentional)
+!.claude/skills/
 # Distribution / packaging
 .Python
 build/
