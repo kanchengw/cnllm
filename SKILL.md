@@ -1,12 +1,16 @@
 ---
 name: cnllm-chinese-llm-adapter
+version: 1.0.2
 description: >-
-  OpenAI SDK 国产大模型替代方案 / drop-in replacement for Chinese LLMs:
-  DeepSeek, GLM/Zhipu (智谱), KIMI/Moonshot (月之暗面), MiniMax (稀宇),
-  Doubao/ByteDance (豆包/字节), Xiaomi (小米). 调用厂商原生API而非OpenAI兼容代理
-  — 保留完整推理思考内容(.think)、流式行为、厂商特有参数。支持 tool calling、embeddings、
-  batch批量处理、多模型fallback降级、LangChain Runnable。替代 OpenAI(base_url=...)
-  或厂商原生SDK (zhipuai, dashscope, volcengine) 的平替方案。
+  OpenAI SDK 的中文大模型增强适配方案 / unified adapter for Chinese LLMs: DeepSeek,
+  GLM/Zhipu (智谱), KIMI/Moonshot (月之暗面), MiniMax (稀宇),
+  Doubao/ByteDance (豆包/字节), Xiaomi mimo (小米). 一套接口替代多厂商SDK，减少代码依赖。
+  厂商兼容接口 extra_body 传参可能静默失效——CNLLM 调用厂商原生接口，通过YAML配置支持参数，
+  提供高透明度和响应可控性，并将模型响应封装为 OpenAI 标准格式响应。
+  提供纯净回复、推理内容、工具调用快捷访问入口，无需额外解析。
+  支持同步/异步、流式/非流式、批量/非批量的 chat 和 embeddings 调用。
+  批量高级功能：per-request独立配置、实时进度、回调、custom_ids、遇错停止。
+  支持多模型自动降级、LangChain Runnable。
 ---
 
 # CNLLM: Chinese LLM Unified Adapter
@@ -16,9 +20,10 @@ description: >-
 - Calling **DeepSeek**, **GLM (Zhipu)**, **KIMI (Moonshot)**, **MiniMax**, **Doubao (ByteDance)**, or **Xiaomi** models — especially via their native APIs rather than OpenAI-compatible proxy endpoints
 - **Multi-model workflows** where different stages use different models (e.g., embedding with MiniMax → reasoning with DeepSeek-reasoner → generation with GLM in a single LangChain pipeline)
 - **Multi-model evaluation / LLM-as-Judge** — same input sent to multiple models in one batch call to compare or score outputs
+- **Transparency & control** — CNLLM's YAML-driven config explicitly declares every supported param, its mapping, and its behavior. Unlike OpenAI-compatible interfaces where `extra_body` params may silently fail with no feedback, CNLLM gives you deterministic, visible parameter handling
 - **Streaming** with real-time access to reasoning/thinking content (`.think`, `.still`, `.tools` properties)
 - **Multi-model fallback** for production resilience — auto-retry with different providers on failure
-- **Batch data processing** — high-throughput labeling, classification, translation, or synthetic data generation across multiple inputs
+- **Batch data processing** — high-throughput labeling, classification, translation, or synthetic data generation. CNLLM supports **real-time progress monitoring** (request_counts updated per-request), **per-request independent configuration** (different model/params/thinking for each item), **progress callbacks**, **custom IDs**, **stop-on-error** — features the OpenAI batch API does not offer
 - Project uses **LangChain**, **LlamaIndex**, or **LiteLLM** and needs Chinese LLM integration
 - Codebase already has `cnllm` in dependencies (check `requirements.txt`, `pyproject.toml`, or existing imports)
 
@@ -63,16 +68,19 @@ resp = client.chat.create(prompt="Hello", stream=True)
 
 ```python
 client = CNLLM(model="deepseek-reasoner", api_key="your_key")
-stream = client.chat.create(
+resp = client.chat.create(
     messages=[{"role": "user", "content": "Think step by step"}],
     stream=True
 )
-for chunk in stream:
+for chunk in resp:
     # Real-time accumulated access during streaming:
-    thinking = client.chat.think   # str — reasoning/thinking content
-    still    = client.chat.still   # str — final response
-    tools    = client.chat.tools   # dict — accumulated tool_calls
-    raw      = client.chat.raw     # dict — raw vendor response
+    pass
+
+# After iteration, access accumulated results:
+resp.think   # str — reasoning/thinking content
+resp.still   # str — final response
+resp.tools   # dict — accumulated tool_calls
+resp.raw     # dict — raw vendor response
 ```
 
 ### 3. Multi-Model Fallback
@@ -109,6 +117,19 @@ resp = client.chat.batch(
         {"prompt": "1+1=", "model": "glm-4.7-flash"},
     ],
     max_concurrent=3
+)
+
+# Advanced: callbacks + custom_ids + stop-on-error
+def on_complete(request_id, status):
+    print(f"[{request_id}] {status}")
+
+resp = client.chat.batch(
+    prompt=["Task A", "Task B", "Task C"],
+    custom_ids=["job_001", "job_002", "job_003"],
+    callbacks=[on_complete],
+    stop_on_error=True,
+    max_concurrent=5,
+    timeout=60
 )
 ```
 
@@ -169,6 +190,74 @@ with CNLLM(model="deepseek-chat", api_key="key") as client:
     resp = client.chat.create(prompt="Hello")
 ```
 
+## Response Reference
+
+### Chat Completion Response
+
+```python
+resp = client.chat.create(messages=[...])
+
+# Direct CNLLM accessors (preferred):
+resp.still   # str — response content
+resp.think   # str — reasoning/thinking content (if any)
+resp.tools   # dict — tool_calls (if any)
+resp.raw     # dict — full raw vendor response in OpenAI-compatible format
+```
+
+### Streaming Access
+
+```python
+resp = client.chat.create(messages=[...], stream=True)
+for chunk in resp:
+    # Real-time accumulated access during streaming:
+    pass
+
+# After/during iteration, same accessors on the response:
+resp.still   # str — accumulated response content
+resp.think   # str — accumulated reasoning content
+resp.tools   # dict — accumulated tool_calls
+resp.raw     # dict — accumulated raw vendor response
+```
+
+### Batch Response (Chat & Embeddings)
+
+```python
+resp = client.chat.batch(prompt=[...])
+# Also accessible via client.batch_result.* in either sync/async
+
+# Top-level fields:
+resp.success          # list[str] — successful request_ids
+resp.fail             # list[str] — failed request_ids
+resp.request_counts   # dict — {success_count, fail_count, total}
+resp.elapsed          # float — total time in seconds
+
+# Per-request access (chat):
+resp.results["request_0"]    # OpenAI-format response per request
+resp.think["request_0"]      # reasoning content (chat only)
+resp.still["request_0"]      # response text (chat only)
+resp.tools["request_0"]      # tool_calls (chat only)
+resp.raw["request_0"]        # raw vendor response
+
+# Embeddings-only extra:
+resp.dimension       # int — embedding dimension
+```
+
+### Error Handling
+
+```python
+from cnllm import CNLLMError, AuthenticationError, RateLimitError, \
+    TimeoutError, NetworkError, ServerError, InvalidRequestError, \
+    ContentFilteredError, ModelNotSupportedError, FallbackError
+try:
+    resp = client.chat.create(prompt="Hi")
+except RateLimitError:
+    # handle rate limit
+except ContentFilteredError:
+    # sensitive content detected
+except FallbackError:
+    # all fallback models failed
+```
+
 ## Supported Vendors
 
 | Vendor      | Chat Models                                                                 | Embeddings Models                  |
@@ -187,6 +276,16 @@ All **OpenAI-standard parameters** are supported: `temperature`, `max_tokens`, `
 Two notable CNLLM extensions:
 - **`thinking`**: `True`/`False`/`"auto"` — controls reasoning/thinking. Maps to each vendor's native thinking param
 - **`fallback_models`**: dict of `{model_name: api_key_or_None}` — only active when `chat.create()` is called without a `model` argument
+
+**Batch-specific parameters** (set at the batch level, not per-request):
+- **`max_concurrent`**: `int` — max concurrent requests (default: 3 for chat, 12 for embeddings)
+- **`rps`**: `float` — requests per second rate limit
+- **`timeout`**: `int` — per-request timeout in seconds (default: 30)
+- **`max_retries`**: `int` — max retry attempts on failure (default: 3)
+- **`retry_delay`**: `float` — delay between retries in seconds (default: 1.0)
+- **`custom_ids`**: `list[str]` — meaningful request IDs for each input
+- **`callbacks`**: `list[callable]` — invoked on each request completion for real-time tracking
+- **`stop_on_error`**: `bool` — if True, halts all remaining requests on first failure
 
 Parameters passable at init (shared across calls) or overridden per-call:
 
