@@ -233,7 +233,7 @@ for chunk in resp:
 
 #### 2.1.3 Response Access
 
-In streaming calls, responses support **in-stream access** with **real-time accumulation**:
+In streaming calls, access via `for` loop with **real-time accumulation**; outside the loop or in non-streaming calls, access the full result directly:
 
 | Category | Access Method | Return Format | Example |
 |----------|-------------|---------------|---------|
@@ -305,7 +305,7 @@ BatchResponse outer structure, where each response under `results[request_id]` i
 
 #### 2.2.2 Chat Batch Response Access
 
-In streaming/non-streaming batch calls, responses support **in-batch access** with **real-time accumulation**:
+Responses support **real-time access** with **real-time accumulation**, accessible by `request_id` or by index:
 For batch streaming calls, accumulation is streaming accumulation, chunk by chunk; for batch non-streaming calls, accumulation is request by request.
 Specifically, in batch calls with mixed streaming strategies, real-time accumulation is request by request.
 
@@ -416,7 +416,7 @@ EmbeddingResponse outer structure, where each response under `results[request_id
 
 #### 2.3.4 Embeddings Batch Response Access
 
-In streaming/non-streaming batch calls, responses support **in-batch access** with **real-time accumulation**.
+Responses support **real-time access** with **real-time accumulation**, request by request; accessible by `request_id` or by index.
 
 | Category | Access Method | Return Format | Example |
 |----------|-------------|---------------|---------|
