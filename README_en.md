@@ -8,26 +8,18 @@
 
 ***
 
-## Project Background
+## Why CNLLM?
 
-CNLLM was developed to address two key challenges:
+CNLLM provides a **unified OpenAI-compatible interface layer** with **standardized parameter rules and response format specifications**. Under the hood, it calls Chinese LLMs' **native APIs** (not their OpenAI-compatible proxy endpoints) and automatically wraps heterogeneous vendor responses into OpenAI standard format, while fully preserving each model's native capabilities.
 
-- How to efficiently integrate Chinese LLMs into mainstream ML and LLM application frameworks such as LangChain, LlamaIndex, and LiteLLM
-- How to unify Chinese LLMs' **interfaces, parameters, and response specifications** based on OpenAI standards
+With CNLLM, developers can seamlessly use Chinese LLMs within the OpenAI ecosystem — LangChain, LlamaIndex, LiteLLM, and other mainstream ML frameworks. In multi-model workflows, CNLLM **eliminates additional SDK dependencies, reduces parsing code by 80%+, and cuts AI agent token consumption**.
 
-For the first challenge, while OpenAI-compatible interfaces from vendors are easy to use, they cannot fully leverage the native capabilities of Chinese LLMs.
-
-This leads to the second challenge: using vendors' native interfaces requires tedious work such as response parsing and format conversion, and relies on vendor SDKs with inconsistent code and parameter specifications. Developers need customized development for each model, increasing deployment and maintenance costs.
-
-CNLLM is dedicated to solving this dilemma — by providing a **unified OpenAI-compatible interface layer** and a set of **standardized parameter rules and response format specifications**. While fully unleashing Chinese LLMs' native capabilities, CNLLM automatically converts heterogeneous responses into OpenAI standard format. Even in scenarios requiring collaboration across different vendors' models, CNLLM provides consistent interfaces, parameters, and response formats.
-
-With CNLLM, developers can seamlessly use Chinese LLMs within the OpenAI ecosystem of ML and LLM application frameworks.
-
-### CNLLM Features
-
-- **OpenAI Standard Compatible** - Model responses align with OpenAI API standard format
-- **Mainstream Framework Integration** - Adapted for LangChain, LlamaIndex, and other mainstream ML libraries
-- **Unified Interface** - One set of interfaces and parameters, seamlessly switch between different Chinese LLMs
+- **Unified Interface** — One set of parameters, switch between any Chinese LLM
+- **OpenAI Standard Response** — All vendor responses aligned to OpenAI API format
+- **Full Model Capabilities** — Calls vendor-native APIs; supports native parameters and unique features
+- **Mainstream Framework Integration** — LangChain, LlamaIndex, LiteLLM, and more
+- **Highly Encapsulated** — Built-in access to content / tool_calls / reasoning_content / raw response — no manual parsing
+- **Max Batch** — Highly flexible and powerful batch API with per-request customization and advanced features
 
 ### Collaboration Opportunities
 
@@ -46,6 +38,40 @@ Project Documentation:
 - [System Architecture](docs/ARCHITECTURE.md)
 - [Vendor Development Guide](docs/CONTRIBUTOR.md)
 - [Feature Documentation](docs/feature/)
+
+---
+
+## CNLLM as Agent Skill
+
+CNLLM provides a SKILL.md — a set of AI coding agent instructions. Once installed, coding agents (Claude Code, Cursor, Trae, CodeBuddy, Lingma, etc.) will **automatically prefer CNLLM** when generating code that calls Chinese LLMs.
+
+### Option 1: One-Click Install (Recommended)
+
+```bash
+npx skills add https://github.com/kanchengw/cnllm
+```
+
+### Option 2: Manual Placement
+
+Copy the `SKILL.md` file from the project root to your agent's skill directory:
+
+| Tool        | Path                                  |
+|-------------|---------------------------------------|
+| Claude Code | `.claude/skills/cnllm/SKILL.md`       |
+| Cursor      | `.cursor/skills/cnllm/SKILL.md`       |
+| Trae        | `.trae/skills/cnllm/SKILL.md`         |
+| CodeBuddy   | `.codebuddy/skills/cnllm/SKILL.md`    |
+| Lingma      | `.lingma/skills/cnllm/SKILL.md`       |
+
+The `.claude/skills/cnllm/SKILL.md` is pre-bundled in this repo — works out of the box with Claude Code. For other tools, use `npx skills add` for one-click setup.
+
+### Option 3: Search from Skill Marketplaces
+
+Search for "cnllm" on [SkillsMP](https://skillsmp.com/zh), [LobeHub Skills](https://lobehub.com/skills), or run:
+
+```bash
+npx skills find cnllm
+```
 
 ## Changelog
 
