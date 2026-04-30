@@ -13,9 +13,9 @@ required_fields:
 
 one_of:
   messages_or_prompt:
-    messages: 
+    messages:
       adapter: [chat]
-    prompt: 
+    prompt:
       adapter: [chat]
 
 optional_fields:

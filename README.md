@@ -39,40 +39,21 @@ CNLLM 提供了一个**统一的 OpenAI 兼容接口层**与一套**标准化的
 - [厂商适配](docs/CONTRIBUTOR.md)
 - [功能性文档](docs/feature/)
 
-***
-
-## CNLLM 作为 Agent Skill 使用
-
-CNLLM 提供了 SKILL.md — 一套 AI 编程 Agent 可读的指令集。作为 Agent Skill 安装后，模型在编写国产大模型相关代码时会**自动优先使用 CNLLM**。
-
-### 方式一：一键安装（推荐）
-
-```bash
-npx skills add https://github.com/kanchengw/cnllm
-```
-
-### 方式二：手动放置
-
-将项目根目录的 `SKILL.md` 文件复制到对应工具的技能目录：
-
-| 工具          | 放置路径                           |
-| ----------- | ---------------------------------- |
-| Claude Code | `.claude/skills/cnllm/SKILL.md`    |
-| Cursor      | `.cursor/skills/cnllm/SKILL.md`    |
-| Trae        | `.trae/skills/cnllm/SKILL.md`      |
-| CodeBuddy   | `.codebuddy/skills/cnllm/SKILL.md` |
-| 通义灵码     | `.lingma/skills/cnllm/SKILL.md`     |
-
-
-### 方式三：从技能市场搜索
-
-在 [SkillsMP 中文版](https://skillsmp.com/zh) 或 [LobeHub Skills](https://lobehub.com/skills) 搜索 "cnllm" ，或运行：
-
-```bash
-npx skills find cnllm
-```
-
 ## 更新日志
+
+### v0.8.1 (2026-04-30)
+
+- ✨ **图片识别支持**
+  - 支持 OpenAI 标准 `content` array 格式传入图片（`type: "image_url"`）
+  - 多模态验证：自动识别纯文本模型，传入图片时抛出 `InvalidRequestError` 并引导使用多模态模型
+  - 新增多模态模型：GLM（glm-5v-turbo、glm-4.5v、glm-4.6v、glm-4.6v-flash）、Kimi（kimi-k2.5、kimi-k2.6、moonshot-v1-vision-preview）、Doubao（2.0全系列、1.6-vision、1.5-vision-pro）、Xiaomi（mimo-v2-omni）
+- ✨ **CNLLM 作为 Agent Skill**
+  - 项目提供 SKILL.md，AI 编程 Agent 编写国产大模型代码时自动优先使用 CNLLM
+  - 支持一键安装：`npx skills add https://github.com/kanchengw/cnllm`
+  - 支持 Claude Code、Cursor、Trae、CodeBuddy、通义灵码等工具
+- 🔧 **bug 修复**
+  - `api_key` 不再泄漏到请求体中（修复 BaseAdapter._build_payload skip 字段缺失）
+  - HTTP 错误码补充：403/408/413 正确映射到 ContentFilteredError/TimeoutError/TokenLimitError
 
 ### v0.8.0 (2026-04-26)
 
@@ -114,16 +95,34 @@ npx skills find cnllm
 ### chat completion 支持：
 
 - **DeepSeek**：deepseek-chat、deepseek-reasoner、deepseek-v4-pro、deepseek-v4-flash
-- **KIMI (Moonshot AI)**：kimi-k2.6、kimi-k2.5、kimi-k2-thinking、kimi-k2-thinking-turbo、kimi-k2-turbo-preview、kimi-k2-0905-preview、moonshot-v1-8k、moonshot-v1-32k、moonshot-v1-128k
-- **豆包Doubao**：doubao-seed-2-0-pro、doubao-seed-2-0-mini、doubao-seed-2-0-lite、doubao-seed-2-0-code、doubao-seed-1-8、doubao-seed-1-6、doubao-seed-1-6-lite、doubao-seed-1-6-flash
-- **智谱GLM**：glm-4.6、glm-4.7、glm-4.7-flash、glm-4.7-flashx、glm-5、glm-5-turbo、glm-5.1
+- **KIMI (Moonshot AI)**：kimi-k2.6、kimi-k2.5、kimi-k2-thinking、kimi-k2-thinking-turbo、kimi-k2-turbo-preview、kimi-k2-0905-preview、moonshot-v1-8k、moonshot-v1-32k、moonshot-v1-128k、moonshot-v1-vision-preview
+- **豆包Doubao**：doubao-seed-2-0-pro、doubao-seed-2-0-mini、doubao-seed-2-0-lite、doubao-seed-2-0-code、doubao-seed-1-8、doubao-seed-1-6、doubao-seed-1-6-flash、doubao-seed-1-6-vision-250815、doubao-1-5-vision-pro-32k-250115、doubao-seed-1-5-lite-32k-250115、doubao-seed-1-5-pro-32k-250115、doubao-seed-1-5-pro-256k-250115
+- **智谱GLM**：glm-4.6、glm-4.7、glm-4.7-flash、glm-4.7-flashx、glm-5、glm-5-turbo、glm-5.1、glm-4.5、glm-4.5-x、glm-4.5-air、glm-4.5-airx、glm-4.5-flash、glm-5v-turbo、glm-4.5v、glm-4.6v、glm-4.6v-flash
 - **小米mimo**：mimo-v2-pro、mimo-v2-omni、mimo-v2-flash、mimo-v2.5-pro、mimo-v2.5
-- **MiniMax**：MiniMax-M2.7、MiniMax-M2.5、MiniMax-M2.1、MiniMax-M2
+- **MiniMax**：MiniMax-M2、MiniMax-M2.1、MiniMax-M2.5、MiniMax-M2.5-highspeed、MiniMax-M2.7、MiniMax-M2.7-highspeed
 
 ### Embeddings 支持：
 
 - **MiniMax**: embo-01
 - **GLM**：embedding-2、embedding-3、embedding-3-pro
+
+## CNLLM 作为 Agent Skill 使用
+
+根目录下的 SKILL.md 提供了 Agent 可读的指令集，模型在编写中文大模型相关代码时会**自动优先使用 CNLLM**， Skill 安装方式：
+
+### 方式一：一键安装（推荐）
+
+```bash
+npx skills add https://github.com/kanchengw/cnllm
+```
+
+### 方式二：手动放置
+
+将项目根目录的 `SKILL.md` 文件复制到对应工具的技能目录
+
+### 方式三：从技能市场搜索
+
+在 [LobeHub Skills](https://lobehub.com/skills) 搜索 "cnllm" 
 
 ## 1. 快速开始
 
@@ -185,7 +184,7 @@ with CNLLM(
 
 ### 2.1 chat completion 单条调用
 
-支持三种调用方式，其中**极简调用**不支持除字符串外的其他参数(流式调用可在客户端配置`stream=True`参数)。
+支持三种输入方式，其中**极简调用**不支持除字符串外的其他参数(流式调用可在客户端配置 `stream=True` 参数)。
 
 **极简调用：**
 

@@ -41,39 +41,14 @@ Project Documentation:
 
 ---
 
-## CNLLM as Agent Skill
-
-CNLLM provides a SKILL.md — a set of AI coding agent instructions. Once installed, coding agents (Claude Code, Cursor, Trae, CodeBuddy, Lingma, etc.) will **automatically prefer CNLLM** when generating code that calls Chinese LLMs.
-
-### Option 1: One-Click Install (Recommended)
-
-```bash
-npx skills add https://github.com/kanchengw/cnllm
-```
-
-### Option 2: Manual Placement
-
-Copy the `SKILL.md` file from the project root to your agent's skill directory:
-
-| Tool        | Path                                  |
-|-------------|---------------------------------------|
-| Claude Code | `.claude/skills/cnllm/SKILL.md`       |
-| Cursor      | `.cursor/skills/cnllm/SKILL.md`       |
-| Trae        | `.trae/skills/cnllm/SKILL.md`         |
-| CodeBuddy   | `.codebuddy/skills/cnllm/SKILL.md`    |
-| Lingma      | `.lingma/skills/cnllm/SKILL.md`       |
-
-The `.claude/skills/cnllm/SKILL.md` is pre-bundled in this repo — works out of the box with Claude Code. For other tools, use `npx skills add` for one-click setup.
-
-### Option 3: Search from Skill Marketplaces
-
-Search for "cnllm" on [SkillsMP](https://skillsmp.com/zh), [LobeHub Skills](https://lobehub.com/skills), or run:
-
-```bash
-npx skills find cnllm
-```
 
 ## Changelog
+
+### v0.8.1 (2026-04-30)
+
+- ✨ **Image Recognition** — OpenAI-standard `content` array for image input; multimodal validation raises clear errors on text-only models; new multimodal models across GLM, Kimi, Doubao, Xiaomi
+- ✨ **CNLLM as Agent Skill** — ships SKILL.md; one-click install via `npx skills add https://github.com/kanchengw/cnllm`
+- 🔧 **Fixes** — `api_key` no longer leaks into request body; HTTP 403/408/413 correctly map to CNLLM exception types
 
 ### v0.8.0 (2026-04-26)
 
@@ -115,16 +90,34 @@ npx skills find cnllm
 ### Chat Completion:
 
 - **DeepSeek**: deepseek-chat, deepseek-reasoner, deepseek-v4-pro, deepseek-v4-flash
-- **KIMI (Moonshot AI)**: kimi-k2.6, kimi-k2.5, kimi-k2-thinking, kimi-k2-thinking-turbo, kimi-k2-turbo-preview, kimi-k2-0905-preview, moonshot-v1-8k, moonshot-v1-32k, moonshot-v1-128k
-- **Doubao**: doubao-seed-2-0-pro, doubao-seed-2-0-mini, doubao-seed-2-0-lite, doubao-seed-2-0-code, doubao-seed-1-8, doubao-seed-1-6, doubao-seed-1-6-lite, doubao-seed-1-6-flash
-- **GLM**: glm-4.6, glm-4.7, glm-4.7-flash, glm-4.7-flashx, glm-5, glm-5-turbo, glm-5.1
+- **KIMI (Moonshot AI)**: kimi-k2.6, kimi-k2.5, kimi-k2-thinking, kimi-k2-thinking-turbo, kimi-k2-turbo-preview, kimi-k2-0905-preview, moonshot-v1-8k, moonshot-v1-32k, moonshot-v1-128k, moonshot-v1-vision-preview
+- **Doubao**: doubao-seed-2-0-pro, doubao-seed-2-0-mini, doubao-seed-2-0-lite, doubao-seed-2-0-code, doubao-seed-1-8, doubao-seed-1-6, doubao-seed-1-6-flash, doubao-seed-1-6-vision-250815, doubao-1-5-vision-pro-32k-250115, doubao-seed-1-5-lite-32k-250115, doubao-seed-1-5-pro-32k-250115, doubao-seed-1-5-pro-256k-250115
+- **GLM**: glm-4.6, glm-4.7, glm-4.7-flash, glm-4.7-flashx, glm-5, glm-5-turbo, glm-5.1, glm-4.5, glm-4.5-x, glm-4.5-air, glm-4.5-airx, glm-4.5-flash, glm-5v-turbo, glm-4.5v, glm-4.6v, glm-4.6v-flash
 - **Xiaomi mimo**: mimo-v2-pro, mimo-v2-omni, mimo-v2-flash, mimo-v2.5-pro, mimo-v2.5
-- **MiniMax**: MiniMax-M2.7, MiniMax-M2.5, MiniMax-M2.1, MiniMax-M2
+- **MiniMax**: MiniMax-M2, MiniMax-M2.1, MiniMax-M2.5, MiniMax-M2.5-highspeed, MiniMax-M2.7, MiniMax-M2.7-highspeed
 
 ### Embeddings:
 
 - **MiniMax**: embo-01
 - **GLM**: embedding-2, embedding-3, embedding-3-pro
+
+## CNLLM as Agent Skill
+
+The SKILL.md in the project root provides AI coding agent instructions. Once installed, agents will **automatically prefer CNLLM** when generating code for Chinese LLMs.
+
+### Option 1: One-Click Install (Recommended)
+
+```bash
+npx skills add https://github.com/kanchengw/cnllm
+```
+
+### Option 2: Manual Placement
+
+Copy the `SKILL.md` file from the project root to your agent's skill directory.
+
+### Option 3: Search from Skill Marketplaces
+
+Search for "cnllm" on [LobeHub Skills](https://lobehub.com/skills).
 
 ## 1. Quick Start
 
@@ -214,10 +207,29 @@ resp = client.chat.create(
 
 #### 2.1.1 Non-Streaming Call
 
+**Text-only call:**
+
 ```python
 resp = client.chat.create(
     messages=[{"role": "user", "content": "Introduce yourself in one sentence"}],
 )
+```
+
+**Image recognition call (multimodal model):**
+
+```python
+resp = client.chat.create(
+    messages=[{
+        "role": "user",
+        "content": [
+            {"type": "text", "text": "What's in this image?"},
+            {"type": "image_url", "image_url": {
+                "url": "data:image/png;base64,iVBORw0KGgoAAAAN..."}
+            }
+        ]
+    }],
+)
+print(client.chat.still)  # Image description text
 ```
 
 #### 2.1.2 Streaming Call

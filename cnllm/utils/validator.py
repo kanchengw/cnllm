@@ -71,10 +71,22 @@ class ParamValidator:
         if isinstance(mapping, dict):
             type_mapping = mapping.get(self.adapter_type)
             if isinstance(type_mapping, dict):
-                return list(type_mapping.values())
+                names = []
+                for v in type_mapping.values():
+                    if isinstance(v, str):
+                        names.append(v)
+                    elif isinstance(v, dict):
+                        names.append(v.get("model", ""))
+                return names
             if self.adapter_type in mapping:
                 return []
-            return list(mapping.values())
+            names = []
+            for v in mapping.values():
+                if isinstance(v, str):
+                    names.append(v)
+                elif isinstance(v, dict):
+                    names.append(v.get("model", ""))
+            return names
         return []
 
     def validate_model(self, model: str) -> bool:
@@ -235,10 +247,14 @@ class ParamValidator:
         mapping = self._get_config_value("model_mapping", default={})
         if isinstance(mapping, dict):
             if "chat" in mapping:
-                return mapping["chat"].get(model, model)
-            if "embedding" in mapping:
-                return mapping["embedding"].get(model, model)
-            return mapping.get(model, model)
+                entry = mapping["chat"].get(model, model)
+            elif "embedding" in mapping:
+                entry = mapping["embedding"].get(model, model)
+            else:
+                entry = mapping.get(model, model)
+            if isinstance(entry, dict):
+                return entry.get("model", model)
+            return entry
         return model
 
     def validate(self, params: Dict[str, Any], *keys) -> None:

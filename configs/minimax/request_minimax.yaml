@@ -16,9 +16,9 @@ required_fields:
 
 one_of:
   messages_or_prompt:
-    messages: 
+    messages:
       adapter: [chat]
-    prompt: 
+    prompt:
       adapter: [chat]
 
 optional_fields:
@@ -83,6 +83,8 @@ model_mapping:
     minimax-m2.1: "MiniMax-M2.1"
     minimax-m2.5: "MiniMax-M2.5"
     minimax-m2.7: "MiniMax-M2.7"
+    minimax-m2.5-highspeed: "MiniMax-M2.5-highspeed"
+    minimax-m2.7-highspeed: "MiniMax-M2.7-highspeed"
   embedding:
     embo-01: "embo-01"
 

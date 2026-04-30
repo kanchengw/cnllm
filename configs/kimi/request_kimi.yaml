@@ -77,18 +77,26 @@ optional_fields:
   safety_identifier:
     adapter: [chat]
 
+
 model_mapping:
   chat:
     moonshot-v1-8k: "moonshot-v1-8k"
     moonshot-v1-32k: "moonshot-v1-32k"
     moonshot-v1-128k: "moonshot-v1-128k"
-    kimi-k2.5: "kimi-k2.5"
+    kimi-k2.5:
+      model: "kimi-k2.5"
+      vision: true
     kimi-k2-thinking: "kimi-k2-thinking"
     kimi-k2-thinking-turbo: "kimi-k2-thinking-turbo"
     kimi-k2-0905-preview: "kimi-k2-0905-preview"
     kimi-k2-0711-preview: "kimi-k2-0711-preview"
     kimi-k2-turbo-preview: "kimi-k2-turbo-preview"
-    kimi-k2.6: "kimi-k2.6"
+    kimi-k2.6:
+      model: "kimi-k2.6"
+      vision: true
+    moonshot-v1-vision-preview:
+      model: "moonshot-v1-vision-preview"
+      vision: true
 
 error_check:
   code_path: "error.code"

@@ -54,7 +54,8 @@ class BaseAdapter:
                 mapping = mapping["chat"]
             if isinstance(mapping, dict):
                 for short_name, vendor_name in mapping.items():
-                    if vendor_name == model:
+                    actual_name = vendor_name if isinstance(vendor_name, str) else vendor_name.get("model") if isinstance(vendor_name, dict) else None
+                    if actual_name == model:
                         return adapter_name
         return None
 
@@ -155,7 +156,48 @@ class BaseAdapter:
         mapping = self._get_config_value("model_mapping", default={})
         if isinstance(mapping, dict) and "chat" in mapping:
             mapping = mapping.get("chat", {})
-        return mapping.get(model, model)
+        entry = mapping.get(model, model)
+        if isinstance(entry, dict):
+            return entry.get("model", model)
+        return entry
+
+    def _has_image_content(self, messages: list) -> bool:
+        """检查 messages 中是否包含图片内容（OpenAI content array 格式）"""
+        if not messages:
+            return False
+        for msg in messages:
+            content = msg.get("content", "")
+            if isinstance(content, list):
+                for part in content:
+                    if isinstance(part, dict) and part.get("type") == "image_url":
+                        return True
+        return False
+
+    def _get_vision_models(self) -> list:
+        """获取当前 adapter 下支持多模态的模型列表"""
+        mapping = self._get_config_value("model_mapping", default={})
+        if isinstance(mapping, dict) and "chat" in mapping:
+            mapping = mapping.get("chat", {})
+        return [
+            name for name, config in mapping.items()
+            if isinstance(config, dict) and config.get("vision")
+        ]
+
+    def _check_image_support(self, params: Dict[str, Any]) -> None:
+        """验证当前模型是否支持图片输入"""
+        from ..utils.exceptions import InvalidRequestError
+        messages = params.get("messages")
+        if not messages:
+            return
+        model = params.get("model") or self.model
+        if self._has_image_content(messages):
+            vision_models = self._get_vision_models()
+            if model not in vision_models:
+                suffix = f": {vision_models}" if vision_models else ""
+                raise InvalidRequestError(
+                    message=f"模型 '{model}' 不支持图片输入。请使用其他多模态模型{suffix}",
+                    provider=self.ADAPTER_NAME
+                )
 
     def get_api_path(self) -> str:
         """获取 API 路径，根据 adapter_type 选择 chat 或 embedding 层级的 path"""
@@ -192,6 +234,24 @@ class BaseAdapter:
                 else:
                     mappings[field_name] = field_name
 
+    def _get_skip_fields(self) -> set:
+        """获取所有声明了 skip: true 的字段名（来自 required_fields / optional_fields / one_of）"""
+        skip_fields = set()
+        for section in ["required_fields", "optional_fields"]:
+            fields = self._get_config_value(section, default={})
+            if isinstance(fields, dict):
+                for field_name, field_config in fields.items():
+                    if isinstance(field_config, dict) and field_config.get("skip"):
+                        skip_fields.add(field_name)
+        one_of = self._get_config_value("one_of", default={})
+        if isinstance(one_of, dict):
+            for group in one_of.values():
+                if isinstance(group, dict):
+                    for field_name, field_config in group.items():
+                        if isinstance(field_config, dict) and field_config.get("skip"):
+                            skip_fields.add(field_name)
+        return skip_fields
+
     def _build_payload(self, params: Dict[str, Any]) -> Dict[str, Any]:
         model = params.get("model") or self.model
         vendor_model = self.get_vendor_model(model)
@@ -200,12 +260,15 @@ class BaseAdapter:
             "model": vendor_model,
         }
 
+        skip_fields = self._get_skip_fields()
         optional_fields = self._get_config_value("optional_fields", default={})
 
         for key, value in params.items():
             if key == "model":
                 continue
             if value is None:
+                continue
+            if key in skip_fields:
                 continue
             field_config = optional_fields.get(key, key)
             if isinstance(field_config, dict):
@@ -254,6 +317,8 @@ class BaseAdapter:
         self._validator.validate_required_params(params)
         params = self._filter_supported_params(params)
         self._validate_one_of(params)
+
+        self._check_image_support(params)
 
         payload = self._build_payload(params)
 
@@ -387,6 +452,8 @@ class BaseAdapter:
         self._validator.validate_required_params(params)
         params = self._filter_supported_params(params)
         self._validate_one_of(params)
+
+        self._check_image_support(params)
 
         payload = self._build_payload(params)
 
