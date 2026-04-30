@@ -13,7 +13,9 @@ from ..utils.exceptions import (
     ServerError,
     InvalidRequestError,
     InvalidURLError,
-    AuthenticationError
+    AuthenticationError,
+    ContentFilteredError,
+    TokenLimitError,
 )
 
 
@@ -92,6 +94,12 @@ class BaseHttpClient:
 
         if status_code == 401:
             raise AuthenticationError(provider=self.provider)
+        elif status_code == 403:
+            raise ContentFilteredError(provider=self.provider)
+        elif status_code == 408:
+            raise CNLLMTimeoutError(provider=self.provider)
+        elif status_code == 413:
+            raise TokenLimitError(provider=self.provider)
         elif status_code == 429:
             raise RateLimitError(provider=self.provider)
         elif status_code == 400:
@@ -156,6 +164,9 @@ class BaseHttpClient:
             except httpx.HTTPError:
                 raise
 
+            except (RateLimitError, AuthenticationError, InvalidRequestError, ServerError):
+                raise
+
             except Exception:
                 if attempt < self.max_retries - 1:
                     time.sleep(self.retry_delay)
@@ -204,6 +215,9 @@ class BaseHttpClient:
                 raise InvalidURLError(message=str(e), provider=self.provider)
 
             except httpx.HTTPError:
+                raise
+
+            except (RateLimitError, AuthenticationError, InvalidRequestError, ServerError):
                 raise
 
             except Exception:
@@ -341,6 +355,9 @@ class BaseHttpClient:
                 raise InvalidURLError(message=str(e), provider=self.provider)
 
             except httpx.HTTPError:
+                raise
+
+            except (RateLimitError, AuthenticationError, InvalidRequestError, ServerError):
                 raise
 
             except Exception:

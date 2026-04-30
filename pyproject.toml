@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "cnllm"
-version = "0.8.0"
-description = "中文大模型适配库，将 API 响应封装为 OpenAI 标准格式，无缝协作 LangChain、LlamaIndex、LiteLLM 等机器学习应用框架"
+version = "0.8.1"
+description = "为中文大模型定制的 OpenAI SDK 增强库，系统性优化接口适配和响应解析、批量处理等能力，无缝协作 OpenAI 生态内 LangChain、LlamaIndex、LiteLLM 等机器学习应用框架"
 readme = "README.md"
 license = "MIT"
 authors = [

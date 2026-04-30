@@ -20,7 +20,7 @@ from .core.accumulators.embedding_accumulator import EmbeddingResponse
 
 from .core import vendor
 
-__version__ = "0.7.0"
+__version__ = "0.8.1"
 
 __all__ = [
     "CNLLM",
