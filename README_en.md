@@ -10,6 +10,8 @@
 
 ## Why CNLLM?
 
+Chinese LLMs are catching up with the leading forces, but there is still a lack of sufficient infrastructure in real-world production environments. A notable **dilemma** arises: when using the OpenAI SDK and vendor-provided compatible interfaces, some models' **native parameters are silently ignored**, leading to **uncontrollable results and limited functions**; while using vendor's proprietary SDKs requires **additional field parsing and structure transformation**, and if workflows involve multiple models from different vendors, different code adaptations are needed for each model, resulting in **increased implementation and maintenance costs**.
+
 CNLLM provides a **unified OpenAI-compatible interface layer** with **standardized parameter rules and response format specifications**. It leverages a **lightweight YAML configuration file** to map request and response parameters, transforming heterogeneous vendor responses into OpenAI standard format while fully preserving each model's native parameters and capabilities.
 
 With CNLLM, developers can seamlessly use Chinese LLMs within the OpenAI ecosystem — LangChain, LlamaIndex, LiteLLM, and other mainstream ML frameworks. In multi-model workflows, CNLLM **eliminates additional SDK dependencies, reduces parsing code by 80%+, and cuts AI agent token consumption**.
@@ -18,8 +20,8 @@ With CNLLM, developers can seamlessly use Chinese LLMs within the OpenAI ecosyst
 - **OpenAI Standard Response** — All vendor responses aligned to OpenAI API format
 - **Full Model Capabilities** — Calls vendor-native APIs; supports native parameters and unique features
 - **Mainstream Framework Integration** — LangChain, LlamaIndex, LiteLLM, and more
-- **Highly Encapsulated** — Built-in access to content / tool_calls / reasoning_content / raw response — no manual parsing
-- **Max Batch** — Highly flexible and powerful batch API with per-request customization and advanced features
+- **Encapsulated Key Fields** — Built-in access to content / tool_calls / reasoning_content / raw response — no manual parsing
+- **Max Batch Capacity** — Highly flexible and powerful batch API with per-request customization and advanced features
 
 ### Collaboration Opportunities
 
@@ -45,6 +47,15 @@ Project Documentation:
 
 
 ## Changelog
+
+### v0.8.2 (2026-05-01)
+
+- 🔧 **Stream accumulation fix** 
+  - Fixed StreamAccumulator double-wrapping that caused `.still`/`.think` duplication
+- ✨ **reasoning_content in standard response** 
+  - `reasoning_content` is now included in `choices[0].message` , access via `.think` property
+- ✨ **reasoning_content in stream delta** 
+  - Streaming chunks now include `reasoning_content` in `choices[0].delta`, access via `.think`, returns real-time cumulative reasoning content
 
 ### v0.8.1 (2026-04-30)
 
@@ -72,7 +83,7 @@ Project Documentation:
 
 ### v0.7.0 (2026-04-21)
 
-- ✨ **Async Support** - Full async support via `asyncCNLLM` client for chat completion and Embeddings async interfaces
+- ✨ **Async Support** - Full async support via `asyncCNLLM` client for chat completions and Embeddings async interfaces
   - httpx unified sync/async HTTP client
   - Supports async SSE streaming and Embeddings calls
 - ✨ **Batch Calls** - `CNLLM.chat.batch()` for sync batch calls, `asyncCNLLM.chat.batch()` for async batch calls
@@ -81,7 +92,7 @@ Project Documentation:
   - Custom IDs: supports `custom_ids` parameter for custom request_id
   - Progress callbacks: `callbacks` custom callback functions
   - Fast fail: throws exception on any request failure to avoid large-scale batch failures
-  - OpenAI compatible: each request in batch response returns standard OpenAI chat completion format
+  - OpenAI compatible: each request in batch response returns standard OpenAI chat completions format
 - ✨ **Embedding Calls** - Sync/async versions of `client.embeddings.create()` and `client.embeddings.batch()`
   - Real-time stats: `request_counts` field shows real-time request status
   - Error isolation: single request failure doesn't affect other requests
@@ -98,7 +109,7 @@ Project Documentation:
 
 ## Supported Models
 
-### Chat Completion:
+### Chat Completions:
 
 - **DeepSeek**: deepseek-chat, deepseek-reasoner, deepseek-v4-pro, deepseek-v4-flash
 - **KIMI (Moonshot AI)**: kimi-k2.6, kimi-k2.5, kimi-k2-thinking, kimi-k2-thinking-turbo, kimi-k2-turbo-preview, kimi-k2-0905-preview, moonshot-v1-8k, moonshot-v1-32k, moonshot-v1-128k, moonshot-v1-vision-preview
@@ -188,11 +199,12 @@ with CNLLM(
 
 ## 2. Call Scenarios
 
-### 2.1 Chat Completion Single Call
+### 2.1 Chat Completions Single Call
 
-Three calling methods are supported. The **simplified call** does not support parameters other than strings (streaming can be configured at client level with `stream=True`).
+Three calling methods are supported, call with one line of code, one parameter:
 
-**Simplified Call:**
+**Simplified Call:** 
+Takes only strings as parameter(streaming can be configured at client level with `stream=True`)
 
 ```python
 resp = client("Introduce yourself in one sentence")
@@ -218,29 +230,10 @@ resp = client.chat.create(
 
 #### 2.1.1 Non-Streaming Call
 
-**Text-only call:**
-
 ```python
 resp = client.chat.create(
     messages=[{"role": "user", "content": "Introduce yourself in one sentence"}],
 )
-```
-
-**Image recognition call (multimodal model):**
-
-```python
-resp = client.chat.create(
-    messages=[{
-        "role": "user",
-        "content": [
-            {"type": "text", "text": "What's in this image?"},
-            {"type": "image_url", "image_url": {
-                "url": "data:image/png;base64,iVBORw0KGgoAAAAN..."}
-            }
-        ]
-    }],
-)
-print(client.chat.still)  # Image description text
 ```
 
 #### 2.1.2 Streaming Call
@@ -251,21 +244,21 @@ resp = client.chat.create(
     stream=True
 )
 for chunk in resp:
-    pass
+    print(resp.still)  # Accumulates real-time response content
 ```
 
 #### 2.1.3 Response Access
 
-In streaming calls, access via `for` loop with **real-time accumulation**; outside the loop or in non-streaming calls, access the full result directly:
+In streaming calls, access via `for` loop with **real-time accumulation**; outside the loop or in non-streaming calls, access the full field content directly:
 
-| Category | Access Method | Return Format | Example |
+| Response Field | Access Method | Return Format | Example |
 |----------|-------------|---------------|---------|
-| **think** reasoning process | `resp.think` | `str` | `"reasoning content..."` |
-| **still** response content | `resp.still` | `str` | `"response content..."` |
-| **tools** tool call messages | `resp.tools` | `Dict[int, Dict]` | `{0: {"id": "...", "function": {...}}, 1: {...}` |
-| **raw** model native response | `resp.raw` | `Dict` | `{"id": "...", "choices": [...], ...}` |
+| **think**: `reasoning content` | `resp.think` | `str` | `"reasoning content..."` |
+| **still**: `content` | `resp.still` | `str` | `"response content..."` |
+| **tools**: `tool_calls` | `resp.tools` | `Dict[int, Dict]` | `{0: {"id": "...", "function": {...}}, 1: {...}` |
+| **raw**: model native response | `resp.raw` | `Dict` | `{"id": "...", "choices": [...], ...}` |
 
-### 2.2 Chat Completion Batch Call
+### 2.2 Chat Completions Batch Call
 
 You can use `prompt` and `messages` parameters for quick global configuration, or use `requests` parameter for independent configuration of individual requests.
 
@@ -290,7 +283,10 @@ resp = client.chat.batch(
 )
 ```
 
-**requests parameter:** Also supports managing context via `requests.messages` parameter.
+**requests parameter:** 
+
+Configure individual requests with **independent strategy**, global parameters inherited when not configured per-request, also supports `requests.messages` parameter to manage context.
+
 ```python
 resp = client.chat.batch(
     requests=[
@@ -328,9 +324,9 @@ BatchResponse outer structure, where each response under `results[request_id]` i
 
 #### 2.2.2 Chat Batch Response Access
 
-Responses support **real-time access** with **real-time accumulation**, accessible by `request_id` or by index:
-For batch streaming calls, accumulation is streaming accumulation, chunk by chunk; for batch non-streaming calls, accumulation is request by request.
-Specifically, in batch calls with mixed streaming strategies, real-time accumulation is request by request.
+Support real-time access to **batch results, statistics, and key fields** via `for` loop with **real-time accumulation**, accessible by `request_id` or by index:
+For batch streaming calls, accumulation builds chunk by chunk; for batch non-streaming calls, accumulation builds request by request;
+Specifically, in batch calls with mixed streaming strategies, real-time accumulation builds request by request.
 
 **Access methods:**
 
@@ -347,9 +343,9 @@ print(resp.still)  # Full batch response content
 # Or access via batch_result:
 
 for r in client.chat.batch(
-    prompt=["Hello", "How's the weather today", "Who are you"]
+    prompt=["Hello", "How's the weather today", "Who are you"], stream=True
 ):
-    print(client.batch_result.results)  # Standard responses for each request, accumulated request by request
+    print(client.batch_result.results)  # Standard responses for each request, accumulated chunk by chunk
 
 print(client.batch_result.raw)  # Full batch model native responses
 ```
@@ -475,8 +471,8 @@ Batch calls support **retry strategy** and **concurrency control** parameter con
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `batch_size` | `int` | Auto-calculated | Batch size, batch Embeddings calls only |
-| `max_concurrent` | `int` | `12`/`3` | Max concurrent requests, Embeddings default 12, Chat completion default 3 |
-| `rps` | `float` | `10`/`2` | Requests per second, Embeddings default 10, Chat completion default 2 |
+| `max_concurrent` | `int` | `12`/`3` | Max concurrent requests, Embeddings default 12, Chat completions default 3 |
+| `rps` | `float` | `10`/`2` | Requests per second, Embeddings default 10, Chat completions default 2 |
 | `timeout` | `int` | 30 | Single request timeout (seconds) |
 | `max_retries` | `int` | 3 | Max retry attempts |
 | `retry_delay` | `float` | 1.0 | Retry delay (seconds) |
@@ -487,7 +483,7 @@ Not recommended to manually configure.
 
 ### 2.5 Batch Call Advanced Features
 
-Both batch chat completion and Embeddings calls support **progress callbacks, custom request IDs, stop on error**.
+Both batch chat completions and Embeddings calls support **progress callbacks, custom request IDs, stop on error**.
 
 #### 2.5.1 Custom Request IDs
 
@@ -548,7 +544,8 @@ CNLLM single request streaming, non-streaming, and Embeddings response formats f
         "index": 0,
         "message": {
             "role": "assistant",
-            "content": "Hello, I'm MiniMax-M2.7..."
+            "content": "Hello, I'm MiniMax-M2.7...",
+            "reasoning_content": "reasoning process..."    # thinking models only; absent for non-thinking models
         },
         "logprobs": null,
         "finish_reason": "stop"
@@ -573,9 +570,12 @@ CNLLM single request streaming, non-streaming, and Embeddings response formats f
 ```python
 {'id': 'chatcmpl-xxx', 'object': 'chat.completion.chunk', 'created': 1234567890, 'model': 'minimax-m2.7', 'choices': [{'index': 0, 'delta': {'role': 'assistant'}, 'finish_reason': None}]}
 
-{'id': 'chatcmpl-xxx', 'object': 'chat.completion.chunk', 'created': 1234567890, 'model': 'minimax-m2.7', 'choices': [{'index': 0, 'delta': {'content': '你'}, 'finish_reason': None}]}
+ # reasoning_content chunks (thinking models only):
+{'id': 'chatcmpl-xxx', 'choices': [{'index': 0, 'delta': {'reasoning_content': 'reasoning...'}, 'finish_reason': None}]}
 
- # ... middle chunks
+{'id': 'chatcmpl-xxx', 'object': 'chat.completion.chunk', 'created': 1234567890, 'model': 'minimax-m2.7', 'choices': [{'index': 0, 'delta': {'content': 'Hello...'}, 'finish_reason': None}]}
+
+ # ... chunks
 
 {'id': 'chatcmpl-xxx', 'object': 'chat.completion.chunk', 'created': 1234567890, 'model': 'minimax-m2.7', 'choices': [{'index': 0, 'delta': {}, 'finish_reason': 'stop'}]}
 ```

@@ -256,6 +256,9 @@ class CNLLM:
                 )
                 self._last_response = resp
                 if actual_stream:
+                    # 避免重复包装：resp 可能已是 StreamAccumulator（来自 _handle_stream）
+                    if isinstance(resp, StreamAccumulator):
+                        return resp
                     return StreamAccumulator(resp, adapter)
                 if hasattr(resp, 'raw') and hasattr(resp, 'still'):
                     return resp
@@ -285,6 +288,8 @@ class CNLLM:
             self.parent._last_adapter = fb_manager._last_adapter
             self._last_response = resp
             if actual_stream:
+                if isinstance(resp, StreamAccumulator):
+                    return resp
                 return StreamAccumulator(resp, fb_manager._last_adapter)
             if hasattr(resp, 'raw') and hasattr(resp, 'still'):
                 return resp

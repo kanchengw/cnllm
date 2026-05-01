@@ -136,12 +136,6 @@ class MiniMaxAdapter(BaseAdapter):
 
     def _accumulate_extra_fields(self, result: Dict[str, Any]) -> None:
         choices = result.get("choices", [])
-        delta = choices[0].get("delta", {}) if choices else {}
-        content = delta.get("content", "")
-        if content and content == self._last_content:
-            return
-        if content:
-            self._last_content = content
         super()._accumulate_extra_fields(result)
         for choice in choices:
             choice.pop("message", None)
