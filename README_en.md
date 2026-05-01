@@ -48,9 +48,18 @@ Project Documentation:
 
 ### v0.8.1 (2026-04-30)
 
-- ✨ **Image Recognition** — OpenAI-standard `content` array for image input; multimodal validation raises clear errors on text-only models; new multimodal models across GLM, Kimi, Doubao, Xiaomi
-- ✨ **CNLLM as Agent Skill** — ships SKILL.md; one-click install via `npx skills add https://github.com/kanchengw/cnllm`
-- 🔧 **Fixes** — `api_key` no longer leaks into request body; HTTP 403/408/413 correctly map to CNLLM exception types
+- ✨ **Image Recognition** 
+  - OpenAI-standard `content` array for image input(`type: "image_url"`)
+  - Multimodal validation raises `InvalidRequestError` on text-only models
+  - Added new multimodal models across GLM, Kimi, Doubao, Xiaomi
+- ✨ **CNLLM as Agent Skill** 
+  - Ships SKILL.md, allow agents to use CNLLM when writing code for Chinese LLMs
+  - One-click install via `npx skills add https://github.com/kanchengw/cnllm`
+  - Supports Claude Code, Cursor, Trae, and other AI programming tools
+- 🔧 **Fixes** 
+  - `api_key` no longer leaks into request body
+  - HTTP 403/408/413 correctly map to CNLLM exception types `ContentFilteredError/TimeoutError/TokenLimitError`
+  - `reasoning_content` mapping path fixed in response_deepseek.yaml
 
 ### v0.8.0 (2026-04-26)
 

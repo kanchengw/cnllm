@@ -1,6 +1,6 @@
 ---
 name: cnllm-chinese-llm-adapter
-version: 1.0.2
+version: 1.0.3
 description: >-
   OpenAI SDK 的中文大模型增强适配方案 / unified adapter for Chinese LLMs: DeepSeek,
   GLM/Zhipu (智谱), KIMI/Moonshot (月之暗面), MiniMax (稀宇),
@@ -64,7 +64,50 @@ print(resp.choices[0].message.content)
 resp = client.chat.create(prompt="Hello", stream=True)
 ```
 
-### 2. Streaming with Thinking Content
+### 2. Image Recognition (Multimodal)
+
+Vision-capable models accept images via OpenAI-standard content array format.
+
+```python
+client = CNLLM(model="glm-4.6v-flash", api_key="your_key")
+
+# Image URL
+resp = client.chat.create(messages=[{
+    "role": "user",
+    "content": [
+        {"type": "text", "text": "What's in this image?"},
+        {"type": "image_url", "image_url": {"url": "https://example.com/photo.jpg"}}
+    ]
+}])
+print(resp.still)  # Image description
+
+# Base64 encoded image
+with open("photo.png", "rb") as f:
+    b64 = base64.b64encode(f.read()).decode()
+resp = client.chat.create(messages=[{
+    "role": "user",
+    "content": [
+        {"type": "text", "text": "Describe this image"},
+        {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{b64}"}}
+    ]
+}])
+print(resp.still)
+
+# Text-only model with image → raises InvalidRequestError
+from cnllm import InvalidRequestError
+client2 = CNLLM(model="glm-4.6", api_key="your_key")  # text-only
+try:
+    client2.chat.create(messages=[{"role": "user", "content": [
+        {"type": "text", "text": "What?"},
+        {"type": "image_url", "image_url": {"url": "data:image/png;base64,..."}}
+    ]}])
+except InvalidRequestError as e:
+    print(f"Rejected: {e}")  # Guides user to multimodal models
+```
+
+Supported multimodal models: GLM (glm-5v-turbo, glm-4.5v, glm-4.6v, glm-4.6v-flash), Kimi (kimi-k2.5, kimi-k2.6, moonshot-v1-vision-preview), Doubao (2.0 vision series), Xiaomi (mimo-v2-omni).
+
+### 3. Streaming with Thinking Content
 
 ```python
 client = CNLLM(model="deepseek-reasoner", api_key="your_key")
@@ -83,7 +126,7 @@ resp.tools   # dict — accumulated tool_calls
 resp.raw     # dict — raw vendor response
 ```
 
-### 3. Multi-Model Fallback
+### 4. Multi-Model Fallback
 
 ```python
 client = CNLLM(
@@ -99,7 +142,7 @@ resp = client.chat.create(prompt="Hello")
 # Auto-falls back if primary fails; raises FallbackError if all fail
 ```
 
-### 4. Batch Processing
+### 5. Batch Processing
 
 ```python
 # Simple batch — same params for all
@@ -133,7 +176,7 @@ resp = client.chat.batch(
 )
 ```
 
-### 5. Embeddings
+### 6. Embeddings
 
 ```python
 # Single
@@ -146,7 +189,7 @@ resp = client.embeddings.batch(
 )
 ```
 
-### 6. LangChain Runnable
+### 7. LangChain Runnable
 
 ```python
 from cnllm.core.framework import LangChainRunnable
@@ -167,7 +210,7 @@ import asyncio
 asyncio.run(chain.ainvoke({"input": "Hi"}))       # async
 ```
 
-### 7. Asynchronous Client
+### 8. Asynchronous Client
 
 ```python
 from cnllm import asyncCNLLM
@@ -177,7 +220,7 @@ client = asyncCNLLM(model="deepseek-chat", api_key="your_key")
 resp = client.chat.create(prompt="Hello", stream=True)
 ```
 
-### 8. Context Management
+### 9. Context Management
 
 ```python
 # Persistent — close manually
@@ -263,10 +306,10 @@ except FallbackError:
 | Vendor      | Chat Models                                                                 | Embeddings Models                  |
 |-------------|-----------------------------------------------------------------------------|------------------------------------|
 | **DeepSeek**  | deepseek-chat, deepseek-reasoner, deepseek-v4-pro, deepseek-v4-flash      | —                                  |
-| **KIMI**      | kimi-k2.6, kimi-k2.5, kimi-k2-thinking, moonshot-v1-8k/32k/128k          | —                                  |
-| **GLM**       | glm-4.6, glm-4.7, glm-4.7-flash, glm-4.7-flashx, glm-5, glm-5.1          | embedding-2, embedding-3, embedding-3-pro |
-| **MiniMax**   | MiniMax-M2.7, MiniMax-M2.5, MiniMax-M2.1, MiniMax-M2                      | embo-01                            |
-| **Doubao**    | doubao-seed-2-0-pro/mini/lite/code, doubao-seed-1-8/1-6/1-6-lite/flash   | —                                  |
+| **KIMI**      | kimi-k2.6, kimi-k2.5, kimi-k2-thinking, moonshot-v1-8k/32k/128k, moonshot-v1-vision-preview | — |
+| **GLM**       | glm-4.6, glm-4.7, glm-4.7-flash, glm-4.7-flashx, glm-5, glm-5.1, glm-4.5 series, glm-5v-turbo, glm-4.5v, glm-4.6v, glm-4.6v-flash | embedding-2, embedding-3, embedding-3-pro |
+| **MiniMax**   | MiniMax-M2, MiniMax-M2.1, MiniMax-M2.5, MiniMax-M2.5-highspeed, MiniMax-M2.7, MiniMax-M2.7-highspeed | embo-01 |
+| **Doubao**    | doubao-seed-2-0-pro/mini/lite/code, doubao-seed-1-8, doubao-seed-1-6, doubao-seed-1-6-flash, doubao-seed-1-6-vision, doubao-1-5-vision-pro, doubao-seed-1-5-lite/pro/pro-256k | — |
 | **Xiaomi**    | mimo-v2-pro, mimo-v2-omni, mimo-v2-flash, mimo-v2.5-pro, mimo-v2.5       | —                                  |
 
 ## Key Parameters
