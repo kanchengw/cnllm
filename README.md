@@ -16,10 +16,10 @@ CNLLM 提供了一个**统一的 OpenAI 兼容接口层**与一套**标准化的
 
 - **统一接口** - 一套接口和参数，轻松切换不同中文大模型
 - **OpenAI 标准响应** - 让所有中文大模型的异构响应对齐 OpenAI API 标准格式
-- **模型能力完整** - 底层调用中文大模型原生接口，支持模型的原生参数，发挥模型完整能力
+- **模型能力完整** - 底层调用中文大模型原生接口（或向下兼容接口），支持所有原生参数，保留模型的完整能力
 - **主流框架集成** - 适配 LangChain、LlamaIndex、LiteLLM 等主流机器学习库
-- **高度封装** - 提供高度封装的 content/tool\_calls/reasoning\_content 以及原生响应访问入口，无需额外解析响应
-- **批量功能Max** - 高灵活性和功能强大的批量请求功能，支持高度可定制的批量请求和其他高级功能
+- **关键字段封装** - 提供 .still/.tools/.think 属性访问 content/tool\_calls/reasoning\_content 字段，并且支持流式和批量请求中的实时累积
+- **批量功能Max** - 高灵活性和功能强大的批量请求功能，支持高度可定制的批量请求和多种批量高级功能
 
 ### 开发者招募
 
@@ -41,21 +41,24 @@ CNLLM 提供了一个**统一的 OpenAI 兼容接口层**与一套**标准化的
 - [厂商适配](docs/CONTRIBUTOR.md)
 - [功能性文档](docs/feature/)
 
+---
+
 ## 更新日志
 
 ### v0.8.1 (2026-04-30)
 
 - ✨ **图片识别支持**
   - 支持 OpenAI 标准 `content` array 格式传入图片（`type: "image_url"`）
-  - 多模态验证：自动识别纯文本模型，传入图片时抛出 `InvalidRequestError` 并引导使用多模态模型
-  - 新增多模态模型：GLM（glm-5v-turbo、glm-4.5v、glm-4.6v、glm-4.6v-flash）、Kimi（kimi-k2.5、kimi-k2.6、moonshot-v1-vision-preview）、Doubao（2.0全系列、1.6-vision、1.5-vision-pro）、Xiaomi（mimo-v2-omni）
+  - 视觉支持验证：自动识别纯文本模型，传入图片时抛出 `InvalidRequestError` 并引导使用多模态模型
+  - 新增视觉模型：GLM（glm-5v-turbo、glm-4.5v、glm-4.6v、glm-4.6v-flash）、Kimi（kimi-k2.5、kimi-k2.6、moonshot-v1-vision-preview）、Doubao（2.0全系列、1.6-vision、1.5-vision-pro）、Xiaomi（mimo-v2-omni、mimo-v2.5）
 - ✨ **CNLLM 作为 Agent Skill**
   - 项目提供 SKILL.md，AI 编程 Agent 编写国产大模型代码时自动优先使用 CNLLM
   - 支持一键安装：`npx skills add https://github.com/kanchengw/cnllm`
   - 支持 Claude Code、Cursor、Trae、CodeBuddy、通义灵码等工具
 - 🔧 **bug 修复**
-  - `api_key` 不再泄漏到请求体中（修复 BaseAdapter._build_payload skip 字段缺失）
-  - HTTP 错误码补充：403/408/413 正确映射到 ContentFilteredError/TimeoutError/TokenLimitError
+  - `api_key` 不再泄漏到请求体中（ BaseAdapter._build_payload skip 字段缺失）
+  - HTTP 错误码补充：403/408/413 正确映射到 `ContentFilteredError/TimeoutError/TokenLimitError`
+  - response_deepseek.yaml 中 `reasoning_content` 映射路径修复
 
 ### v0.8.0 (2026-04-26)
 
