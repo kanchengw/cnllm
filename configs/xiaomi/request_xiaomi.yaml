@@ -75,7 +75,9 @@ model_mapping:
       vision: true
     mimo-v2-flash: "mimo-v2-flash"
     mimo-v2.5-pro: "mimo-v2.5-pro"
-    mimo-v2.5: "mimo-v2.5"
+    mimo-v2.5:
+      model: "mimo-v2.5"
+      vision: true
 
 error_check:
   code_path: "error.code"
