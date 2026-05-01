@@ -10,7 +10,7 @@
 
 ## Why CNLLM?
 
-CNLLM provides a **unified OpenAI-compatible interface layer** with **standardized parameter rules and response format specifications**. Under the hood, it calls Chinese LLMs' **native APIs** (not their OpenAI-compatible proxy endpoints) and automatically wraps heterogeneous vendor responses into OpenAI standard format, while fully preserving each model's native capabilities.
+CNLLM provides a **unified OpenAI-compatible interface layer** with **standardized parameter rules and response format specifications**. It leverages a **lightweight YAML configuration file** to map request and response parameters, transforming heterogeneous vendor responses into OpenAI standard format while fully preserving each model's native parameters and capabilities.
 
 With CNLLM, developers can seamlessly use Chinese LLMs within the OpenAI ecosystem — LangChain, LlamaIndex, LiteLLM, and other mainstream ML frameworks. In multi-model workflows, CNLLM **eliminates additional SDK dependencies, reduces parsing code by 80%+, and cuts AI agent token consumption**.
 
@@ -23,7 +23,9 @@ With CNLLM, developers can seamlessly use Chinese LLMs within the OpenAI ecosyst
 
 ### Collaboration Opportunities
 
-Welcome like-minded friends to join us in building CNLLM. Please contact us at: <wangkancheng1122@163.com>
+Welcome to join us in building CNLLM. Please submit a Pull Request after creating an Issue to discuss your solution.
+
+Or contact us at: <wangkancheng1122@163.com>
 
 | Area | Description |
 |------|-------------|
