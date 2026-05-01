@@ -233,6 +233,9 @@ class Responder:
             if message["content"] == "":
                 message["content"] = None
 
+        if reasoning_content:
+            message["reasoning_content"] = reasoning_content
+
         choice = {
             "index": defaults.get("index", 0),
             "message": message,
@@ -374,6 +377,10 @@ class Responder:
 
         if tool_calls:
             delta_obj["tool_calls"] = tool_calls
+
+        reasoning_content = self._get_by_path(raw, reasoning_content_path) if reasoning_content_path else None
+        if reasoning_content:
+            delta_obj["reasoning_content"] = reasoning_content
 
         result = {
             "id": self._get_by_path(raw, "id") or f"chatcmpl-{uuid.uuid4().hex[:24]}",
