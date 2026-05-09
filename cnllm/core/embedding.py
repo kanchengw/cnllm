@@ -6,6 +6,7 @@ from typing import Dict, Any, List, Union, Optional
 
 from .accumulators.embedding_accumulator import EmbeddingResponse
 from ..utils.validator import ParamValidator
+from ..core.param_registry import resolve_scope_params, validate_for_scope, resolve_default
 
 logger = logging.getLogger(__name__)
 
@@ -211,10 +212,12 @@ class BaseEmbeddingAdapter:
         retry_delay: float = None,
         base_url: str = None,
         config_file: str = None,
+        drop_params: str = "warn",
         **kwargs
     ):
         self.api_key = api_key
         self.model = model
+        self.drop_params = drop_params
         self._raw_response = None
 
         self._load_class_config()
@@ -256,10 +259,40 @@ class BaseEmbeddingAdapter:
                 return default
         return value if value is not None else default
 
-    def _get_request_url(self, **kwargs) -> str:
-        base_url = self.base_url
-        api_path = self._validator.get_api_path()
-        return f"{base_url.rstrip('/')}/{api_path.lstrip('/')}" if api_path else base_url
+    def _get_yaml_base_url_default(self) -> str:
+        """读取 YAML 中 base_url 的 default 值（embedding 层级）"""
+        base_url_config = self._get_config_value("optional_fields", "base_url", default={})
+        if not isinstance(base_url_config, dict):
+            return ""
+        type_config = base_url_config.get(self._validator.adapter_type, {})
+        if isinstance(type_config, dict):
+            return type_config.get("default", "")
+        return ""
+
+    def _get_request_url(self, base_url: str = None, **kwargs) -> str:
+        base = (base_url or self.base_url).rstrip("/")
+        api_path = self._validator.get_api_path().lstrip("/")
+        if not api_path:
+            return base
+
+        # 规则1：已包含完整路径
+        if base.endswith(f"/{api_path}"):
+            return base
+
+        # 规则2：到版本号为止（path 首段），追加剩余部分
+        first_seg, _, rest = api_path.partition("/")
+        if rest and base.endswith(f"/{first_seg}"):
+            return f"{base}/{rest}"
+
+        # 规则5：用户 URL 是 YAML default 的前缀 → 补全
+        yaml_default = self._get_yaml_base_url_default()
+        if yaml_default:
+            yaml_default = yaml_default.rstrip("/")
+            if yaml_default.startswith(base + "/") or yaml_default == base:
+                base = yaml_default
+
+        # 规则3/4：兜底追加完整 path
+        return f"{base}/{api_path}"
 
     def _build_payload(self, params: Dict[str, Any]) -> Dict[str, Any]:
         model = params.get("model") or self.model
@@ -313,12 +346,13 @@ class BaseEmbeddingAdapter:
                     mappings[field_name] = field_name
         return mappings
 
-    def _build_headers(self, **kwargs) -> Dict[str, str]:
+    def _build_headers(self, api_key: str = None, **kwargs) -> Dict[str, str]:
         headers_config = self._get_config_value("request", "headers", default={})
         headers = {}
+        actual_api_key = api_key or self.api_key
         for key, value in headers_config.items():
             if isinstance(value, str) and "${api_key}" in value:
-                headers[key] = value.replace("${api_key}", self.api_key)
+                headers[key] = value.replace("${api_key}", actual_api_key)
             else:
                 headers[key] = value
         for user_key, header_key in self._get_header_mappings().items():
@@ -326,20 +360,24 @@ class BaseEmbeddingAdapter:
                 headers[header_key] = kwargs[user_key]
         return headers
 
-    def _post(self, url: str, payload: Dict[str, Any], timeout: int = None, **kwargs) -> Dict[str, Any]:
+    def _post(self, url: str, payload: Dict[str, Any], timeout: int = None, api_key: str = None, **kwargs) -> Dict[str, Any]:
         import httpx
-        headers = self._build_headers(**kwargs)
+        headers = self._build_headers(api_key=api_key, **kwargs)
         actual_timeout = timeout if timeout is not None else self.timeout
+        if actual_timeout is None:
+            actual_timeout = 60
         with httpx.Client(timeout=actual_timeout) as client:
             response = client.post(url=url, headers=headers, json=payload)
             if response.status_code >= 400:
                 raise Exception(f"HTTP {response.status_code}: {response.text[:200]}")
             return response.json()
 
-    async def _apost(self, url: str, payload: Dict[str, Any], timeout: int = None, **kwargs) -> Dict[str, Any]:
+    async def _apost(self, url: str, payload: Dict[str, Any], timeout: int = None, api_key: str = None, **kwargs) -> Dict[str, Any]:
         import httpx
-        headers = self._build_headers(**kwargs)
+        headers = self._build_headers(api_key=api_key, **kwargs)
         actual_timeout = timeout if timeout is not None else self.timeout
+        if actual_timeout is None:
+            actual_timeout = 60
         async with httpx.AsyncClient(timeout=actual_timeout) as client:
             response = await client.post(url=url, headers=headers, json=payload)
             if response.status_code >= 400:
@@ -354,23 +392,50 @@ class BaseEmbeddingAdapter:
         return responder.to_openai_format(raw, model)
 
     def _prepare_params(self, input_data: Union[str, List[str]], model: str = None, **kwargs) -> Dict[str, Any]:
+        from .param_registry import validate_for_scope
         params = {
-            "api_key": self.api_key,
             "model": model or self.model,
             "input": input_data,
             **kwargs
         }
-        self._validator.validate_required_params(params)
-        params = self._validator.filter_supported_params(params)
+        params = validate_for_scope(
+            params=params,
+            scope="embed",
+            vendor_yaml=self._config or {},
+            drop_params=self.drop_params,
+        )
         return params
 
     def create_single(self, input_str: str, model: str = None, **kwargs) -> Dict[str, Any]:
         from .accumulators.embedding_accumulator import EmbeddingAccumulator
+
+        # 提取客户端参数（调用级覆盖，不入 API payload）
+        call_timeout = kwargs.pop("timeout", self.timeout)
+        call_max_retries = kwargs.pop("max_retries", self.max_retries)
+        call_retry_delay = kwargs.pop("retry_delay", self.retry_delay)
+        call_api_key = kwargs.pop("api_key", None)
+        call_base_url = kwargs.pop("base_url", None)
+
         input_list = [input_str] if isinstance(input_str, str) else input_str
         params = self._prepare_params(input_list, model, **kwargs)
         payload = self._build_payload(params)
-        url = self._get_request_url(**params)
-        raw_response = self._post(url, payload, timeout=self.timeout, **params)
+        url = self._get_request_url(base_url=call_base_url, **params)
+
+        # 重试循环
+        last_error = None
+        for attempt in range(call_max_retries + 1):
+            try:
+                raw_response = self._post(url, payload, timeout=call_timeout, api_key=call_api_key, **params)
+                last_error = None
+                break
+            except Exception as e:
+                last_error = e
+                if attempt < call_max_retries:
+                    time.sleep(call_retry_delay)
+
+        if last_error:
+            raise last_error
+
         accumulator = EmbeddingAccumulator(raw_response, self)
         return accumulator.process()
 
@@ -411,19 +476,31 @@ class BaseEmbeddingAdapter:
         actual_timeout = timeout if timeout is not None else self.timeout
         actual_max_retries = max_retries if max_retries is not None else self.max_retries
         actual_retry_delay = retry_delay if retry_delay is not None else self.retry_delay
+        call_api_key = kwargs.pop("api_key", None)
+        call_base_url = kwargs.pop("base_url", None)
 
         params = self._prepare_params(inputs, model, **kwargs)
         payload = self._build_payload(params)
-        url = self._get_request_url(**params)
+        url = self._get_request_url(base_url=call_base_url, **params)
         start_time = time.time()
 
-        try:
-            raw_response = self._post(url, payload, timeout=actual_timeout, **params)
-        except Exception as e:
+        # 重试循环
+        last_error = None
+        for attempt in range(actual_max_retries + 1):
+            try:
+                raw_response = self._post(url, payload, timeout=actual_timeout, api_key=call_api_key, **params)
+                last_error = None
+                break
+            except Exception as e:
+                last_error = e
+                if attempt < actual_max_retries:
+                    time.sleep(actual_retry_delay)
+
+        if last_error:
             elapsed = time.time() - start_time
             response._elapsed = elapsed
             for rid in custom_ids:
-                response.add_error(rid, e)
+                response.add_error(rid, last_error)
             return response
 
         base_resp = raw_response.get("base_resp", {})
@@ -436,13 +513,143 @@ class BaseEmbeddingAdapter:
             response._elapsed = elapsed
             return response
 
+        if "usage" in raw_response:
+            response._usage = raw_response["usage"]
+
         if "data" in raw_response:
             for item in raw_response.get("data", []):
                 index = item.get("index", 0)
                 request_id = custom_ids[index] if index < len(custom_ids) else f"request_{index}"
                 result_data = self._to_openai_format({"data": [item]}, self.model)
-                if "usage" in item:
-                    result_data["usage"] = item["usage"]
+                response.add_result(request_id, result_data)
+                embedding = item.get("embedding", [])
+                if embedding and dimension == 0:
+                    dimension = len(embedding)
+
+        if dimension > 0:
+            response._request_counts["dimension"] = dimension
+
+        elapsed = time.time() - start_time
+        response._elapsed = elapsed
+
+        return response
+
+    # ========== 异步方法 ==========
+
+    async def acreate_single(self, input_str: str, model: str = None, **kwargs) -> Dict[str, Any]:
+        from .accumulators.embedding_accumulator import AsyncEmbeddingAccumulator
+        import asyncio
+
+        call_timeout = kwargs.pop("timeout", self.timeout)
+        call_max_retries = kwargs.pop("max_retries", self.max_retries)
+        call_retry_delay = kwargs.pop("retry_delay", self.retry_delay)
+        call_api_key = kwargs.pop("api_key", None)
+        call_base_url = kwargs.pop("base_url", None)
+
+        input_list = [input_str] if isinstance(input_str, str) else input_str
+        params = self._prepare_params(input_list, model, **kwargs)
+        payload = self._build_payload(params)
+        url = self._get_request_url(base_url=call_base_url, **params)
+
+        last_error = None
+        for attempt in range(call_max_retries + 1):
+            try:
+                raw_response = await self._apost(url, payload, timeout=call_timeout, api_key=call_api_key, **params)
+                last_error = None
+                break
+            except Exception as e:
+                last_error = e
+                if attempt < call_max_retries:
+                    await asyncio.sleep(call_retry_delay)
+
+        if last_error:
+            raise last_error
+
+        accumulator = AsyncEmbeddingAccumulator(raw_response, self)
+        return await accumulator.process()
+
+    async def acreate(
+        self,
+        input: str,
+        model: str = None,
+        **kwargs
+    ) -> Dict[str, Any]:
+        if not isinstance(input, str):
+            raise ValueError("acreate() 只接受单条文本输入 (str)，请使用 batch() 方法处理批量输入")
+        return await self.acreate_single(input, model=model, **kwargs)
+
+    async def acreate_batch(
+        self,
+        input: Union[str, List[str]],
+        custom_ids: Optional[List[str]] = None,
+        model: str = None,
+        timeout: int = None,
+        max_retries: int = None,
+        retry_delay: float = None,
+        **kwargs
+    ) -> EmbeddingResponse:
+        import asyncio
+        if isinstance(input, str):
+            inputs = [input]
+        else:
+            inputs = input
+        custom_ids = custom_ids or [f"request_{i}" for i in range(len(inputs))]
+        dimension = 0
+
+        response = EmbeddingResponse(
+            _request_counts={
+                "total": len(inputs),
+                "dimension": 0
+            }
+        )
+
+        actual_timeout = timeout if timeout is not None else self.timeout
+        actual_max_retries = max_retries if max_retries is not None else self.max_retries
+        actual_retry_delay = retry_delay if retry_delay is not None else self.retry_delay
+        call_api_key = kwargs.pop("api_key", None)
+        call_base_url = kwargs.pop("base_url", None)
+
+        params = self._prepare_params(inputs, model, **kwargs)
+        payload = self._build_payload(params)
+        url = self._get_request_url(base_url=call_base_url, **params)
+        start_time = time.time()
+
+        last_error = None
+        for attempt in range(actual_max_retries + 1):
+            try:
+                raw_response = await self._apost(url, payload, timeout=actual_timeout, api_key=call_api_key, **params)
+                last_error = None
+                break
+            except Exception as e:
+                last_error = e
+                if attempt < actual_max_retries:
+                    await asyncio.sleep(actual_retry_delay)
+
+        if last_error:
+            elapsed = time.time() - start_time
+            response._elapsed = elapsed
+            for rid in custom_ids:
+                response.add_error(rid, last_error)
+            return response
+
+        base_resp = raw_response.get("base_resp", {})
+        status_code = base_resp.get("status_code")
+        if status_code and status_code != 0:
+            error_msg = base_resp.get("status_msg", f"API error: {status_code}")
+            for rid in custom_ids:
+                response.add_error(rid, error_msg)
+            elapsed = time.time() - start_time
+            response._elapsed = elapsed
+            return response
+
+        if "usage" in raw_response:
+            response._usage = raw_response["usage"]
+
+        if "data" in raw_response:
+            for item in raw_response.get("data", []):
+                index = item.get("index", 0)
+                request_id = custom_ids[index] if index < len(custom_ids) else f"request_{index}"
+                result_data = self._to_openai_format({"data": [item]}, self.model)
                 response.add_result(request_id, result_data)
                 embedding = item.get("embedding", [])
                 if embedding and dimension == 0:
@@ -458,56 +665,96 @@ class BaseEmbeddingAdapter:
 
 
 class EmbeddingsNamespace:
-    DEFAULT_MAX_CONCURRENCY = 12
-    DEFAULT_RPS = 10
-
     def __init__(self, parent):
         self.parent = parent
 
-    def _get_adapter(self, model: str = None):
+    def _get_adapter(self, model: str = None, drop_params: str = None, api_key: str = None):
         if model is None:
             model = getattr(self.parent, 'model', None) or BaseEmbeddingAdapter.get_default_model()
         adapter_class = BaseEmbeddingAdapter.get_adapter_for_model(model)
         if not adapter_class:
             raise ValueError(f"不支持的 embedding 模型: {model}")
-        
-        timeout = getattr(self.parent, 'timeout', None)
-        max_retries = getattr(self.parent, 'max_retries', None)
-        retry_delay = getattr(self.parent, 'retry_delay', None)
-        
+
+        timeout = getattr(self.parent, 'timeout', None) or resolve_default("embed", "timeout")
+        max_retries = getattr(self.parent, 'max_retries', None) or resolve_default("embed", "max_retries")
+        retry_delay = getattr(self.parent, 'retry_delay', None) or resolve_default("embed", "retry_delay")
+
         return adapter_class(
-            api_key=self.parent.api_key,
+            api_key=api_key or self.parent.api_key,
             model=model,
             base_url=self.parent.base_url,
             timeout=timeout,
             max_retries=max_retries,
-            retry_delay=retry_delay
+            retry_delay=retry_delay,
+            drop_params=drop_params or getattr(self.parent, 'drop_params', 'warn')
         )
 
     def create(
         self,
-        input: str,
+        input: str = None,
         model: str = None,
         **kwargs
     ) -> Dict[str, Any]:
-        adapter = self._get_adapter(model)
-        return adapter.create(input, model=model, **kwargs)
+        # === 参数作用域校验：以下参数仅支持在调用入口配置，不允许在客户端初始化时传入 ===
+        for _key in ('prompt', 'messages', 'input', 'requests'):
+            if _key in self.parent._init_params:
+                raise TypeError(
+                    f"参数 '{_key}' 仅支持在调用入口配置，"
+                    f"请通过 embeddings.create({_key}=...)、batch({_key}=...) 传入"
+                )
 
-    async def create_async(
-        self,
-        input: str,
-        model: str = None,
-        **kwargs
-    ) -> Dict[str, Any]:
-        loop = asyncio.get_event_loop()
-        return await loop.run_in_executor(
-            None,
-            lambda: self.create(input, model=model, **kwargs)
+        actual_drop_params = kwargs.pop("drop_params", None)
+        if input is None:
+            raise TypeError("embeddings.create() 需要 input 参数")
+        if not isinstance(input, str):
+            raise ValueError("create() 只接受单条文本输入 (str)，请使用 batch() 方法处理批量输入")
+        clean_kwargs = validate_for_scope(
+            kwargs, "embed",
+            drop_params=actual_drop_params or getattr(self.parent, 'drop_params', 'warn'),
         )
+        if model is not None:
+            adapter = self._get_adapter(model, drop_params=actual_drop_params)
+            return adapter.create(input, model=model, **clean_kwargs)
+        # 无显式 model：尝试客户端 model + fallback_models
+        from ..utils.fallback import FallbackManager
+        last_error = None
+        primary = getattr(self.parent, 'model', None)
+        fb_config = getattr(self.parent, 'fallback_models', {})
+        if primary:
+            try:
+                adapter = self._get_adapter(primary, drop_params=actual_drop_params)
+                return adapter.create(input, model=primary, **clean_kwargs)
+            except Exception as e:
+                last_error = e
+        for fb_model, fb_key in fb_config.items():
+            try:
+                adapter = self._get_adapter(fb_model, drop_params=actual_drop_params, api_key=fb_key)
+                return adapter.create(input, model=fb_model, **clean_kwargs)
+            except Exception:
+                continue
+        if primary:
+            from ..utils.exceptions import FallbackError
+            raise FallbackError(f"embedding 所有模型失败, 最后错误: {last_error}") from last_error
+        from ..utils.exceptions import MissingParameterError
+        raise MissingParameterError("embeddings.create() 需要 model 参数（未配置客户端 model 且调用入口未传入）")
+
+    def _resolve_batch_params(self, *, max_concurrent=None, rps=None, batch_size=None, keep=None):
+        from ..core.param_registry import resolve_default
+        actual_max_concurrent = (
+            max_concurrent if max_concurrent is not None
+            else self.parent._init_params.get("max_concurrent") or resolve_default("embed", "max_concurrent") or 12
+        )
+        actual_rps = (
+            rps if rps is not None
+            else self.parent._init_params.get("rps") or resolve_default("embed", "rps") or 10
+        )
+        actual_batch_size = batch_size if batch_size is not None else self.parent._init_params.get("batch_size")
+        actual_keep = keep if keep is not None else self.parent._init_params.get("keep")
+        return actual_max_concurrent, actual_rps, actual_batch_size, actual_keep
 
     def batch(
         self,
-        input: Union[str, List[str]],
+        input: Union[str, List[str]] = None,
         batch_size: int = None,
         max_concurrent: int = None,
         rps: float = None,
@@ -516,36 +763,176 @@ class EmbeddingsNamespace:
         timeout: int = None,
         max_retries: int = None,
         retry_delay: float = None,
-        stop_on_error: bool = False,
+        stop_on_error: bool = None,
         callbacks: Optional[List] = None,
+        keep: Optional[set] = None,
         **kwargs
     ) -> EmbeddingResponse:
         from cnllm.utils.batch import EmbeddingBatchScheduler
-        from cnllm.core.accumulators.embedding_accumulator import EmbeddingBatchAccumulator
-        
+        from cnllm.core.accumulators.embedding_accumulator import EmbeddingResponse as EmbResponse
+
+        if input is None:
+            raise TypeError("embeddings.batch() 需要 input 参数")
+
+        # === 参数作用域校验：以下参数仅支持在调用入口配置，不允许在客户端初始化时传入 ===
+        for _key in ('prompt', 'messages', 'input', 'requests'):
+            if _key in self.parent._init_params:
+                raise TypeError(
+                    f"参数 '{_key}' 仅支持在调用入口配置，"
+                    f"请通过 embeddings.create({_key}=...)、batch({_key}=...) 传入"
+                )
+
         if isinstance(input, str):
             input = [input]
-        
-        adapter = self._get_adapter(model)
+
+        actual_max_concurrent, actual_rps, actual_batch_size, actual_keep = self._resolve_batch_params(
+            max_concurrent=max_concurrent, rps=rps, batch_size=batch_size, keep=keep,
+        )
+        actual_stop_on_error = stop_on_error if stop_on_error is not None else (self.parent._init_params.get("stop_on_error") if self.parent._init_params.get("stop_on_error") is not None else False)
+        actual_callbacks = callbacks if callbacks is not None else self.parent._init_params.get("callbacks")
+        actual_custom_ids = custom_ids if custom_ids is not None else self.parent._init_params.get("custom_ids")
+
+        from cnllm.core.param_registry import split_batch_params, validate_for_scope, validate_batch_params, resolve_default
+        actual_drop_params = kwargs.pop("drop_params", None)
+        batch_level_kwargs, per_request_kwargs = split_batch_params(kwargs)
+        drop_params = actual_drop_params or getattr(self.parent, 'drop_params', 'warn')
+        per_request_kwargs = validate_for_scope(per_request_kwargs, "embed", drop_params=drop_params)
+        batch_level_kwargs = validate_batch_params(batch_level_kwargs, "embed", drop_params=drop_params)
+        if actual_drop_params is not None:
+            per_request_kwargs["drop_params"] = actual_drop_params
+        actual_timeout = timeout if timeout is not None else getattr(self.parent, 'timeout', None)
+        actual_max_retries = max_retries if max_retries is not None else getattr(self.parent, 'max_retries', None)
+        actual_retry_delay = retry_delay if retry_delay is not None else getattr(self.parent, 'retry_delay', None)
+
+        response = EmbResponse()
+        response._request_counts["total"] = len(input)
+        if actual_custom_ids:
+            response._custom_ids = list(actual_custom_ids)
+        if actual_keep is not None:
+            response._keep = actual_keep if isinstance(actual_keep, frozenset) else frozenset(actual_keep)
+
+        adapter = self._get_adapter(model, drop_params=actual_drop_params)
         scheduler = EmbeddingBatchScheduler(
             adapter=adapter,
-            max_concurrent=max_concurrent,
-            rps=rps,
-            batch_size=batch_size,
-            custom_ids=custom_ids,
+            max_concurrent=actual_max_concurrent,
+            rps=actual_rps,
+            batch_size=actual_batch_size,
+            custom_ids=actual_custom_ids,
+            timeout=actual_timeout,
+            max_retries=actual_max_retries,
+            retry_delay=actual_retry_delay,
+            stop_on_error=actual_stop_on_error,
+            callbacks=actual_callbacks,
+        )
+        scheduler._execute_batch_response = response
+
+        def _bg_run():
+            try:
+                scheduler.execute(input, **per_request_kwargs)
+            except BaseException:
+                pass
+            finally:
+                response._clear_non_kept_fields()
+                response.mark_done()
+
+        import threading
+        response._start_time = time.time()
+        thread = threading.Thread(target=_bg_run, daemon=True)
+        thread.start()
+
+        return response
+
+
+class AsyncEmbeddingsNamespace:
+    def __init__(self, parent):
+        self.parent = parent
+
+    def _get_adapter(self, model: str = None, drop_params: str = None, api_key: str = None):
+        if model is None:
+            model = getattr(self.parent, 'model', None) or BaseEmbeddingAdapter.get_default_model()
+        adapter_class = BaseEmbeddingAdapter.get_adapter_for_model(model)
+        if not adapter_class:
+            raise ValueError(f"不支持的 embedding 模型: {model}")
+
+        timeout = getattr(self.parent, 'timeout', None) or resolve_default("embed", "timeout")
+        max_retries = getattr(self.parent, 'max_retries', None) or resolve_default("embed", "max_retries")
+        retry_delay = getattr(self.parent, 'retry_delay', None) or resolve_default("embed", "retry_delay")
+
+        return adapter_class(
+            api_key=api_key or self.parent.api_key,
+            model=model,
+            base_url=self.parent.base_url,
             timeout=timeout,
             max_retries=max_retries,
             retry_delay=retry_delay,
-            stop_on_error=stop_on_error,
-            callbacks=callbacks,
+            drop_params=drop_params or getattr(self.parent, 'drop_params', 'warn')
         )
-        batch_result = scheduler.execute(input, **kwargs)
-        accumulator = EmbeddingBatchAccumulator(batch_result, adapter, elapsed=batch_result.elapsed if hasattr(batch_result, 'elapsed') else 0.0)
-        return accumulator.process()
 
-    async def batch_async(
+    async def create(
         self,
-        input: Union[str, List[str]],
+        input: str = None,
+        model: str = None,
+        **kwargs
+    ) -> Dict[str, Any]:
+        # === 参数作用域校验：以下参数仅支持在调用入口配置，不允许在客户端初始化时传入 ===
+        for _key in ('prompt', 'messages', 'input', 'requests'):
+            if _key in self.parent._init_params:
+                raise TypeError(
+                    f"参数 '{_key}' 仅支持在调用入口配置，"
+                    f"请通过 embeddings.create({_key}=...)、batch({_key}=...) 传入"
+                )
+
+        actual_drop_params = kwargs.pop("drop_params", None)
+        if input is None:
+            raise TypeError("embeddings.create() 需要 input 参数")
+        if not isinstance(input, str):
+            raise ValueError("create() 只接受单条文本输入 (str)，请使用 batch() 方法处理批量输入")
+        clean_kwargs = validate_for_scope(
+            kwargs, "embed",
+            drop_params=actual_drop_params or getattr(self.parent, 'drop_params', 'warn'),
+        )
+        if model is not None:
+            adapter = self._get_adapter(model, drop_params=actual_drop_params)
+            return await adapter.acreate(input, model=model, **clean_kwargs)
+        from ..utils.fallback import FallbackManager
+        last_error = None
+        primary = getattr(self.parent, 'model', None)
+        fb_config = getattr(self.parent, 'fallback_models', {})
+        if primary:
+            try:
+                adapter = self._get_adapter(primary, drop_params=actual_drop_params)
+                return await adapter.acreate(input, model=primary, **clean_kwargs)
+            except Exception as e:
+                last_error = e
+        for fb_model, fb_key in fb_config.items():
+            try:
+                adapter = self._get_adapter(fb_model, drop_params=actual_drop_params, api_key=fb_key)
+                return await adapter.acreate(input, model=fb_model, **clean_kwargs)
+            except Exception:
+                continue
+        if primary:
+            from ..utils.exceptions import FallbackError
+            raise FallbackError(f"embedding 所有模型失败, 最后错误: {last_error}") from last_error
+        from ..utils.exceptions import MissingParameterError
+        raise MissingParameterError("embeddings.create() 需要 model 参数")
+
+    def _resolve_batch_params(self, *, max_concurrent=None, rps=None, batch_size=None, keep=None):
+        from ..core.param_registry import resolve_default
+        actual_max_concurrent = (
+            max_concurrent if max_concurrent is not None
+            else self.parent._init_params.get("max_concurrent") or resolve_default("embed", "max_concurrent") or 12
+        )
+        actual_rps = (
+            rps if rps is not None
+            else self.parent._init_params.get("rps") or resolve_default("embed", "rps") or 10
+        )
+        actual_batch_size = batch_size if batch_size is not None else self.parent._init_params.get("batch_size")
+        actual_keep = keep if keep is not None else self.parent._init_params.get("keep")
+        return actual_max_concurrent, actual_rps, actual_batch_size, actual_keep
+
+    async def batch(
+        self,
+        input: Union[str, List[str]] = None,
         batch_size: int = None,
         max_concurrent: int = None,
         rps: float = None,
@@ -554,32 +941,67 @@ class EmbeddingsNamespace:
         timeout: int = None,
         max_retries: int = None,
         retry_delay: float = None,
-        stop_on_error: bool = False,
+        stop_on_error: bool = None,
         callbacks: Optional[List] = None,
+        keep: Optional[set] = None,
         **kwargs
     ) -> EmbeddingResponse:
         from cnllm.utils.batch import AsyncEmbeddingBatchScheduler
-        from cnllm.core.accumulators.embedding_accumulator import AsyncEmbeddingBatchAccumulator
-        
+        from cnllm.core.accumulators.embedding_accumulator import EmbeddingResponse as EmbResponse
+
+        if input is None:
+            raise TypeError("embeddings.batch() 需要 input 参数")
+
+        # === 参数作用域校验：以下参数仅支持在调用入口配置，不允许在客户端初始化时传入 ===
+        for _key in ('prompt', 'messages', 'input', 'requests'):
+            if _key in self.parent._init_params:
+                raise TypeError(
+                    f"参数 '{_key}' 仅支持在调用入口配置，"
+                    f"请通过 embeddings.create({_key}=...)、batch({_key}=...) 传入"
+                )
+
         if isinstance(input, str):
             input = [input]
-        
-        adapter = self._get_adapter(model)
+
+        actual_max_concurrent, actual_rps, actual_batch_size, actual_keep = self._resolve_batch_params(
+            max_concurrent=max_concurrent, rps=rps, batch_size=batch_size, keep=keep,
+        )
+        actual_stop_on_error = stop_on_error if stop_on_error is not None else (self.parent._init_params.get("stop_on_error") if self.parent._init_params.get("stop_on_error") is not None else False)
+        actual_callbacks = callbacks if callbacks is not None else self.parent._init_params.get("callbacks")
+        actual_custom_ids = custom_ids if custom_ids is not None else self.parent._init_params.get("custom_ids")
+
+        from cnllm.core.param_registry import split_batch_params, validate_for_scope, validate_batch_params, resolve_default
+        actual_drop_params = kwargs.pop("drop_params", None)
+        batch_level_kwargs, per_request_kwargs = split_batch_params(kwargs)
+        drop_params = actual_drop_params or getattr(self.parent, 'drop_params', 'warn')
+        per_request_kwargs = validate_for_scope(per_request_kwargs, "embed", drop_params=drop_params)
+        batch_level_kwargs = validate_batch_params(batch_level_kwargs, "embed", drop_params=drop_params)
+        if actual_drop_params is not None:
+            per_request_kwargs["drop_params"] = actual_drop_params
+
+        response = EmbResponse()
+        response._request_counts["total"] = len(input)
+        if actual_custom_ids:
+            response._custom_ids = list(actual_custom_ids)
+        if actual_keep is not None:
+            response._keep = actual_keep if isinstance(actual_keep, frozenset) else frozenset(actual_keep)
+
+        adapter = self._get_adapter(model, drop_params=actual_drop_params)
         scheduler = AsyncEmbeddingBatchScheduler(
             adapter=adapter,
-            max_concurrent=max_concurrent,
-            rps=rps,
-            batch_size=batch_size,
-            custom_ids=custom_ids,
-            timeout=timeout,
-            max_retries=max_retries,
-            retry_delay=retry_delay,
-            stop_on_error=stop_on_error,
-            callbacks=callbacks,
+            max_concurrent=actual_max_concurrent,
+            rps=actual_rps,
+            batch_size=actual_batch_size,
+            custom_ids=actual_custom_ids,
+            timeout=actual_timeout,
+            max_retries=actual_max_retries,
+            retry_delay=actual_retry_delay,
+            stop_on_error=actual_stop_on_error,
+            callbacks=actual_callbacks,
         )
-        batch_result = None
-        async for resp in scheduler.execute(input, **kwargs):
-            batch_result = resp
-        
-        accumulator = AsyncEmbeddingBatchAccumulator(batch_result, adapter, elapsed=batch_result.elapsed if hasattr(batch_result, 'elapsed') else 0.0)
-        return await accumulator.process()
+        scheduler._execute_batch_response = response
+
+        async for _ in scheduler.execute(input, **per_request_kwargs):
+            pass
+
+   

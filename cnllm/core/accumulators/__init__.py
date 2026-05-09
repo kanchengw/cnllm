@@ -18,6 +18,7 @@ from cnllm.core.accumulators.batch_accumulator import (
     AsyncBatchStreamAccumulator,
     BatchNonStreamAccumulator,
     AsyncBatchNonStreamAccumulator,
+    _DEFAULT_KEEP,
 )
 from cnllm.core.accumulators.embedding_accumulator import (
     EmbeddingResponse,
@@ -25,6 +26,7 @@ from cnllm.core.accumulators.embedding_accumulator import (
     AsyncEmbeddingAccumulator,
     EmbeddingBatchAccumulator,
     AsyncEmbeddingBatchAccumulator,
+    _DEFAULT_EMB_KEEP,
 )
 
 __all__ = [

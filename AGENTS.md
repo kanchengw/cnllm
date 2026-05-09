@@ -32,7 +32,7 @@ Models with `vision: true` in `model_mapping.chat` support image input via OpenA
 ]}
 ```
 
-Validation is done at the model level — passing images to a text-only model raises `InvalidRequestError` before any API call. See `BaseAdapter._check_image_support()` in `adapter.py`.
+Validation is done at the model level — passing images to a text-only model raises `TypeError` before any API call. See `BaseAdapter._check_image_support()` in `adapter.py`.
 
 Current vision-capable vendors: GLM, Kimi, Doubao, Xiaomi.
 
@@ -70,7 +70,7 @@ The vendor module is also where you place any subclass overrides for logic that 
 - `defaults` — fallback values when vendor omits fields
 - `error_check` — sensitive content detection paths
 
-The parameter processing order is: `validate_required_params` → `filter_supported_params` → `validate_one_of` → `get_default_value` → `validate_base_url` → `get_header_mappings` → `_build_payload` → `get_vendor_model`.
+The parameter processing order is: `resolve_default` (read scope defaults) → `validate_for_scope` (PARAM_REGISTRY + YAML + drop_params) → `_validate_one_of` → `_check_image_support` → `_build_payload` (YAML field mapping + get_vendor_model) → `get_base_url` + `get_api_path` → `get_header_mappings`.
 
 ### Field accumulation
 

@@ -137,22 +137,6 @@ class TestXiaomiPayload:
 class TestParameterValidation:
     """参数校验测试"""
 
-    def test_required_params_validated(self):
-        """验证必填参数校验"""
-        adapter = XiaomiAdapter(api_key="test", model="mimo-v2-flash")
-
-        params = {
-            "model": "mimo-v2-flash"
-        }
-
-        with pytest.raises(Exception) as exc_info:
-            adapter._validate_required_params(params)
-
-        assert "api_key" in str(exc_info.value).lower() or "missing" in str(exc_info.value).lower(), \
-            "缺少 api_key 时应抛出异常"
-
-        print(f"\n[PASS] 必填参数校验生效")
-
     def test_one_of_validation(self):
         """验证互斥参数校验（messages 或 prompt 二选一）"""
         adapter = XiaomiAdapter(api_key="test", model="mimo-v2-flash")

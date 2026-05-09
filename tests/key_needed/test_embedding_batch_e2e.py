@@ -44,24 +44,24 @@ def test_1_basic_batch():
     """基本批量 embedding """
     print("\n========== TEST 1: 基本批量 embedding ==========")
     client = make_client()
-    resp = client.embeddings.batch(input=["你好", "天气", "测试"])
+    resp = client.embeddings.batch(input=["你好", "天气", "测试"], keep=["*"])
 
-    print(f"  total: {resp.total}")
-    print(f"  success_count: {resp.success_count}")
-    print(f"  fail_count: {resp.fail_count}")
-    print(f"  dimension: {resp.dimension}")
+    print(f"  total: {resp.status['total']}")
+    print(f"  success_count: {resp.status['success_count']}")
+    print(f"  fail_count: {resp.status['fail_count']}")
+    print(f"  dimension: {resp.batch_info['dimension']}")
     print(f"  elapsed: {resp.elapsed:.3f}s")
 
-    if resp.fail_count > 0:
-        print(f"  WARNING: {resp.fail} - API may have insufficient balance")
-        if resp.fail_count == resp.total:
+    if resp.status["fail_count"] > 0:
+        print(f"  WARNING: {list(resp.errors.keys())} - API may have insufficient balance")
+        if resp.status["fail_count"] == resp.status["total"]:
             print("  SKIP: all requests failed, cannot verify embedding format")
             return
 
-    assert resp.total == 3
-    assert resp.dimension > 0, "dimension 应大于 0"
+    assert resp.status["total"] == 3
+    assert resp.batch_info["dimension"] > 0, "dimension 应大于 0"
 
-    for rid in resp.success:
+    for rid in resp.results.keys():
         verify_embedding_result(resp.results[rid], rid)
     print("PASS")
 
@@ -71,25 +71,25 @@ def test_2_statistical_fields():
     """统计字段验证"""
     print("\n========== TEST 2: 统计字段 ==========")
     client = make_client()
-    resp = client.embeddings.batch(input=["hello", "world"])
+    resp = client.embeddings.batch(input=["hello", "world"], keep=["*"])
 
-    print(f"  success: {resp.success}")
-    print(f"  fail: {resp.fail}")
-    print(f"  success_count: {resp.success_count}")
-    print(f"  fail_count: {resp.fail_count}")
-    print(f"  request_counts: {resp.request_counts}")
-    print(f"  total: {resp.total}")
-    print(f"  dimension: {resp.dimension}")
+    print(f"  success: {list(resp.results.keys())}")
+    print(f"  fail: {list(resp.errors.keys())}")
+    print(f"  success_count: {resp.status['success_count']}")
+    print(f"  fail_count: {resp.status['fail_count']}")
+    print(f"  status: {resp.status}")
+    print(f"  total: {resp.status['total']}")
+    print(f"  dimension: {resp.batch_info['dimension']}")
     print(f"  elapsed: {resp.elapsed:.3f}s")
 
-    assert resp.total == 2
+    assert resp.status["total"] == 2
 
-    if resp.fail_count == resp.total:
+    if resp.status["fail_count"] == resp.status["total"]:
         print("  SKIP: all requests failed due to API balance")
         return
 
     assert resp.elapsed > 0
-    assert resp.dimension > 0
+    assert resp.batch_info["dimension"] > 0
     print("PASS")
 
 
@@ -98,9 +98,9 @@ def test_3_index_access():
     """索引访问：整数和字符串"""
     print("\n========== TEST 3: 索引访问 ==========")
     client = make_client()
-    resp = client.embeddings.batch(input=["你好", "天气", "测试"])
+    resp = client.embeddings.batch(input=["你好", "天气", "测试"], keep=["*"])
 
-    if resp.fail_count == resp.total:
+    if resp.status["fail_count"] == resp.status["total"]:
         print("  SKIP: all requests failed due to API balance")
         return
 
@@ -118,13 +118,21 @@ def test_3_index_access():
 
 @requires_key
 def test_4_repr():
-    """repr 输出"""
+    """repr 输出 — 验证 EmbeddingResponse 的元数据展示"""
     print("\n========== TEST 4: repr ==========")
     client = make_client()
     resp = client.embeddings.batch(input=["hello"])
+    # 先迭代确保 bg 线程完成
+    for _ in resp:
+        pass
     r = repr(resp)
     print(f"  repr: {r}")
+    # 验证 repr 包含正确的批量元数据
     assert "EmbeddingResponse" in r
+    assert "success_count" in r
+    assert "total" in r
+    assert "prompt_tokens" in r or "total_tokens" in r
+    assert "batch_size" in r or "batch_info" in r
     print("PASS")
 
 
@@ -136,18 +144,17 @@ def test_5_to_dict():
     resp = client.embeddings.batch(input=["hello"])
 
     d = resp.to_dict()
-    assert "results" in d
     print(f"  keys: {list(d.keys())}")
 
-    d_stats = resp.to_dict(stats=True)
-    assert "request_counts" in d_stats
-    assert "elapsed" in d_stats
-    assert "success" in d_stats
-    assert "fail" in d_stats
-    print(f"  stats keys: {list(d_stats.keys())}")
+    assert "vectors" in d
+    assert "status" in d
+    assert "batch_info" in d
+    assert "usage" in d
+    assert "success" not in d
+    assert "fail" not in d
 
-    if resp.success_count > 0:
-        assert "request_0" in d["results"]
+    if resp.status["success_count"] > 0:
+        assert "request_0" in d["vectors"]
     print("PASS")
 
 
@@ -156,14 +163,14 @@ def test_6_iteration():
     """迭代 results"""
     print("\n========== TEST 6: 迭代 ==========")
     client = make_client()
-    resp = client.embeddings.batch(input=["A", "B", "C"])
+    resp = client.embeddings.batch(input=["A", "B", "C"], keep=["*"])
 
     count = 0
     for r in resp.results:
         count += 1
     print(f"  迭代数量: {count}")
 
-    if resp.fail_count == resp.total:
+    if resp.status["fail_count"] == resp.status["total"]:
         assert count == 0
         print("  SKIP: all requests failed due to API balance")
         return
@@ -177,12 +184,12 @@ def test_7_results_container():
     """EmbeddingResults 容器方法"""
     print("\n========== TEST 7: Results 容器 ==========")
     client = make_client()
-    resp = client.embeddings.batch(input=["x", "y"])
+    resp = client.embeddings.batch(input=["x", "y"], keep=["*"])
 
     results = resp.results
     print(f"  len: {len(results)}")
 
-    if resp.fail_count == resp.total:
+    if resp.status["fail_count"] == resp.status["total"]:
         assert len(results) == 0
         print("  SKIP: all requests failed due to API balance")
         return
@@ -203,15 +210,16 @@ def test_8_custom_ids():
     resp = client.embeddings.batch(
         input=["你好", "天气", "测试"],
         custom_ids=["doc_001", "doc_002", "doc_003"],
+        keep=["*"],
     )
 
-    print(f"  success: {resp.success}")
+    print(f"  success: {list(resp.results.keys())}")
 
-    if resp.fail_count == resp.total:
+    if resp.status["fail_count"] == resp.status["total"]:
         print("  SKIP: all requests failed due to API balance")
         return
 
-    assert resp.success == ["doc_001", "doc_002", "doc_003"]
+    assert list(resp.results.keys()) == ["doc_001", "doc_002", "doc_003"]
     assert resp.results["doc_001"] is not None
     assert resp.results[0] is not None
     print("PASS")
@@ -231,16 +239,17 @@ def test_9_callbacks():
     resp = client.embeddings.batch(
         input=["A", "B", "C"],
         callbacks=[on_complete],
+        keep=["*"],
     )
 
     print(f"  回调事件数: {len(callback_events)}")
 
-    if resp.fail_count == resp.total:
+    if resp.status["fail_count"] == resp.status["total"]:
         print("  SKIP: all requests failed due to API balance")
         return
 
     assert len(callback_events) == 3
-    assert resp.success_count == 3
+    assert resp.status["success_count"] == 3
     print("PASS")
 
 
@@ -253,13 +262,14 @@ def test_10_stop_on_error():
     resp = client.embeddings.batch(
         input=["正常文本"],
         stop_on_error=True,
+        keep=["*"],
     )
 
-    print(f"  success: {resp.success}")
-    print(f"  fail: {resp.fail}")
-    assert resp.total >= 1
-    if resp.success_count == 0:
-        print(f"  WARNING: {resp.fail} - API insufficient balance")
+    print(f"  success: {list(resp.results.keys())}")
+    print(f"  fail: {list(resp.errors.keys())}")
+    assert resp.status["total"] >= 1
+    if resp.status["success_count"] == 0:
+        print(f"  WARNING: {list(resp.errors.keys())} - API insufficient balance")
         print("  SKIP")
         return
     verify_embedding_result(resp.results["request_0"], "stop_on_error")
@@ -270,25 +280,27 @@ def test_10_stop_on_error():
 def test_11_batch_async():
     """异步批量 embedding"""
     print("\n========== TEST 11: 异步批量 ==========")
-    client = make_client()
+    from cnllm import asyncCNLLM
     import asyncio
 
     async def run():
-        resp = await client.embeddings.batch_async(
+        client = asyncCNLLM(model=MODEL, api_key=API_KEY)
+        resp = client.embeddings.batch(
             input=["异步1", "异步2", "异步3"],
+            keep=["*"],
         )
-        print(f"  total: {resp.total}")
-        print(f"  success_count: {resp.success_count}")
+        print(f"  total: {resp.status['total']}")
+        print(f"  success_count: {resp.status['success_count']}")
 
-        if resp.fail_count == resp.total:
+        if resp.status["fail_count"] == resp.status["total"]:
             print("  SKIP: all requests failed due to API balance")
             return
 
-        assert resp.total == 3
-        assert resp.success_count == 3
-        assert resp.dimension > 0
+        assert resp.status["total"] == 3
+        assert resp.status["success_count"] == 3
+        assert resp.batch_info["dimension"] > 0
 
-        for rid in resp.success:
+        for rid in resp.results.keys():
             verify_embedding_result(resp.results[rid], f"async_{rid}")
         print("PASS")
 
@@ -300,10 +312,10 @@ def test_12_embedding_format_standard():
     """外层/内层格式标准"""
     print("\n========== TEST 12: 格式标准 ==========")
     client = make_client()
-    resp = client.embeddings.batch(input=["测试文本"])
+    resp = client.embeddings.batch(input=["测试文本"], keep=["*"])
 
-    if resp.fail_count > 0:
-        print(f"  WARNING: {resp.fail} - API may have insufficient balance")
+    if resp.status["fail_count"] > 0:
+        print(f"  WARNING: {list(resp.errors.keys())} - API may have insufficient balance")
         print("  SKIP: cannot verify format")
         return
 
@@ -326,21 +338,23 @@ def test_12_embedding_format_standard():
 def test_13_batch_async_custom_ids():
     """异步批量 + 自定义 ID"""
     print("\n========== TEST 13: 异步批量 + 自定义ID ==========")
-    client = make_client()
+    from cnllm import asyncCNLLM
     import asyncio
 
     async def run():
-        resp = await client.embeddings.batch_async(
+        client = asyncCNLLM(model=MODEL, api_key=API_KEY)
+        resp = client.embeddings.batch(
             input=["text1", "text2"],
             custom_ids=["my_1", "my_2"],
+            keep=["*"],
         )
-        print(f"  success: {resp.success}")
+        print(f"  success: {list(resp.results.keys())}")
 
-        if resp.fail_count == resp.total:
+        if resp.status["fail_count"] == resp.status["total"]:
             print("  SKIP: all requests failed due to API balance")
             return
 
-        assert resp.success == ["my_1", "my_2"]
+        assert list(resp.results.keys()) == ["my_1", "my_2"]
         assert resp.results["my_1"] is not None
         assert resp.results["my_2"] is not None
         verify_embedding_result(resp.results["my_1"], "my_1")
@@ -352,17 +366,17 @@ def test_13_batch_async_custom_ids():
 @requires_key
 def test_14_single_input_string():
     """输入为单字符串"""
-    print("\n========== TEST 14: 单字符串输入 ==========")
+    print("\n========== TEST 14: 单元素列表输入 ==========")
     client = make_client()
-    resp = client.embeddings.batch(input="你好")
-    print(f"  total: {resp.total}")
+    resp = client.embeddings.batch(input=["你好"], keep=["*"])
+    print(f"  total: {resp.status['total']}")
 
-    if resp.fail_count > 0:
-        print(f"  WARNING: {resp.fail} - API may have insufficient balance")
+    if resp.status["fail_count"] > 0:
+        print(f"  WARNING: {list(resp.errors.keys())} - API may have insufficient balance")
         print("  SKIP")
         return
 
-    assert resp.total == 1
-    assert resp.success_count == 1
+    assert resp.status["total"] == 1
+    assert resp.status["success_count"] == 1
     verify_embedding_result(resp.results["request_0"], "single")
     print("PASS")

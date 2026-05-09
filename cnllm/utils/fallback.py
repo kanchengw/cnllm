@@ -17,7 +17,8 @@ class FallbackManager:
         timeout: int = None,
         max_retries: int = None,
         retry_delay: float = None,
-        base_url: str = None
+        base_url: str = None,
+        drop_params: str = None
     ):
         self.fallback_config = fallback_config
         self.primary_api_key = primary_api_key
@@ -27,6 +28,7 @@ class FallbackManager:
         self.max_retries = max_retries
         self.retry_delay = retry_delay
         self.base_url = base_url
+        self.drop_params = drop_params
         self._last_adapter = None
 
     def _default_fallback_handler(self, from_model: str, to_model: str, error: Exception):
@@ -60,7 +62,8 @@ class FallbackManager:
                     timeout=self.timeout,
                     max_retries=self.max_retries,
                     retry_delay=self.retry_delay,
-                    base_url=self.base_url
+                    base_url=self.base_url,
+                    drop_params=self.drop_params
                 )
                 self._last_adapter = adapter
             except Exception as e:
@@ -95,7 +98,7 @@ class FallbackManager:
             raise original_exceptions[0] from None
 
         raise FallbackError(
-            message=f"所有模型均失败。已尝试: {', '.join(tried)}",
+            message=f"所有模型均失败。已尝试: {', '.join(str(m) for m in tried)}",
             errors=all_errors
         ) from None
 
@@ -125,7 +128,8 @@ class FallbackManager:
                     timeout=self.timeout,
                     max_retries=self.max_retries,
                     retry_delay=self.retry_delay,
-                    base_url=self.base_url
+                    base_url=self.base_url,
+                    drop_params=self.drop_params
                 )
                 self._last_adapter = adapter
             except Exception as e:
@@ -160,6 +164,6 @@ class FallbackManager:
             raise original_exceptions[0] from None
 
         raise FallbackError(
-            message=f"所有模型均失败。已尝试: {', '.join(tried)}",
+            message=f"所有模型均失败。已尝试: {', '.join(str(m) for m in tried)}",
             errors=all_errors
         ) from None

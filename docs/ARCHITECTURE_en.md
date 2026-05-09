@@ -217,66 +217,272 @@ flowchart TB
 | Batch method | `client.chat.batch(['hi', 'hello'])` / `embeddings.create_batch(['text1', 'text2'])` |
 | Scheduler | `BatchScheduler(client, max_concurrent=5, stop_on_error=True)` |
 | Adapter | `GLMAdapter(api_key='xxx', model='glm-4')` |
-| Batch Response | `BatchResponse.total / success / fail / results` |
-| Embedding Response | `EmbeddingResponse.dimension / results` |
+| Batch Response | `BatchResponse.results / status["success_count"] / errors / usage` |
+| Embedding Response | `EmbeddingResponse.results / vectors / batch_info["dimension"] / status` |
 
 ***
 
-## 2. Call Parameter Chain
+## 2. Request Parameter Chain
 
-### 2.1 Single Call Parameter Chain
-
-```
-User calls client.chat.create(timeout=60)
-    ↓
-Namespace.create(timeout=60)
-    ↓
-BaseAdapter.__init__(timeout=60)
-    ↓
-Adapter.validate_params(timeout=60) → filter_supported_params()
-    ↓
-HTTP request uses self.timeout
-```
-
-### 2.2 Batch Call Parameter Chain
+### 2.1 Single Request Parameter Chain
 
 ```
-User calls client.chat.batch(requests, timeout=60, stop_on_error=True, callbacks=[...])
+User calls client.chat.create(messages=[...], temperature=0.7)
     ↓
-Namespace.batch(requests, timeout=60, stop_on_error=True, callbacks=[...])
+Namespace.create() passes through parameters
     ↓
-BatchScheduler(client, timeout=actual_timeout, stop_on_error=True, callbacks=[...])
+BaseAdapter.__init__()   ← during client initialization
+├─ resolve_default("chat", "timeout")      → 30
+├─ resolve_default("chat", "max_retries")  → 3
+└─ resolve_default("chat", "retry_delay")  → 1.0
     ↓
-scheduler.execute() uses internal parameters
+BaseAdapter.create_completion(messages, temperature, stream, **kwargs)
     ↓
-adapter.create_completion(request) ← does not pass scheduler parameters
+① Collect parameters: {model, messages, temperature, stream, **kwargs}
+    ↓
+② validate_for_scope(params, scope="chat", vendor_yaml=..., drop_params="warn")
+  ├─ A: PARAM_REGISTRY validation (registered / scope match / batch_level misuse / type hints)
+  ├─ B: YAML field_mappings validation (vendor-specific parameter whitelist)
+  └─ C: Unmatched parameters → handled by drop_params strategy (warn / strict / ignore)
+    ↓
+③ _validate_one_of(params)  →  Mutually exclusive parameter validation (prompt / messages pick one)
+    ↓
+④ _check_image_support(params)  →  Image input compatibility check
+    ↓
+⑤ _build_payload(params)  →  Build request body via YAML field mappings (map / transform / skip)
+   └─ Internally calls get_vendor_model(model)  →  Short name → vendor model name
+    ↓
+⑥ get_base_url() + get_api_path()  →  Assemble complete request URL
+    ↓
+⑦ get_header_mappings()  →  Read YAML fields with skip:true and head → request headers
+    ↓
+⑧ HTTP request (BaseHttpClient)
 ```
 
-### 2.3 YAML Config Parameter Pass-through Mechanism
+Key changes:
 
-> **Parameter Pass-through Order**:
+- **`filter_supported_params`** **+** **`validate_required_params`** **→ merged into** **`validate_for_scope()`**, unified in `param_registry.py`
+- **`get_default_value`** **→ replaced by** **`resolve_default()`**, reads scope-aware defaults from PARAM_REGISTRY during adapter initialization
+- **`drop_params`** **strategy (warn/strict/ignore)** is passed through layers from client entry, controlling how unknown parameters are handled
+- **New** **`_check_image_support()`**, validates whether model supports image input before Payload construction
+
+### 2.2 Batch Request Parameter Chain
+
+```
+User calls client.chat.batch(requests, temperature=0.7, max_concurrent=5,
+                            stop_on_error=True, callbacks=[...])
+    ↓
+Namespace.batch() entry
+    ↓
+① split_batch_params(kwargs)  →  Split by PARAM_REGISTRY.batch_level flag
+  ├─ per_request_defaults = {temperature: 0.7, ...}  →  merged into each request
+  └─ batch_level_kwargs = {max_concurrent: 5, stop_on_error: True, ...}  →  passed to Scheduler
+    ↓
+② _normalize_batch_requests(requests, prompt=..., messages=..., per_request_defaults)
+  →  Unified three input modes into requests list
+  →  Shared prompt/messages injection (prompt as single string, messages as single message list)
+  →  _input_type metadata tagging
+    ↓
+③ BatchScheduler(client, max_concurrent=5, stop_on_error=True, callbacks=[...],
+                  timeout=resolve_default("chat", "timeout"), ...)
+    ↓
+④ scheduler.execute()  controls concurrency / rate limiting / callbacks
+    ↓
+⑤ adapter.create_completion(request)  ←  only passes per-request parameters, no batch-level parameters
+```
+
+Key changes:
+
+- **`BATCH_LEVEL_KEYS`** **hard-coded set → replaced by** **`split_batch_params()`**, dynamically splits based on `batch_level=True` flag in PARAM\_REGISTRY
+- **\_normalize\_batch\_requests supports `requests=` coexisting with `prompt=` / `messages=`**, where prompt is single string, messages is single message list, serving as common input for all requests
+
+### 2.3 Parameter Passing Mechanism in YAML Configuration Files
+
+> **Parameter Passing Order Description**:
 >
-> - When user calls `chat.create()` or `embeddings.create()`, adapter type (chat/embedding) is already determined
-> - After `filter_supported_params` executes, all parameters are filtered to adapter-supported parameters
-> - Process order (top to bottom)
+> - When user calls `create()`, the adapter type (chat/embedding) is already determined
+> - During adapter initialization (`__init__`), scope-aware default values are read via `resolve_default`
+> - After `validate_for_scope` executes, parameters are filtered according to PARAM\_REGISTRY + YAML whitelist
+> - The following logic is sorted by parameter processing order (top to bottom)
 
-| # | Purpose | Access Point | Judgment Range | Judgment Basis | New Parameters |
-| --- | --- | --- | --- | --- | --- |
-| 1 | Required param validation | `validate_required_params` | required_fields | adapter identifier + chat/embedding level | - |
-| 2 | Supported param validation | `filter_supported_params` | required_fields + optional_fields + one_of | adapter identifier + chat/embedding level | - |
-| 3 | Mutually exclusive validation | `validate_one_of` | one_of | adapter identifier | - |
-| 4 | Get default values | `get_default_value` | hardcoded: timeout, max_retries, retry_delay | - | timeout, max_retries, retry_delay |
-| 5 | Validate base_url + get complete path | `validate_base_url` + `get_api_path` | base_url | chat/embedding level | may add: base_url + api_path |
-| 6 | Header mapping | `get_header_mappings` | required_fields + optional_fields + one_of | skip: true | - |
-| 7 | Build request body | `_build_payload` | required_fields + optional_fields + one_of | field mapping: no skip: true and {fields}.map | - |
-| 8 | Model name mapping | `get_vendor_model` | model_mapping | chat/embedding level | - |
+| # | Purpose | Access Point | Validation Scope | New/Processed Parameters |
+| -- | --- | --- | --- | --- |
+| 1 | Get scope-aware default value (at init) | `resolve_default` | **PARAM\_REGISTRY.default** (scope-differentiated: e.g., chat=3, embed=12) | timeout, max\_retries, retry\_delay |
+| 2 | General parameter validation + filtering | `validate_for_scope` step A | **PARAM\_REGISTRY** (scope match + batch\_level validation + type hints) | - |
+| 3 | Vendor-specific parameter validation | `validate_for_scope` step B | **YAML optional\_fields** (with optional scope restrictions) | - |
+| 4 | Unknown parameter strategy | `validate_for_scope` step C | **drop\_params** (warn / strict / ignore) | - |
+| 5 | Mutually exclusive parameter validation | `_validate_one_of`¹ | one\_of (prompt ↔ messages) | - |
+| 6 | Image support validation | `_check_image_support` | Model vision support list | - |
+| 7 | Build request body + model name mapping | `_build_payload` | YAML field mappings (map / transform / skip) + model\_mapping | - |
+| 8 | Assemble request URL | `get_base_url` + `get_api_path` | base\_url + api\_path (layered by adapter\_type) | - |
+| 9 | Request header mapping | `get_header_mappings` | YAML fields with skip:true and head | - |
 
-**Judgment Basis Explanation**:
+¹ `_validate_one_of` only executes in Chat call path, Embedding path does not call this method.
 
-- `adapter`: Field-level identifier, e.g., `adapter: [chat]` or `adapter: [embedding]`
-- `chat`/`embedding` level: Config has `chat:` or `embedding:` sub-level (e.g., `base_url`)
+**Two-Stage Parameter Validation Design**:
 
-***
+```
+validate_for_scope(params, scope, vendor_yaml, drop_params)
+  │
+  ├─ Step A ── PARAM_REGISTRY Matching
+  │   ├─ scope match → add to clean
+  │   ├─ scope mismatch → handle by drop_params
+  │   ├─ batch_level=True → warn (misplaced in create)
+  │   └─ type mismatch → TypeError in strict mode, logger.warning + drop in warn mode
+  │
+  ├─ Step B ── YAML field_mappings Matching (vendor-specific parameters)
+  │   ├─ check optional_fields + required_fields
+  │   ├─ scope restriction check (e.g., mask only for chat)
+  │   └─ skip fields ignored
+  │
+  └─ Step C ── No match → handle by drop_params strategy
+      ├─ "strict" → throw TypeError (type mismatch) / InvalidRequestError (unknown param)
+      ├─ "warn"   → logger.warning + drop (default)
+      └─ "ignore" → silently drop
+```
+
+**YAML Simplification**:
+
+After refactoring, the `adapter` level identifiers (such as `adapter: [chat]` / `adapter: [embedding]`) have been removed from YAML configuration. Scope control is now unified by PARAM\_REGISTRY. Vendor-specific parameters remain in YAML, registered via `optional_fields`, and can carry `scope` restriction fields. Field mapping mechanisms like `skip`, `map`, and `transform` remain unchanged.
+
+### 2.4 Batch Parameter Validation Chain
+
+Batch calls support three input modes, with parameter validation divided into three layers: Entry Layer (parameter splitting + request normalization) → Scheduler Layer (fill runtime defaults) → Create Layer (single request validation chain).
+
+#### 2.4.1 Three-Layer Responsibility Division
+
+```mermaid
+flowchart TB
+    subgraph entry["入口层 chat.batch()"]
+        K[batch kwargs] --> S{split_batch_params}
+        S --> B[batch_level params]
+        S --> P[per_request_defaults]
+        P --> N{_normalize_batch_requests}
+        N --> O[requests list]
+    end
+
+    subgraph sched["Scheduler 层 BatchScheduler"]
+        I[__init__] --> E[execute]
+        E --> M[merge defaults]
+        M --> C[clean metadata]
+    end
+
+    subgraph create["Create 层 create_completion"]
+        CR[create_completion] --> V[validate_for_scope]
+        V --> O1[_validate_one_of]
+        O1 --> BP[_build_payload]
+        BP --> H[HTTP request]
+    end
+
+    O --> E
+    B --> I
+    C --> CR
+
+    style entry fill:#ffe4b5,stroke:#333,stroke-width:1px
+    style sched fill:#bde0fe,stroke:#333,stroke-width:1px
+    style create fill:#d4f1be,stroke:#333,stroke-width:1px
+```
+
+#### 2.4.2 Batch Parameter Classification (Defined by PARAM\_REGISTRY)
+
+Batch parameters are divided into two categories, **completely different in nature**, defined by the `batch_level` flag in PARAM\_REGISTRY:
+
+| Category | Parameters | PARAM\_REGISTRY Definition | Handling |
+| --- | --- | --- | --- |
+| **Per-Request** | `prompt`, `messages`, `thinking`, `tools`, `temperature`, `max_tokens`, `top_p`, `stop`, `model`, `stream`, `timeout`, `max_retries`, `retry_delay` | `batch_level=False` (default) | Enter request dict → create() → validate\_for\_scope |
+| **Batch-Level** | `max_concurrent`, `rps`, `batch_size`, `stop_on_error`, `callbacks`, `custom_ids`, `keep` | `batch_level=True` | **Do NOT enter request dict** → directly passed to BatchScheduler/EmbeddingBatchScheduler |
+
+> **Key Principle**: Batch-Level parameters do not need to, should not, and are not required to enter YAML. YAML describes "External API Interface Specification", while Batch-Level parameters describe "Client Scheduling Behavior" - the two have different responsibilities.
+
+#### 2.4.3 Source Separation Mechanism (split\_batch\_params)
+
+All `kwargs` are split into two groups by `split_batch_params()` at the `batch()` entry point, replacing the old hard-coded `BATCH_LEVEL_KEYS`:
+
+```python
+# split_batch_params reads the batch_level flag of each parameter from PARAM_REGISTRY
+def split_batch_params(kwargs):
+    batch_params = {}
+    per_request_params = {}
+    for key, value in kwargs.items():
+        param_def = PARAM_REGISTRY.get(key)
+        if param_def is not None and param_def.batch_level:
+            batch_params[key] = value     # → BatchScheduler
+        else:
+            per_request_params[key] = value  # → create() validation
+    return batch_params, per_request_params
+
+# Call site (ChatNamespace.batch / EmbeddingsNamespace.batch)
+batch_level_kwargs, per_request_defaults = split_batch_params(kwargs)
+```
+
+**Advantages**:
+
+- **Single Source of Truth**: PARAM\_REGISTRY is the only authoritative source for parameter classification, eliminating the need to maintain two separate logic sets
+- **Auto-extensible**: Adding a new batch-level parameter only requires adding one definition in PARAM\_REGISTRY, no need to modify the separation logic
+- **Scope-aware**: Different functional domains (chat/embed) can define different batch-level parameter sets
+
+#### 2.4.4 Per-Request Parameter Priority
+
+The final parameters for each request are determined by three-layer priority:
+
+```
+Per-Request independent parameters (requests[i]) > Shared parameters (batch-level prompt/messages) > Per-Request global defaults (batch kwargs)
+```
+
+Merge logic (in `_normalize_batch_requests`):
+
+```python
+per_request = req.copy()  # request[i] own parameters have highest priority
+if per_request_defaults:
+    defaults = {k: v for k, v in per_request_defaults.items()
+                 if k not in per_request}  # do not override item's own values
+    per_request = {**defaults, **per_request}
+```
+
+Scheduler layer further supplements runtime defaults (read from PARAM\_REGISTRY via `resolve_default`):
+
+```python
+# Scheduler._execute_single — only fill when per-request doesn't exist
+if 'timeout' not in request and self.timeout is not None:
+    request['timeout'] = self.timeout
+if 'max_retries' not in request and self.max_retries is not None:
+    request['max_retries'] = self.max_retries
+```
+
+#### 2.4.5 Internal Metadata Field (\_input\_type)
+
+`_normalize_batch_requests()` adds an internal `_input_type` metadata field to each request (`"prompt"` / `"messages"`), which only serves as an identifier for the input source, **does not participate in any filtering or routing logic**.
+
+This field is stripped by the Scheduler layer before being passed to `create()`:
+
+```python
+# Scheduler layer (_execute_single) — only strips metadata, no filtering logic
+request_with_batch = {k: v for k, v in request.items() if k != "_input_type"}
+response = self.client.chat.create(**request_with_batch)
+```
+
+#### 2.4.6 Per-Request Batch-Level Parameter Misplacement Warning
+
+If a user accidentally passes a Batch-Level parameter in a dict within the `requests` list (e.g., `requests=[{"prompt": "A", "max_concurrent": 5}]`), a **guidance warning** is generated in `normalize_batch_requests()`, rather than a generic "parameter not supported" warning:
+
+```
+WARNING: batch() parameter 'max_concurrent' in requests[0] has no effect.
+Please configure 'max_concurrent' in batch() global parameters, e.g., batch(..., max_concurrent=5)
+```
+
+This warning is based on the old `BATCH_LEVEL_KEYS` hard-coded set (coexisting with `split_batch_params`), ensuring users correctly understand which layer the parameter should be configured in.
+
+#### 2.4.7 Three Input Modes
+
+| Mode | Example | Internal Handling |
+| --- | --- | --- |
+| `requests=[{...}, {...}]` | **Recommended usage**, each item with independent parameters | Use directly, item's own parameters have highest priority |
+| `requests=[...] + prompt="A"` | **Shared mode**, all requests use the same prompt | prompt as single string, inject this value to items without their own prompt/messages |
+| `requests=[...] + messages=[...]` | **Shared mode**, all requests use the same messages | messages as single message list, inject this value to items without their own prompt/messages |
+| `prompt=["A", "B"]` | Legacy usage, backward compatible | Wrapped as `[{prompt: "A"}, {prompt: "B"}]` |
+| `messages=[[{...}], [{...}]]` | Legacy usage, backward compatible | Wrapped as `[{messages: [...]}, ...]` |
+
+> **Note**: `prompt` and `messages` remain mutually exclusive (cannot be provided simultaneously). When coexisting with `requests`, prompt or messages serve as global parameters and only accept single input.
 
 ## 3. Exception Handling System Architecture
 
@@ -312,6 +518,7 @@ flowchart LR
 
 | Error Type | Occurrence Scenario | Handling Component |
 | --- | --- | --- |
+| TypeError, invalid params | Client-side pre-check | `validate_for_scope` / `_check_image_support` → `TypeError` |
 | Network unreachable, connection timeout | Before sending request | HTTP Layer |
 | API Key incorrect (401) | Before request reaches server | HTTP Layer |
 | Rate limit (429) | Before request reaches server | HTTP Layer |
@@ -616,6 +823,8 @@ The system supports 12 response types, combined from 3 dimensions:
 | 10 | Sync batch Embeddings | `EmbeddingResponse` | `EmbeddingBatchAccumulator` |
 | 11 | Async non-batch Embeddings | `Dict` | `AsyncEmbeddingAccumulator` |
 | 12 | Async batch Embeddings | `EmbeddingResponse` | `AsyncEmbeddingBatchAccumulator` |
+| 13 | Sync mixed streaming batch | `BatchResponse` | `MixedBatchScheduler` |
+| 14 | Async mixed streaming batch | `BatchResponse` | `AsyncMixedBatchScheduler` |
 
 ### 6.2 Non-batch Response Types
 
@@ -698,38 +907,73 @@ The system supports 12 response types, combined from 3 dimensions:
 #### Type 3, 7: Sync/Async Non-streaming Batch
 
 ```python
-# Return format: BatchResponse
-{
-    "total": 10,           # Total requests
-    "success": 9,           # Successful requests
-    "fail": 1,            # Failed requests
-    "results": [
-        {"id": "chatcmpl-1", "choices": [...], "usage": {...}, "_custom_id": "req-1"},
-        {"id": "chatcmpl-2", "choices": [...], "usage": {...}, "_custom_id": "req-2"},
-        ...
-    ],
-    "errors": [
-        {"error": "Rate limit", "message": "Too many requests", "_custom_id": "req-10"}
-    ]
-}
+# Return format: BatchResponse (non-streaming batch / mixed streaming batch)
+# Note: to_dict() expands the full dict; directly access properties for data
 
-# Access methods:
-batch_response.total       # Total count
-batch_response.success  # Success count
-batch_response.fail    # Fail count
-batch_response.results # List of successful responses
-batch_response.errors  # List of error details
-batch_response.responses_by_id("req-1")  # Get by custom_id
-batch_response.error_of("req-10")     # Get error by custom_id
+# status — statistics
+result.status
+# {"success_count": 2, "fail_count": 0, "total": 2, "elapsed": "0.35s"}
+
+# results — success response dict (not persisted by default; use keep=["*"] or keep=["results"])
+result.results
+# {"request_0": {...}, "request_1": {...}}  each value is same as Type 1 Dict
+
+# errors — failure info dict
+result.errors
+# {"request_1": "parameter error"}
+
+# usage — token accumulation
+result.usage
+# {"prompt_tokens": 10, "completion_tokens": 50, "total_tokens": 60}
+
+# think / still / tools — persisted by default (no keep param needed)
+result.think    # {"request_0": "...", "request_1": "..."}
+result.still    # {"request_0": "...", "request_1": "..."}
+result.tools    # {"request_0": [...], "request_1": [...]}
+
+# raw — native response
+result.raw      # {"request_0": {...}, "request_1": {...}}
+
+# to_dict — field control
+result.to_dict()
+# {"still": {...}, "think": {...}, "tools": {...}, "status": {...}, "usage": {...}}
+
+result.to_dict(results=True, errors=True)
+# {"results": {...}, "errors": {...}, "status": {...}, "usage": {...}}
 ```
 
 #### Type 4, 8: Sync/Async Streaming Batch
 
 ```python
-# Return format: Iterator[Dict] / AsyncIterator[Dict]
-# Each item is a streaming chunk for each request
-# Combined with BatchScheduler for concurrent processing
+# Return format: Iterator[Dict] / AsyncIterator[Dict] (chunk iterator)
+# After iteration, access aggregated data via batch_result
+
+# Iteration: each chunk yielded in real-time
+for chunk in client.chat.batch(requests, stream=True):
+    print(chunk)  # streaming chunk for a single request (OpenAI standard format)
+
+# After iteration, access complete results via batch_result
+batch_resp = client.chat.batch_result
+
+batch_resp.status
+# {"success_count": 1, "fail_count": 1, "total": 2, "elapsed": "0.42s"}
+
+batch_resp.errors
+# {"request_1": "parameter error"}
+
+batch_resp.results  # requires keep=["results"] or keep=["*"]
+# {"request_0": [chunk1, chunk2, ...], ...}
+
+batch_resp.usage
+# {"prompt_tokens": 10, "completion_tokens": 30}
+
+# think / still / tools / raw — persisted by default
+batch_resp.think   # {"request_0": "...", "request_1": "..."}
+batch_resp.still   # {"request_0": "...", "request_1": "..."}
+batch_resp.tools   # {"request_0": [...], "request_1": [...]}
+batch_resp.raw     # {"request_0": {...}, "request_1": {...}}
 ```
+
 
 ### 6.4 Embedding Response Types
 
@@ -754,9 +998,8 @@ batch_response.error_of("req-10")     # Get error by custom_id
 }
 
 # Access:
-response.embedding    # [0.123, -0.456, ...]
-response.dimension   # 1024
-response.token_usage # 8
+result["data"][0]["embedding"]    # [0.123, -0.456, ...]
+result["usage"]["total_tokens"]  # 8
 ```
 
 #### Type 10, 12: Batch Embeddings
@@ -764,26 +1007,45 @@ response.token_usage # 8
 ```python
 # Return format: EmbeddingResponse
 {
-    "total": 3,
-    "success": 3,
-    "fail": 0,
-    "dimension": 1024,
-    "results": [
-        {"embedding": [0.1, -0.2, ...], "index": 0, "_custom_id": "text-1"},
-        {"embedding": [0.3, -0.4, ...], "index": 1, "_custom_id": "text-2"},
-        {"embedding": [0.5, -0.6, ...], "index": 2, "_custom_id": "text-3"}
-    ],
-    "errors": []
+    "status": {
+        "success_count": 2,
+        "fail_count": 0,
+        "total": 2,
+        "elapsed": "0.35s"
+    },
+    "usage": {
+        "prompt_tokens": 11,
+        "total_tokens": 11
+    },
+    "batch_info": {
+        "batch_size": 2,
+        "batch_count": 1,
+        "dimension": 1024
+    },
+    "vectors": {
+        "request_0": [0.1, 0.2, ...],
+        "request_1": [0.3, 0.4, ...]
+    },
+    "results": {
+        "request_0": {
+            "object": "list",
+            "data": [{"embedding": [0.1, 0.2, ...], "index": 0}],
+            "model": "embedding-2",
+            "usage": {"prompt_tokens": 5, "total_tokens": 5}
+        }
+    }
 }
 
 # Access methods:
-embedding_response.total      # Total count
-embedding_response.success    # Success count
-embedding_response.fail     # Fail count
-embedding_response.dimension   # Vector dimension
-embedding_response.results  # List of successful embeddings
-embedding_response.errors   # List of error details
-embedding_response.embedding_of("text-1")  # Get by custom_id
+embedding_resp.status                    # {"success_count": 2, "fail_count": 0, "total": 2, "elapsed": "0.35s"}
+embedding_resp.status["success_count"]   # 2
+embedding_resp.vectors                   # {"request_0": [0.1, 0.2, ...], "request_1": [0.3, 0.4, ...]}
+embedding_resp.vectors["request_0"]      # [0.1, 0.2, ...]
+embedding_resp.vectors[0]                # [0.1, 0.2, ...]
+embedding_resp.results                   # requires keep=["*"]
+embedding_resp.usage                     # {"prompt_tokens": 11, "total_tokens": 11}
+embedding_resp.batch_info                # {"batch_size": 2, "batch_count": 1, "dimension": 1024}
+embedding_resp.errors                    # {"request_2": "some error"}
 ```
 
 ***

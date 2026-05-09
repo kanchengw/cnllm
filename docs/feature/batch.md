@@ -64,24 +64,20 @@ flowchart TD
 
 ### 参数分类
 
-所有 `kwargs` 在 `batch()` 入口处按 `BATCH_LEVEL_KEYS` 集合分为两组：
+所有 `kwargs` 在 `batch()` 入口处通过 `split_batch_params()` 按 `PARAM_REGISTRY` 中 `batch_level` 标志动态分离：
 
 ```python
-BATCH_LEVEL_KEYS = frozenset({
-    "max_concurrent", "rps", "stop_on_error",
-    "callbacks", "custom_ids", "requests",
-})
-
-per_request_defaults = {k: v for k, v in kwargs.items() if k not in BATCH_LEVEL_KEYS}
-batch_level_kwargs  = {k: v for k, v in kwargs.items() if k in BATCH_LEVEL_KEYS}
+# split_batch_params(kwargs)  →  按 PARAM_REGISTRY.batch_level 标志分离
+#   ├─ per_request_defaults = {temperature: 0.7, ...}  →  合并到每个请求
+#   └─ batch_level_kwargs = {max_concurrent: 5, stop_on_error: True, ...}  →  传给 Scheduler
 ```
 
 | 类别 | 参数 | 性质 | 处理方式 |
 |------|------|------|---------|
 | **Per-Request** | `prompt`/`messages`、`thinking`、`tools`、`temperature`、`max_tokens`、`top_p`、`stop`、`model`、`stream`、`timeout`、`max_retries`、`retry_delay` | 描述「发给 API 的数据」 | 进入请求 dict → create() → YAML 验证 |
-| **Batch-Level** | `max_concurrent`、`rps`、`stop_on_error`、`callbacks`、`custom_ids` | 描述「如何调度这些请求」 | **不进请求 dict** → 直接用于 BatchScheduler，不传给 create() |
+| **Batch-Level** | `max_concurrent`、`rps`、`batch_size`、`stop_on_error`、`callbacks`、`custom_ids`、`keep` | 描述「如何调度这些请求」 | **不进请求 dict** → 直接用于 BatchScheduler，不传给 create() |
 
-**关键原则**：Per-Request 参数可在 `requests` 列表中每个请求独立配置，也可作为全局参数传入 `batch()`，未配置时自动继承全局默认值（逐字段继承）。
+**关键原则**：Per-Request 参数可在 `requests` 列表中每个请求独立配置，也可作为全局参数传入 `batch()`，未配置时自动继承全局默认值（逐字段继承）。Batch-Level 参数不需要、不应该、不必要进入 YAML。
 
 ### 重试机制
 
@@ -157,16 +153,18 @@ async def abatch(
 | 参数 | 类型 | 默认值 | 层级 | 说明 |
 |------|------|--------|------|------|
 | `requests` | `list[dict]` | - | per-request | 请求列表，每项可含 `prompt`/`messages` 及独立参数 |
-| `prompt` | `list[str]` | - | 向后兼容 | prompt 字符串列表 |
-| `messages` | `list[list]` | - | 向后兼容 | messages 列表的列表 |
+| `prompt` | `list[str]` | - | 向后兼容 | prompt 字符串列表（独立模式）；与 requests 共存时为单个字符串 |
+| `messages` | `list[list]` | - | 向后兼容 | messages 列表的列表（独立模式）；与 requests 共存时为单组消息列表 |
 | `stream` | `bool` | `False` | per-request | 是否使用流式处理（也可 per-request 独立控制） |
 | `max_concurrent` | `int` | `3` | batch-level | 最大并发执行数 |
+| `rps` | `float` | `2` | batch-level | 每秒请求数限制 |
 | `timeout` | `float` | `None` | per-request | 单请求超时时间（秒），YAML 默认兜底 |
 | `max_retries` | `int` | `None` | per-request | 重试次数，YAML 默认兜底 |
 | `retry_delay` | `float` | `None` | per-request | 重试间隔，YAML 默认兜底 |
 | `stop_on_error` | `bool` | `False` | batch-level | 遇错误时停止其他任务 |
 | `callbacks` | `List[Callable]` | `None` | batch-level | 进度回调函数列表 |
 | `custom_ids` | `List[str]` | `None` | batch-level | 自定义请求 ID 列表 |
+| `keep` | `set` | `None` | batch-level | `for` 循环迭代后保留的字段（如 `{"still", "think"}`） |
 
 ### 参数继承规则
 
@@ -187,24 +185,25 @@ Batch-Level 参数（`max_concurrent`, `stop_on_error`, `callbacks`, `custom_ids
 ```python
 # print 输出:
 print(result)
-# BatchResponse(success=2, fail=0, total=2, elapsed=0.35s)
-
-print(result.results)
-# BatchResults(count=2, ids=['request_0', 'request_1'])
+# BatchResponse(status={'success_count': 2, 'fail_count': 0, 'total': 2, 'elapsed': '0.35s'}, usage={'prompt_tokens': 10, 'completion_tokens': 8, 'total_tokens': 18})
 ```
 
 ### 6.2 非流式批量响应格式
 
 ```python
 {
-    "success": ["request_0", "request_1"],  # 成功的 request_id 列表
-    "errors": [],                                 # 失败的 request_id 列表
-    "request_counts": {
+    "status": {
         "success_count": 2,
         "fail_count": 0,
-        "total": 2
+        "total": 2,
+        "elapsed": "2.10s"
     },
-    "elapsed": 2.1,
+    "usage": {
+        "prompt_tokens": 10,
+        "completion_tokens": 8,
+        "total_tokens": 18
+    },
+    "errors": {"request_1": "参数错误"},
     "results": {              # {request_id: OpenAI 格式 dict}
         "request_0": {
             "id": "chatcmpl-xxx",
@@ -219,15 +218,7 @@ print(result.results)
                 },
                 "finish_reason": "stop"
             }],
-            "usage": {
-                "prompt_tokens": 5,
-                "completion_tokens": 4,
-                "total_tokens": 9
-            }
         },
-        "request_1": {
-            "error": "参数错误"
-        }
     },
     "think": {"request_0": "推理内容", "request_1": "推理内容"},
     "still": {"request_0": "回复内容", "request_1": "回复内容"},
@@ -255,13 +246,13 @@ print(result.results)
 
 ```python
 # 统计字段:
-result.total              # int: 总数
-result.success_count      # int: 成功数
-result.fail_count         # int: 失败数
-result.elapsed            # float: 耗时
-result.success            # List[str]: 成功的 request_id 列表
-result.fail               # List[str]: 失败的 request_id 列表
-result.request_counts     # Dict: {"success_count": ..., "fail_count": ..., "total": ...}
+result.status              # Dict: {"success_count": ..., "fail_count": ..., "total": ..., "elapsed": "0.35s"}
+result.status["success_count"]
+result.status["fail_count"]
+result.status["total"]
+result.status["elapsed"]   # str: "0.35s"
+result.errors              # Dict[str, str]: {"request_1": "参数错误"}
+result.usage               # Dict: {"prompt_tokens": ..., "completion_tokens": ..., "total_tokens": ...}
 
 # 累积字段（支持索引和 key 访问）:
 result.think[0]                  # 推理内容
@@ -286,9 +277,14 @@ for request_id, item in result.results.items():
     else:
         print(f"成功: {item['choices'][0]['message']['content']}")
 
+# 实时迭代（for 循环中实时累积）:
+for r in result:
+    print(f"已处理: {r.status['success_count']}/{r.status['total']}")
+
 # 转换为标准 JSON:
-result.to_dict()
-result.to_dict(stats=True, think=True, still=True, tools=True, raw=True)
+result.to_dict()                                         # 默认：保留 still/think/tools + status/usage
+result.to_dict(status=True, results=True)                # 保留 results + status/usage
+result.to_dict(results=True, errors=True, think=True)    # 保留 results/errors/think + status/usage
 ```
 
 ## 7. 使用示例
@@ -457,7 +453,16 @@ results = client.chat.batch(
 )
 ```
 
-### 8.5 per-request 超时和重试
+### 8.5 限速控制
+
+```python
+results = client.chat.batch(
+    prompt=["文本1", "文本2", "文本3"],
+    rps=5,                        # 每秒最多 5 个请求
+)
+```
+
+### 8.6 per-request 超时和重试
 
 ```python
 # 每个请求独立超时和重试策略
@@ -465,4 +470,29 @@ results = client.chat.batch(requests=[
     {"prompt": "快处理完成", "timeout": 10},
     {"prompt": "很慢的任务", "timeout": 60, "max_retries": 2},
 ])
+```
+
+### 8.7 `keep` 参数 — 控制迭代后保留的字段
+
+`for` 循环迭代结束后，可指定哪些累积字段保留（默认为全部保留）。
+
+```python
+# 默认：迭代后全部保留
+results = client.chat.batch(
+    requests=[{"prompt": "hi"}, {"prompt": "hello"}],
+)
+for r in results:
+    pass
+results.still    # 可访问 ✓
+results.think    # 可访问 ✓
+
+# 如需限制保留字段节省内存：
+results = client.chat.batch(
+    requests=[{"prompt": "hi"}, {"prompt": "hello"}],
+    keep={"still"},               # 只保留 still，其余字段在迭代后释放
+)
+for r in results:
+    pass
+results.still    # 可访问 ✓
+results.think    # 已释放（访问会触发警告）
 ```

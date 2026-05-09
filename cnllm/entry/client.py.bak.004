@@ -8,7 +8,7 @@ from ..utils.exceptions import ModelNotSupportedError, MissingParameterError
 from ..utils.fallback import FallbackManager
 from ..core.accumulators.batch_accumulator import BatchResponse
 from ..core.accumulators.single_accumulator import NonStreamAccumulator, StreamAccumulator
-from ..core.param_registry import split_batch_params, validate_for_scope, resolve_scope_params, resolve_default
+from ..core.param_registry import split_batch_params
 from .async_client import asyncCNLLM
 from ..core.embedding import EmbeddingsNamespace
 
@@ -215,7 +215,7 @@ class CNLLM:
             return None
 
         @property
-        def still(self) -> Optional[str]:
+        def still(self) -> str:
             br = self._batch_field("still")
             if br is not None:
                 return br
@@ -223,7 +223,12 @@ class CNLLM:
             if adapter is None:
                 return None
             cnllm_extra = getattr(adapter, "_cnllm_extra", {})
-            return cnllm_extra.get("_still")
+            still = cnllm_extra.get("_still")
+            if still is not None:
+                return still
+            if self._last_response is None:
+                return None
+            return self._last_response["choices"][0]["message"]["content"]
 
         @property
         def raw(self) -> Optional[Dict[str, Any]]:
@@ -258,7 +263,9 @@ class CNLLM:
             tools = cnllm_extra.get("_tools")
             if tools is not None:
                 return tools
-            return cnllm_extra.get("_tools")
+            if self._last_response is None:
+                return None
+            return self._last_response["choices"][0]["message"].get("tool_calls")
 
         @property
         def usage(self) -> Optional[Dict[str, Any]]:
@@ -321,34 +328,19 @@ class CNLLM:
             if messages is None and prompt is not None:
                 messages = self.parent._prompt_to_messages(prompt)
 
-            call_params = {k: v for k, v in {
-                "model": model, "api_key": api_key,
-                "timeout": timeout, "max_retries": max_retries, "retry_delay": retry_delay,
-                "base_url": base_url, "temperature": temperature, "max_tokens": max_tokens,
-                "stream": stream,
-            }.items() if v is not None}
-            merged = resolve_scope_params(
-                self.parent._init_params, "chat",
-                {**call_params, **kwargs},
-                include_batch_level=False,
-            )
-            explicit_model = merged.pop("model", None)
-            model = explicit_model or self.parent.model
-            actual_drop_params = merged.pop("drop_params", None)
-            actual_api_key = merged.pop("api_key", None) or self.parent.api_key
-            actual_timeout = merged.pop("timeout", None) or self.parent.timeout or resolve_default("chat", "timeout")
-            actual_max_retries = merged.pop("max_retries", None) or self.parent.max_retries or resolve_default("chat", "max_retries")
-            actual_retry_delay = merged.pop("retry_delay", None) or self.parent.retry_delay or resolve_default("chat", "retry_delay")
-            actual_base_url = merged.pop("base_url", None) or self.parent.base_url
-            actual_temperature = merged.pop("temperature", None) or self.parent.temperature
-            actual_max_tokens = merged.pop("max_tokens", None) or self.parent.max_tokens
-            actual_stream = merged.pop("stream", None) or self.parent.stream
-            clean_kwargs = validate_for_scope(
-                merged, "chat",
-                drop_params=actual_drop_params or self.parent.drop_params,
-            )
+            actual_api_key = api_key if api_key is not None else self.parent.api_key
+            actual_timeout = timeout if timeout is not None else self.parent.timeout
+            actual_max_retries = max_retries if max_retries is not None else (self.parent.max_retries if self.parent.max_retries is not None else 3)
+            actual_retry_delay = retry_delay if retry_delay is not None else (self.parent.retry_delay if self.parent.retry_delay is not None else 1.0)
+            actual_base_url = base_url if base_url is not None else self.parent.base_url
+            actual_temperature = temperature if temperature is not None else self.parent.temperature
+            actual_max_tokens = max_tokens if max_tokens is not None else self.parent.max_tokens
+            actual_stream = stream if stream is not None else self.parent.stream
 
-            if explicit_model is not None:
+            actual_drop_params = kwargs.pop("drop_params", None)
+            merged_kwargs = {**self.parent._kwargs, **kwargs}
+
+            if model is not None and model != "":
                 adapter = self.parent._get_adapter(model, actual_api_key, actual_timeout, actual_max_retries, actual_retry_delay, actual_base_url, drop_params=actual_drop_params)
                 self.parent._last_adapter = adapter
                 resp = adapter.create_completion(
@@ -357,7 +349,11 @@ class CNLLM:
                     max_tokens=actual_max_tokens,
                     stream=actual_stream,
                     model=model,
-                    **clean_kwargs
+                    timeout=actual_timeout,
+                    max_retries=actual_max_retries,
+                    retry_delay=actual_retry_delay,
+                    base_url=actual_base_url,
+                    **merged_kwargs
                 )
                 self._last_response = resp
                 if actual_stream:
@@ -389,7 +385,7 @@ class CNLLM:
                 temperature=actual_temperature,
                 max_tokens=actual_max_tokens,
                 stream=actual_stream,
-                **clean_kwargs
+                **merged_kwargs
             )
             self.parent._last_adapter = fb_manager._last_adapter
             self._last_response = resp
@@ -443,12 +439,13 @@ class CNLLM:
             Returns:
                 BatchResponse: 批量响应对象（非流式/流式都返回）
             """
-            from cnllm.utils.batch import BatchScheduler, StreamBatchScheduler, MixedBatchScheduler, _normalize_batch_requests
+            from cnllm.utils.batch import BatchScheduler, StreamBatchScheduler, _normalize_batch_requests
             from cnllm.core.accumulators.batch_accumulator import (
                 BatchResponse,
                 BatchStreamAccumulator,
+                BatchNonStreamAccumulator,
             )
-            from cnllm.core.param_registry import validate_batch_params, resolve_batch_init_defaults
+            from cnllm.core.param_registry import validate_for_scope, validate_batch_params
 
             # === validate_one_of: 同级 prompt + messages 互斥 ===
             if prompt is not None and messages is not None:
@@ -505,10 +502,6 @@ class CNLLM:
             # 注入 drop_params 到 per-request 默认值（已在验证后注入，避免被当作未知参数丢弃）
             if actual_drop_params is not None:
                 per_request_defaults["drop_params"] = actual_drop_params
-            # stream 参数继承到 per-request 默认值（优先级：per-req显式 > batch调用级 > 客户端初始化）
-            stream_default = stream or getattr(self.parent, 'stream', False)
-            if stream_default:
-                per_request_defaults["stream"] = True
 
             actual_requests = requests if requests is not None else self.parent._batch_requests
 
@@ -519,27 +512,15 @@ class CNLLM:
                 per_request_defaults=per_request_defaults,
             )
 
-            # 通过 resolve_batch_init_defaults 统一解析 batch-level 参数最终值
-            #（优先级：调用级 > 客户端初始化 > PARAM_REGISTRY 默认值）
-            batch_call_params = {
-                "max_concurrent": max_concurrent, "rps": rps,
-                "timeout": timeout, "max_retries": max_retries, "retry_delay": retry_delay,
-                "stop_on_error": stop_on_error, "callbacks": callbacks,
-                "custom_ids": custom_ids, "keep": keep,
-            }
-            batch_defaults = resolve_batch_init_defaults(
-                self.parent._init_params, "chat", batch_call_params,
-            )
-            actual_max_concurrent = batch_defaults.get("max_concurrent")
-            actual_rps = batch_defaults.get("rps")
-            actual_stop_on_error = batch_defaults.get("stop_on_error")
-            actual_callbacks = batch_defaults.get("callbacks")
-            actual_custom_ids = batch_defaults.get("custom_ids")
-            actual_keep = batch_defaults.get("keep")
-            # timeout/max_retries/retry_delay 在 PARAM_REGISTRY 中非 batch_level，但 batch 也需此值
-            actual_timeout = timeout if timeout is not None else (self.parent.timeout or resolve_default("chat", "timeout"))
-            actual_max_retries = max_retries if max_retries is not None else (self.parent.max_retries or resolve_default("chat", "max_retries"))
-            actual_retry_delay = retry_delay if retry_delay is not None else (self.parent.retry_delay or resolve_default("chat", "retry_delay"))
+            actual_timeout = timeout if timeout is not None else self.parent.timeout
+            actual_max_retries = max_retries if max_retries is not None else (self.parent.max_retries if self.parent.max_retries is not None else 3)
+            actual_retry_delay = retry_delay if retry_delay is not None else (self.parent.retry_delay if self.parent.retry_delay is not None else 1.0)
+            actual_max_concurrent = max_concurrent if max_concurrent is not None else (self.parent._batch_max_concurrent or 3)
+            actual_rps = rps if rps is not None else (self.parent._batch_rps or 2)
+            actual_stop_on_error = stop_on_error if stop_on_error is not None else (self.parent._batch_stop_on_error if self.parent._batch_stop_on_error is not None else False)
+            actual_callbacks = callbacks if callbacks is not None else self.parent._batch_callbacks
+            actual_custom_ids = custom_ids if custom_ids is not None else self.parent._batch_custom_ids
+            actual_keep = keep if keep is not None else self.parent._batch_keep
 
             # === 按 per-req stream 值分组 ===
             stream_requests = []
@@ -564,7 +545,7 @@ class CNLLM:
             )
 
             if not stream_requests:
-                # === 全部非流式 ===
+                # === 全部非流式：走现有 BatchScheduler 路径 ===
                 scheduler = BatchScheduler(**_scheduler_kwargs)
                 adapter = scheduler._get_adapter()
 
@@ -579,11 +560,11 @@ class CNLLM:
 
                 def _bg_run():
                     try:
-                        for _ in scheduler.execute(non_stream_requests):
-                            pass
+                        scheduler.execute(non_stream_requests)
                     except Exception:
                         pass
                     finally:
+                        batch_response._clear_non_kept_fields()
                         batch_response.mark_done()
 
                 import threading
@@ -603,18 +584,64 @@ class CNLLM:
                 return accumulator
 
             else:
-                # === 混合模式 ===
-                from cnllm.utils.batch import MixedBatchScheduler
-                scheduler = MixedBatchScheduler(
-                    client=self.parent,
-                    timeout=actual_timeout,
-                    max_retries=actual_max_retries,
-                    retry_delay=actual_retry_delay,
-                    callbacks=actual_callbacks,
-                    custom_ids=actual_custom_ids,
-                )
-                batch_response = scheduler.execute(batch_requests)
+                # === 混合模式：两个 scheduler 并发，结果合并到共享 BatchResponse ===
+                import time as _time
+                import threading
+                shared_response = BatchResponse()
                 if actual_keep is not None:
-                    batch_response._keep = actual_keep
-                self._batch_response = batch_response
-                return batch_response
+                    shared_response._keep = actual_keep
+                shared_response._total = len(batch_requests)
+                shared_response._start_time = _time.time()
+
+                ns_scheduler = BatchScheduler(**_scheduler_kwargs)
+                ns_scheduler._execute_batch_response = shared_response
+
+                s_scheduler = StreamBatchScheduler(**_scheduler_kwargs)
+
+                def _ns_run():
+                    try:
+                        ns_scheduler.execute(non_stream_requests)
+                    except Exception:
+                        pass
+
+                def _s_run():
+                    try:
+                        chunks_iterator = s_scheduler.execute(stream_requests)
+                        adapter = s_scheduler._get_adapter()
+                        merge_keep = set(actual_keep) if actual_keep is not None else set()
+                        merge_keep.update(["raw", "results", "errors", "still", "think", "tools"])
+                        accumulator = BatchStreamAccumulator(chunks_iterator, adapter, total=len(stream_requests), keep=frozenset(merge_keep))
+                        for _ in accumulator:
+                            pass
+                        src = accumulator._batch_response
+                        shared_response._results.update(src._results)
+                        shared_response._errors.update(src._errors)
+                        shared_response._raw.update(src._raw)
+                        shared_response._think.update(src._think)
+                        shared_response._still.update(src._still)
+                        shared_response._tools.update(src._tools)
+                        for req_id, u in src._usage.items():
+                            if req_id not in shared_response._usage:
+                                shared_response._usage[req_id] = u
+                            elif isinstance(u, dict) and isinstance(shared_response._usage[req_id], dict):
+                                for k, v in u.items():
+                                    if isinstance(v, (int, float)) and isinstance(shared_response._usage[req_id].get(k), (int, float)):
+                                        shared_response._usage[req_id][k] = shared_response._usage[req_id].get(k, 0) + v
+                                    else:
+                                        shared_response._usage[req_id][k] = v
+                        shared_response._success_count += src._success_count
+                        shared_response._fail_count += src._fail_count
+                    except Exception:
+                        pass
+
+                ns_thread = threading.Thread(target=_ns_run, daemon=True)
+                s_thread = threading.Thread(target=_s_run, daemon=True)
+                ns_thread.start()
+                s_thread.start()
+                ns_thread.join()
+                s_thread.join()
+
+                shared_response.set_total(len(batch_requests))
+                shared_response._end_time = _time.time()
+                shared_response.mark_done()
+                shared_respons

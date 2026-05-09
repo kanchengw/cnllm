@@ -12,14 +12,11 @@ from cnllm.core.accumulators.batch_accumulator import (
     BatchResponse,
     BatchStreamAccumulator,
     AsyncBatchStreamAccumulator,
-    BatchNonStreamAccumulator,
-    AsyncBatchNonStreamAccumulator,
 )
 from cnllm.core.accumulators.embedding_accumulator import EmbeddingResponse
+import logging
 
-
-
-
+logger = logging.getLogger(__name__)
 def _extract_batch_item(response):
     """从批量单项响应中提取 (raw, formatted, extras) 元组
 
@@ -35,6 +32,8 @@ def _extract_batch_item(response):
     """
     extras = {}
     if isinstance(response, dict):
+        if "usage" in response:
+            extras["_usage"] = response["usage"]
         return response, response, extras
 
     if hasattr(response, 'finalize') and hasattr(response, '_accumulated_raw'):
@@ -46,25 +45,27 @@ def _extract_batch_item(response):
             except Exception:
                 pass
             raw = response._accumulated_raw
-        if hasattr(response, 'think'):
+        # 从 accumulated raw 中提取 still/think/tools（避免跨请求共享 adapter._cnllm_extra）
+        if raw and isinstance(raw, dict):
+            _choices = raw.get("choices", [])
+            if _choices and isinstance(_choices, list) and len(_choices) > 0:
+                _choice = _choices[0]
+                if isinstance(_choice, dict):
+                    _delta = _choice.get("delta", {})
+                    _content = _delta.get("content", "")
+                    if _content:
+                        extras["_still"] = _content
+                    _reasoning = _delta.get("reasoning_content", "")
+                    if _reasoning:
+                        extras["_thinking"] = _reasoning
+                    _tools = _delta.get("tool_calls")
+                    if _tools:
+                        extras["_tools"] = _tools
+        if hasattr(response, 'usage'):
             try:
-                t = response.think
-                if t:
-                    extras["_thinking"] = t
-            except Exception:
-                pass
-        if hasattr(response, 'still'):
-            try:
-                s = response.still
-                if s:
-                    extras["_still"] = s
-            except Exception:
-                pass
-        if hasattr(response, 'tools'):
-            try:
-                t = response.tools
-                if t:
-                    extras["_tools"] = t
+                u = response.usage
+                if u:
+                    extras["_usage"] = u
             except Exception:
                 pass
         formatted = response.finalize()
@@ -76,27 +77,6 @@ def _extract_batch_item(response):
         raw = response._response
         while not isinstance(raw, dict) and hasattr(raw, '_response'):
             raw = raw._response
-        if hasattr(response, 'think'):
-            try:
-                t = response.think
-                if t:
-                    extras["_thinking"] = t
-            except Exception:
-                pass
-        if hasattr(response, 'still'):
-            try:
-                s = response.still
-                if s:
-                    extras["_still"] = s
-            except Exception:
-                pass
-        if hasattr(response, 'tools'):
-            try:
-                t = response.tools
-                if t:
-                    extras["_tools"] = t
-            except Exception:
-                pass
         formatted = getattr(response, '_data', None)
         if formatted is None:
             try:
@@ -109,6 +89,29 @@ def _extract_batch_item(response):
                         formatted = response._response
             except Exception:
                 formatted = response._response
+        # 从 OpenAI 格式 formatted 中提取 still/think/tools（避免跨请求共享 adapter._cnllm_extra）
+        if formatted and isinstance(formatted, dict):
+            _choices = formatted.get("choices", [])
+            if _choices and isinstance(_choices, list) and len(_choices) > 0:
+                _choice = _choices[0]
+                if isinstance(_choice, dict):
+                    _msg = _choice.get("message", {})
+                    _content = _msg.get("content", "")
+                    if _content:
+                        extras["_still"] = _content
+                    _reasoning = _msg.get("reasoning_content", "")
+                    if _reasoning:
+                        extras["_thinking"] = _reasoning
+                    _tools = _msg.get("tool_calls")
+                    if _tools:
+                        extras["_tools"] = _tools
+        if hasattr(response, 'usage'):
+            try:
+                u = response.usage
+                if u:
+                    extras["_usage"] = u
+            except Exception:
+                pass
         return raw, formatted, extras
     return response, response, extras
 
@@ -131,6 +134,7 @@ class BatchItemResult:
     error: Optional[Exception] = None  # 错误（失败时）
     elapsed: float = 0.0                # 耗时（秒）
     status: str = "pending"             # pending / success / error
+    request_id: str = ""               # 请求 ID（保留 custom_ids）
 
 
 @dataclass
@@ -211,9 +215,9 @@ class BatchScheduler:
         self.stop_on_error = stop_on_error
         self.callbacks = callbacks or []
         self.custom_ids = custom_ids
-        self._adapter = None
         self.max_retries = max_retries
         self.retry_delay = retry_delay
+        self._adapter = None
         self._execute_batch_response = None
 
     def _get_adapter(self):
@@ -268,7 +272,8 @@ class BatchScheduler:
 
         batch_items.sort(key=lambda x: -x.priority)
 
-        first_error = None
+        first_error_info = None  # (request_id, error)
+        batch_item_results: List[BatchItemResult] = []
         last_submit_time = 0
 
         with ThreadPoolExecutor(max_workers=self.max_concurrent) as executor:
@@ -288,6 +293,8 @@ class BatchScheduler:
 
                 try:
                     result = future.result(timeout=self.timeout)
+                    result.request_id = request_id
+                    batch_item_results.append(result)
                     if result.status == "success":
                         raw_resp, formatted_resp, extras = _extract_batch_item(result.response)
                         batch_response.set_raw(request_id, raw_resp)
@@ -298,40 +305,49 @@ class BatchScheduler:
                             batch_response.set_still(request_id, extras["_still"])
                         if "_tools" in extras:
                             batch_response.set_tools(request_id, extras["_tools"])
+                        if "_usage" in extras:
+                            batch_response.set_usage(request_id, extras["_usage"])
                     else:
                         error_data = {"error": str(result.error) if result.error else "unknown error"}
                         batch_response.add_result(request_id, error_data)
+                        if self.stop_on_error and first_error_info is None:
+                            first_error_info = (request_id, result.error or Exception("未知错误"))
+                            for f in future_to_item:
+                                f.cancel()
                     self._notify_callback(result)
                 except Exception as e:
-                    from cnllm.utils.exceptions import ModelAPIError, InvalidRequestError, TimeoutError as CNLLMTimeoutError
+                    from cnllm.utils.exceptions import ModelAPIError, TimeoutError as CNLLMTimeoutError
                     if isinstance(e, ValueError):
-                        error = InvalidRequestError(message=str(e), provider="unknown", original_exc=e)
+                        error = TypeError(str(e))
                     elif isinstance(e, TimeoutError):
                         error = CNLLMTimeoutError(message=str(e), provider="unknown", original_exc=e)
                     else:
                         error = ModelAPIError(message=str(e), provider="unknown", original_exc=e)
+                    error_result = BatchItemResult(
+                        index=item.index,
+                        request=item.request,
+                        error=error,
+                        elapsed=0.0,
+                        status="error",
+                        request_id=item.request_id,
+                    )
+                    batch_item_results.append(error_result)
                     error_data = {"error": str(error)}
                     batch_response.add_result(request_id, error_data)
                     self._notify_callback(item)
 
                     if self.stop_on_error:
-                        first_error = error
+                        first_error_info = (request_id, error)
                         for f in future_to_item:
                             f.cancel()
 
-        batch_response.set_total(len(requests))
         batch_response._end_time = time.time()
+
+        # 迭代中已通过 _extract_batch_item 直接写入最终 OpenAI 格式，
+        # 不再需要额外的 Accumulator 覆盖处理。
+        batch_response.set_total(len(requests))
         batch_response.mark_done()
         self._execute_batch_response = None
-        
-        if first_error:
-            from cnllm.utils.exceptions import BatchStopOnError
-            raise BatchStopOnError(
-                batch_response=batch_response,
-                error=first_error
-            )
-        
-        return batch_response
 
     def execute_streaming(self, requests: List[Any], priorities: Optional[List[int]] = None) -> Iterator[tuple]:
         """
@@ -362,9 +378,9 @@ class BatchScheduler:
                     self._notify_callback(result)
                     yield (item.request_id, result)
                 except Exception as e:
-                    from cnllm.utils.exceptions import ModelAPIError, InvalidRequestError, TimeoutError as CNLLMTimeoutError
+                    from cnllm.utils.exceptions import ModelAPIError, TimeoutError as CNLLMTimeoutError
                     if isinstance(e, ValueError):
-                        error = InvalidRequestError(message=str(e), provider="unknown", original_exc=e)
+                        error = TypeError(str(e))
                     elif isinstance(e, TimeoutError):
                         error = CNLLMTimeoutError(message=str(e), provider="unknown", original_exc=e)
                     else:
@@ -505,9 +521,6 @@ class EmbeddingBatchItemResult:
 
 
 class EmbeddingBatchScheduler:
-    DEFAULT_MAX_CONCURRENT = 12
-    DEFAULT_RPS = 10
-
     def __init__(
         self,
         adapter: Any,
@@ -522,8 +535,9 @@ class EmbeddingBatchScheduler:
         callbacks: Optional[List[Callable]] = None,
     ):
         self.adapter = adapter
-        self.max_concurrent = max_concurrent or self.DEFAULT_MAX_CONCURRENT
-        self.rps = rps or self.DEFAULT_RPS
+        from cnllm.core.param_registry import resolve_default
+        self.max_concurrent = max_concurrent or resolve_default("embed", "max_concurrent") or 12
+        self.rps = rps or resolve_default("embed", "rps") or 10
         self.batch_size = batch_size
         self.custom_ids = custom_ids
         self.timeout = timeout if timeout is not None else getattr(adapter, 'timeout', None)
@@ -532,6 +546,7 @@ class EmbeddingBatchScheduler:
         self.stop_on_error = stop_on_error
         self.callbacks = callbacks or []
         self._min_interval = 1.0 / self.rps if self.rps > 0 else 0
+        self._execute_batch_response = None
 
     def _get_request_id(self, index: int) -> str:
         if self.custom_ids and index < len(self.custom_ids):
@@ -561,16 +576,22 @@ class EmbeddingBatchScheduler:
 
     def execute(self, input: List[str], **kwargs) -> EmbeddingResponse:
         start_time = time.time()
-        response = EmbeddingResponse(
-            _request_counts={"total": len(input), "dimension": 0},
-            _custom_ids=list(self.custom_ids) if self.custom_ids else []
-        )
+        if self._execute_batch_response is not None:
+            response = self._execute_batch_response
+        else:
+            response = EmbeddingResponse(
+                _request_counts={"total": len(input), "dimension": 0},
+                _custom_ids=list(self.custom_ids) if self.custom_ids else []
+            )
         response._start_time = start_time
         if not input:
             response.finish()
             return response
 
         packs = self._pack_inputs(input)
+        actual_bs = self.batch_size if self.batch_size is not None else get_dynamic_batch_size(len(input))
+        response._batch_size = actual_bs
+        response._batch_count = len(packs)
         has_error = False
 
         with ThreadPoolExecutor(max_workers=self.max_concurrent) as executor:
@@ -589,14 +610,12 @@ class EmbeddingBatchScheduler:
                 future = executor.submit(self._execute_pack, chunk, ids, start_idx, **kwargs)
                 future_to_pack[future] = (chunk, ids, start_idx)
 
-            first_error = None
+            first_error_info = None  # (request_id, error)
             for future in as_completed(future_to_pack):
                 if has_error and self.stop_on_error:
                     for f in future_to_pack:
                         f.cancel()
-                    from cnllm.utils.exceptions import BatchStopOnError
-                    response.finish()
-                    raise BatchStopOnError(batch_response=response, error=first_error)
+                    break
 
                 chunk, ids, start_idx = future_to_pack[future]
                 try:
@@ -620,11 +639,11 @@ class EmbeddingBatchScheduler:
                         self._notify_callback(item_result)
                         if self.stop_on_error:
                             has_error = True
-                            if first_error is None:
-                                first_error = error
+                            if first_error_info is None:
+                                first_error_info = (rid, error)
                 except Exception as e:
-                    if first_error is None:
-                        first_error = e
+                    if first_error_info is None:
+                        first_error_info = (ids[0] if ids else "unknown", e)
                     for rid in ids:
                         response.add_error(rid, e)
                         item_result = EmbeddingBatchItemResult(
@@ -637,7 +656,23 @@ class EmbeddingBatchScheduler:
                         if self.stop_on_error:
                             has_error = True
 
-        response.finish()
+        response._end_time = time.time()
+
+        if first_error_info:
+            req_id, err = first_error_info
+            total_count = response._request_counts.get("total", 0)
+            success_count = len(response._results)
+            if success_count > 0:
+                logger.warning(
+                    f"{req_id}请求失败，失败原因：{err}，"
+                    f"已返回 {success_count}/{total_count} 个成功结果"
+                )
+            else:
+                logger.warning(
+                    f"{req_id}请求失败，失败原因：{err}，"
+                    f"批量请求全部失败"
+                )
+
         return response
 
     def _execute_pack(self, chunk: List[str], ids: List[str], start_idx: int, **kwargs) -> Dict[str, Any]:
@@ -656,6 +691,17 @@ class EmbeddingBatchScheduler:
         fail_results = {}
 
         if isinstance(pack_result, EmbeddingResponse):
+            # 累积 pack 级 usage
+            if pack_result._usage:
+                pack_usage = pack_result._usage
+                if not response._usage:
+                    response._usage = dict(pack_usage)
+                else:
+                    for k, v in pack_usage.items():
+                        if isinstance(v, (int, float)) and isinstance(response._usage.get(k), (int, float)):
+                            response._usage[k] = response._usage.get(k, 0) + v
+                        else:
+                            response._usage[k] = v
             for rid in ids:
                 if rid in pack_result.results:
                     result_data = pack_result.results[rid]
@@ -664,10 +710,10 @@ class EmbeddingBatchScheduler:
                     embedding_data = result_data.get("data", [{}])
                     if embedding_data and embedding_data[0].get("embedding"):
                         dim = len(embedding_data[0]["embedding"])
-                        if dim > response.dimension:
+                        if dim > response._request_counts.get("dimension", 0):
                             response._request_counts["dimension"] = dim
                 else:
-                    error = pack_result.fail[0] if pack_result.fail else "no result in pack response"
+                    error = pack_result._errors.get(rid, "no result in pack response")
                     if isinstance(error, dict):
                         error_msg = error.get("error", str(error))
                     else:
@@ -740,10 +786,13 @@ class AsyncEmbeddingBatchScheduler:
 
     async def execute(self, input: List[str], **kwargs):
         start_time = time.time()
-        response = EmbeddingResponse(
-            _request_counts={"total": len(input), "dimension": 0},
-            _custom_ids=list(self.custom_ids) if self.custom_ids else []
-        )
+        if self._execute_batch_response is not None:
+            response = self._execute_batch_response
+        else:
+            response = EmbeddingResponse(
+                _request_counts={"total": len(input), "dimension": 0},
+                _custom_ids=list(self.custom_ids) if self.custom_ids else []
+            )
         response._start_time = start_time
         if not input:
             response.finish()
@@ -751,6 +800,9 @@ class AsyncEmbeddingBatchScheduler:
             return
 
         packs = self._pack_inputs(input)
+        actual_bs = self.batch_size if self.batch_size is not None else get_dynamic_batch_size(len(input))
+        response._batch_size = actual_bs
+        response._batch_count = len(packs)
         semaphore = asyncio.Semaphore(self.max_concurrent)
         has_error = False
 
@@ -771,6 +823,8 @@ class AsyncEmbeddingBatchScheduler:
             task = asyncio.create_task(run_pack(pack_idx, chunk, ids, start_idx))
             pending.add(task)
 
+        first_error_info = None  # (request_id, error)
+
         while pending:
             done, _ = await asyncio.wait(pending, return_when=asyncio.FIRST_COMPLETED)
             for task in done:
@@ -788,6 +842,8 @@ class AsyncEmbeddingBatchScheduler:
                         self._notify_callback(item_result)
                     if self.stop_on_error:
                         has_error = True
+                        if first_error_info is None:
+                            first_error_info = (ids[0] if ids else "unknown", error)
                         for p in pending:
                             p.cancel()
                         break
@@ -811,23 +867,37 @@ class AsyncEmbeddingBatchScheduler:
                         self._notify_callback(item_result)
                         if self.stop_on_error:
                             has_error = True
+                            if first_error_info is None:
+                                first_error_info = (rid, error_msg)
                 yield response
 
-        response.finish()
+        response._end_time = time.time()
+
+        if first_error_info:
+            req_id, err = first_error_info
+            total_count = response._request_counts.get("total", 0)
+            success_count = len(response._results)
+            if success_count > 0:
+                logger.warning(
+                    f"{req_id}请求失败，失败原因：{err}，"
+                    f"已返回 {success_count}/{total_count} 个成功结果"
+                )
+            else:
+                logger.warning(
+                    f"{req_id}请求失败，失败原因：{err}，"
+                    f"批量请求全部失败"
+                )
+
         yield response
 
     async def _execute_pack(self, chunk: List[str], ids: List[str], start_idx: int, **kwargs) -> Any:
-        loop = asyncio.get_event_loop()
-        raw = await loop.run_in_executor(
-            None,
-            lambda: self.adapter.create_batch(
-                chunk,
-                custom_ids=ids,
-                timeout=self.timeout,
-                max_retries=self.max_retries,
-                retry_delay=self.retry_delay,
-                **kwargs
-            )
+        raw = await self.adapter.acreate_batch(
+            chunk,
+            custom_ids=ids,
+            timeout=self.timeout,
+            max_retries=self.max_retries,
+            retry_delay=self.retry_delay,
+            **kwargs
         )
         return raw
 
@@ -836,6 +906,17 @@ class AsyncEmbeddingBatchScheduler:
         fail_results = {}
 
         if isinstance(pack_result, EmbeddingResponse):
+            # 累积 pack 级 usage
+            if pack_result._usage:
+                pack_usage = pack_result._usage
+                if not response._usage:
+                    response._usage = dict(pack_usage)
+                else:
+                    for k, v in pack_usage.items():
+                        if isinstance(v, (int, float)) and isinstance(response._usage.get(k), (int, float)):
+                            response._usage[k] = response._usage.get(k, 0) + v
+                        else:
+                            response._usage[k] = v
             for rid in ids:
                 if rid in pack_result.results:
                     result_data = pack_result.results[rid]
@@ -844,10 +925,10 @@ class AsyncEmbeddingBatchScheduler:
                     embedding_data = result_data.get("data", [{}])
                     if embedding_data and embedding_data[0].get("embedding"):
                         dim = len(embedding_data[0]["embedding"])
-                        if dim > response.dimension:
+                        if dim > response._request_counts.get("dimension", 0):
                             response._request_counts["dimension"] = dim
                 else:
-                    error = pack_result.fail[0] if pack_result.fail else "no result in pack response"
+                    error = pack_result._errors.get(rid, "no result in pack response")
                     if isinstance(error, dict):
                         error_msg = error.get("error", str(error))
                     else:
@@ -964,8 +1045,9 @@ class AsyncBatchScheduler:
             task = asyncio.create_task(_execute_wrapper(item))
             tasks.append(task)
 
-        first_error = None
+        first_error_info = None  # (request_id, error)
 
+        batch_item_results: List[BatchItemResult] = []
         # 按完成顺序逐个处理（实时更新统计）
         for coro in asyncio.as_completed(tasks):
             item, result = await coro
@@ -981,18 +1063,25 @@ class AsyncBatchScheduler:
                 else:
                     error = ModelAPIError(message=str(result), provider="unknown")
                     error.__cause__ = result
+                batch_item_results.append(BatchItemResult(
+                    index=item.index, request=item.request, error=error,
+                    elapsed=0.0, status="error",
+                    request_id=item.request_id,
+                ))
                 error_data = {"error": str(error) if error else "unknown error", "error_type": type(error).__name__}
-                batch_response.add_result(request_id, error_data)
                 self._notify_callback(BatchItemResult(
                     index=item.index, request=item.request, error=error,
-                    elapsed=0.0, status="error"
+                    elapsed=0.0, status="error",
+                    request_id=item.request_id,
                 ))
                 if self.stop_on_error:
-                    first_error = error
+                    first_error_info = (request_id, error)
                     for t in tasks:
                         t.cancel()
                     break
             elif result.status == "success":
+                result.request_id = item.request_id
+                batch_item_results.append(result)
                 raw_resp, formatted_resp, extras = _extract_batch_item(result.response)
                 batch_response.set_raw(request_id, raw_resp)
                 batch_response.add_result(request_id, formatted_resp)
@@ -1002,25 +1091,43 @@ class AsyncBatchScheduler:
                     batch_response.set_still(request_id, extras["_still"])
                 if "_tools" in extras:
                     batch_response.set_tools(request_id, extras["_tools"])
+                if "_usage" in extras:
+                    batch_response.set_usage(request_id, extras["_usage"])
                 self._notify_callback(result)
             else:
+                result.request_id = item.request_id
+                batch_item_results.append(result)
                 error_data = {"error": str(result.error) if result.error else "unknown error"}
                 batch_response.add_result(request_id, error_data)
                 self._notify_callback(result)
+                if self.stop_on_error:
+                    first_error_info = (request_id, result.error or Exception("未知错误"))
+                    for t in tasks:
+                        t.cancel()
+                    break
 
         batch_response._end_time = time.time()
         batch_response.set_elapsed(time.time() - start_time)
+
+        # 迭代中已通过 _extract_batch_item 直接写入最终 OpenAI 格式，
+        # 不再需要额外的 Accumulator 覆盖处理。
         batch_response.set_total(len(requests))
         batch_response.mark_done()
         self._execute_batch_response = None
         self._semaphore = None
 
-        if first_error:
-            from cnllm.utils.exceptions import BatchStopOnError
-            raise BatchStopOnError(
-                batch_response=batch_response,
-                error=first_error
-            )
+        if first_error_info:
+            req_id, err = first_error_info
+            if batch_response.status["success_count"] > 0:
+                logger.warning(
+                    f"{req_id}请求失败，失败原因：{err}，"
+                    f"已返回 {batch_response.status['success_count']}/{batch_response.status['total']} 个成功结果"
+                )
+            else:
+                logger.warning(
+                    f"{req_id}请求失败，失败原因：{err}，"
+                    f"批量请求全部失败"
+                )
 
         return batch_response
 
@@ -1147,23 +1254,30 @@ def _normalize_batch_requests(
     将用户输入规范化为统一的请求对象列表。
 
     三种输入模式：
-    1. requests=[{...}, {...}]        → 直接使用，合并 per-request 全局默认值
-    2. prompt=["A", "B"]              → 包装成 [{prompt: "A"}, {prompt: "B"}]
-    3. messages=[[{...}], [{...}]]     → 包装成 [{messages: [...]}, ...]
+    1. requests=[{...}, {...}]                     → 直接使用，合并 per-request 全局默认值
+    2. prompt=["A", "B"]                           → 包装成 [{prompt: "A"}, {prompt: "B"}]
+    3. messages=[[{...}], [{...}]]                  → 包装成 [{messages: [...]}, ...]
+
+    当 requests 与 prompt/messages 共存时：
+    - prompt 为单个字符串，作为所有 request 的通用输入
+    - messages 为单组消息列表，作为所有 request 的通用输入
 
     Args:
         requests_arg: 请求对象列表（per-request 独立参数）
-        prompt: prompt 字符串列表
-        messages: 消息列表
+        prompt: 独立模式为字符串列表；与 requests 共存时为单个字符串
+        messages: 独立模式为消息列表的列表；与 requests 共存时为单组消息列表
         per_request_defaults: Per-Request 全局默认参数（如 tools, thinking 等）
     """
     if requests_arg is not None:
-        if prompt is not None or messages is not None:
-            raise TypeError(
-                "batch() 只能使用 requests 或 prompt/messages 其中一种，不能同时使用"
-            )
         if len(requests_arg) == 0:
             raise TypeError("requests 列表不能为空")
+
+        # 共存模式验证：prompt 必须为字符串，messages 必须为单组消息列表
+        if prompt is not None and not isinstance(prompt, str):
+            raise TypeError("与 requests 共存时 prompt 必须为字符串，而非列表")
+        if messages is not None and (not isinstance(messages, list) or
+                                      (messages and not isinstance(messages[0], dict))):
+            raise TypeError("与 requests 共存时 messages 必须为单组消息列表，而非列表的列表")
 
         final_requests = []
         for i, req in enumerate(requests_arg):
@@ -1180,6 +1294,13 @@ def _normalize_batch_requests(
                         f"例如: batch(..., {batch_key}={req[batch_key]})"
                     )
                     req = {k: v for k, v in req.items() if k != batch_key}
+
+            # 从共享 prompt/messages 注入（均为单值，适用于所有 request）
+            if "prompt" not in req and "messages" not in req:
+                if prompt is not None:
+                    req["prompt"] = prompt
+                elif messages is not None:
+                    req["messages"] = messages
 
             if "prompt" not in req and "messages" not in req:
                 raise TypeError(f"requests[{i}] 必须包含 'prompt' 或 'messages' 字段")
@@ -1209,6 +1330,11 @@ def _normalize_batch_requests(
 
     defaults = per_request_defaults or {}
     if prompt is not None:
+        if not isinstance(prompt, list):
+            raise TypeError(
+                "batch() 的 prompt 参数必须为字符串列表（独立模式），"
+                "如需单个请求请使用 chat.create()"
+            )
         prompt = [p for p in prompt if p != ""]
         if len(prompt) == 0:
             raise TypeError("prompt 列表不能为空且不能全为空字符串")
@@ -1217,6 +1343,11 @@ def _normalize_batch_requests(
             for p in prompt
         ]
     else:
+        if not isinstance(messages, list) or (messages and not isinstance(messages[0], list)):
+            raise TypeError(
+                "batch() 的 messages 参数必须为消息列表的列表（独立模式），"
+                "如需单个请求请使用 chat.create()"
+            )
         messages = [m for m in messages if m and len(m) > 0]
         if len(messages) == 0:
             raise TypeError("messages 列表不能为空")
@@ -1289,13 +1420,13 @@ class StreamBatchScheduler(BatchScheduler):
                         continue
                     chunks.append(chunk)
 
-                return item.index, iter(chunks), adapter
+                return item.index, iter(chunks), adapter, False, ""
             except CNLLMError as e:
                 return item.index, iter([{
                     "request_id": item.request_id,
                     "error": str(e),
                     "status": "error"
-                }]), None
+                }]), None, True, str(e)
             except Exception as e:
                 from cnllm.utils.exceptions import ModelAPIError, InvalidRequestError, TimeoutError as CNLLMTimeoutError
                 if isinstance(e, ValueError):
@@ -1307,7 +1438,7 @@ class StreamBatchScheduler(BatchScheduler):
                 return item.index, iter([{
                     "error": str(error),
                     "status": "error"
-                }]), None
+                }]), None, True, str(error)
 
         with ThreadPoolExecutor(max_workers=self.max_concurrent) as executor:
             future_to_item = {}
@@ -1325,10 +1456,17 @@ class StreamBatchScheduler(BatchScheduler):
             per_request_extras = {}
             for future in as_completed(future_to_item):
                 try:
-                    index, chunks_iter, adapter = future.result(timeout=self.timeout)
+                    index, chunks_iter, adapter, is_error, error_msg = future.result(timeout=self.timeout)
                     all_chunks[index] = chunks_iter
                     if adapter and hasattr(adapter, '_cnllm_extra'):
-                        per_request_extras[index] = dict(adapter._cnllm_extra)
+                        # 仅传递 usage，thinking/still/tools 由 BatchStreamAccumulator 逐 chunk 提取
+                        _usage = adapter._cnllm_extra.get("_usage")
+                        per_request_extras[index] = {"_usage": _usage} if _usage else {}
+                    if is_error and self.stop_on_error:
+                        item = future_to_item[future]
+                        logger.warning(f"{item.request_id}请求失败，失败原因：{error_msg}")
+                        for f in future_to_item:
+                            f.cancel()
                 except Exception as e:
                     item = future_to_item[future]
                     from cnllm.utils.exceptions import ModelAPIError, InvalidRequestError, TimeoutError as CNLLMTimeoutError
@@ -1345,6 +1483,7 @@ class StreamBatchScheduler(BatchScheduler):
                     }])
 
                     if self.stop_on_error:
+                        logger.warning(f"{item.request_id}请求失败，失败原因：{error}")
                         for f in future_to_item:
                             f.cancel()
 
@@ -1484,17 +1623,211 @@ class AsyncStreamBatchScheduler(AsyncBatchScheduler):
                 if active_streams == 0:
                     await queue.put(None)
 
+        tasks = []
         for item in batch_items:
-            asyncio.create_task(process_stream(item))
+            task = asyncio.create_task(process_stream(item))
+            tasks.append(task)
         
         while True:
             chunk_wrapper = await queue.get()
             if chunk_wrapper is None:
                 break
             yield chunk_wrapper
+            if isinstance(chunk_wrapper, dict) and chunk_wrapper.get("status") == "error" and self.stop_on_error:
+                req_id = chunk_wrapper.get("request_id", "unknown")
+                err_msg = chunk_wrapper.get("error", "未知错误")
+                import logging
+                logging.getLogger(__name__).warning(f"{req_id}请求失败，失败原因：{err_msg}")
+                break
 
-    def _notify_callback_stream(self, result: BatchItemStreamResult):
-        """通知回调（流式版本）"""
+
+class MixedBatchScheduler:
+    """统一调度器：按输入顺序处理流式和非流式请求，结果合并到单个 BatchResponse"""
+
+    def __init__(self, client, max_concurrent=3, rps=0, timeout=None,
+                 stop_on_error=False, callbacks=None, max_retries=None,
+                 retry_delay=None, custom_ids=None):
+        self.client = client
+        self.max_concurrent = max_concurrent
+        self.rps = rps
+        self._min_interval = 1.0 / rps if rps > 0 else 0
+        self.timeout = timeout
+        self.stop_on_error = stop_on_error
+        self.callbacks = callbacks or []
+        self.max_retries = max_retries
+        self.retry_delay = retry_delay
+        self.custom_ids = custom_ids
+
+    def _get_request_id(self, index):
+        if self.custom_ids and index < len(self.custom_ids):
+            return self.custom_ids[index]
+        return f"request_{index}"
+
+    def execute(self, requests, priorities=None):
+        """按输入顺序逐个处理请求，返回 BatchResponse"""
+        from cnllm.core.accumulators.batch_accumulator import BatchResponse, _DEFAULT_KEEP
+        import time as _time
+
+        batch_response = BatchResponse()
+        batch_response._total = len(requests)
+        batch_response._start_time = _time.time()
+
+        for i, req in enumerate(requests):
+            request_id = self._get_request_id(i)
+            start = _time.time()
+            try:
+                if isinstance(req, str):
+                    kwargs = {}
+                    if self.timeout is not None:
+                        kwargs['timeout'] = self.timeout
+                    if self.max_retries is not None:
+                        kwargs['max_retries'] = self.max_retries
+                    if self.retry_delay is not None:
+                        kwargs['retry_delay'] = self.retry_delay
+                    result = self.client.chat.create(prompt=req, **kwargs)
+                elif isinstance(req, dict):
+                    req_copy = {k: v for k, v in req.items() if k != "_input_type"}
+                    if 'timeout' not in req_copy and self.timeout is not None:
+                        req_copy['timeout'] = self.timeout
+                    if 'max_retries' not in req_copy and self.max_retries is not None:
+                        req_copy['max_retries'] = self.max_retries
+                    if 'retry_delay' not in req_copy and self.retry_delay is not None:
+                        req_copy['retry_delay'] = self.retry_delay
+                    result = self.client.chat.create(**req_copy)
+                else:
+                    raise ValueError(f"Invalid request type: {type(req).__name__}")
+
+                raw, formatted, extras = _extract_batch_item(result)
+                batch_response.set_raw(request_id, raw)
+                batch_response.add_result(request_id, formatted)
+
+                if extras.get("_still"):
+                    batch_response.set_still(request_id, extras["_still"])
+                if extras.get("_thinking"):
+                    batch_response.set_think(request_id, extras["_thinking"])
+                if extras.get("_tools"):
+                    batch_response.set_tools(request_id, extras["_tools"])
+                if extras.get("_usage"):
+                    batch_response.set_usage(request_id, extras["_usage"])
+
+                self._notify_callback(BatchItemResult(
+                    index=i, request=req, response=formatted,
+                    elapsed=_time.time() - start, status="success",
+                    request_id=request_id
+                ))
+
+            except Exception as e:
+                batch_response.add_error(request_id, str(e))
+                self._notify_callback(BatchItemResult(
+                    index=i, request=req, error=e,
+                    elapsed=_time.time() - start, status="error",
+                    request_id=request_id
+                ))
+                if self.stop_on_error:
+                    break
+
+        batch_response._end_time = _time.time()
+        batch_response.mark_done()
+        return batch_response
+
+    def _notify_callback(self, result: BatchItemResult):
+        """通知回调"""
+        for callback in self.callbacks:
+            try:
+                callback(result)
+            except Exception as e:
+                import logging
+                logging.error(f"Callback error: {e}")
+
+
+class AsyncMixedBatchScheduler:
+    """异步统一调度器：按输入顺序处理流式和非流式请求，结果合并到单个 BatchResponse"""
+
+    def __init__(self, client, timeout=None, max_retries=None,
+                 retry_delay=None, stop_on_error=False,
+                 callbacks=None, custom_ids=None):
+        self.client = client
+        self.timeout = timeout
+        self.max_retries = max_retries
+        self.retry_delay = retry_delay
+        self.stop_on_error = stop_on_error
+        self.callbacks = callbacks or []
+        self.custom_ids = custom_ids
+
+    def _get_request_id(self, index):
+        if self.custom_ids and index < len(self.custom_ids):
+            return self.custom_ids[index]
+        return f"request_{index}"
+
+    async def execute(self, requests, priorities=None):
+        """按输入顺序逐个处理请求，返回 BatchResponse"""
+        from cnllm.core.accumulators.batch_accumulator import BatchResponse
+        import time as _time
+
+        batch_response = BatchResponse()
+        batch_response._total = len(requests)
+        batch_response._start_time = _time.time()
+
+        for i, req in enumerate(requests):
+            request_id = self._get_request_id(i)
+            start = _time.time()
+            try:
+                if isinstance(req, str):
+                    kwargs = {}
+                    if self.timeout is not None:
+                        kwargs['timeout'] = self.timeout
+                    if self.max_retries is not None:
+                        kwargs['max_retries'] = self.max_retries
+                    if self.retry_delay is not None:
+                        kwargs['retry_delay'] = self.retry_delay
+                    result = await self.client.chat.create(prompt=req, **kwargs)
+                elif isinstance(req, dict):
+                    req_copy = {k: v for k, v in req.items() if k != "_input_type"}
+                    if 'timeout' not in req_copy and self.timeout is not None:
+                        req_copy['timeout'] = self.timeout
+                    if 'max_retries' not in req_copy and self.max_retries is not None:
+                        req_copy['max_retries'] = self.max_retries
+                    if 'retry_delay' not in req_copy and self.retry_delay is not None:
+                        req_copy['retry_delay'] = self.retry_delay
+                    result = await self.client.chat.create(**req_copy)
+                else:
+                    raise ValueError(f"Invalid request type: {type(req).__name__}")
+
+                raw, formatted, extras = _extract_batch_item(result)
+                batch_response.set_raw(request_id, raw)
+                batch_response.add_result(request_id, formatted)
+
+                if extras.get("_still"):
+                    batch_response.set_still(request_id, extras["_still"])
+                if extras.get("_thinking"):
+                    batch_response.set_think(request_id, extras["_thinking"])
+                if extras.get("_tools"):
+                    batch_response.set_tools(request_id, extras["_tools"])
+                if extras.get("_usage"):
+                    batch_response.set_usage(request_id, extras["_usage"])
+
+                self._notify_callback(BatchItemResult(
+                    index=i, request=req, response=formatted,
+                    elapsed=_time.time() - start, status="success",
+                    request_id=request_id
+                ))
+
+            except Exception as e:
+                batch_response.add_error(request_id, str(e))
+                self._notify_callback(BatchItemResult(
+                    index=i, request=req, error=e,
+                    elapsed=_time.time() - start, status="error",
+                    request_id=request_id
+                ))
+                if self.stop_on_error:
+                    break
+
+        batch_response._end_time = _time.time()
+        batch_response.mark_done()
+        return batch_response
+
+    def _notify_callback(self, result: BatchItemResult):
+        """通知回调，支持同步和异步回调"""
         for callback in self.callbacks:
             try:
                 if asyncio.iscoroutinefunction(callback):
@@ -1502,6 +1835,5 @@ class AsyncStreamBatchScheduler(AsyncBatchScheduler):
                 else:
                     callback(result)
             except Exception as e:
-                # 捕获回调函数的异常，避免阻断批量任务
                 import logging
                 logging.error(f"Callback error: {e}")

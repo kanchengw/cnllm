@@ -27,10 +27,12 @@ CNLLM 采用 **OpenAI SDK 风格的双客户端设计**：
 
 无论是同步还是异步客户端，`stream=True` 参数都控制返回类型：
 
-| 客户端 | `stream=False` | `stream=True` | 批量 `stream=True` |
-| ------ | -------------- | ------------- | ----------------- |
-| 同步 `CNLLM` | `dict` | `StreamResultAccumulator` | `Iterator[dict]` |
-| 异步 `asyncCNLLM` | `dict` | `AsyncStreamResponse` | `AsyncIterator[dict]` |
+| 客户端 | 模式 | `stream=False` | `stream=True` |
+| ------ | ---- | -------------- | ------------- |
+| 同步 `CNLLM` | 单条 | `dict` | `StreamAccumulator`（可迭代 chunk） |
+| 同步 `CNLLM` | 批量 | `BatchResponse` | `BatchStreamAccumulator`（可迭代 chunk） |
+| 异步 `asyncCNLLM` | 单条 | `dict` | `AsyncStreamAccumulator`（async 可迭代 chunk） |
+| 异步 `asyncCNLLM` | 批量 | `BatchResponse` | `AsyncBatchStreamAccumulator`（async 可迭代 chunk） |
 
 ### 2.3 httpx 统一方案
 
@@ -157,51 +159,15 @@ class BaseHttpClient:
         """关闭异步客户端"""
 ```
 
-### 3.4 AsyncStreamAccumulator 异步流式封装
+### 3.4 异步流式封装
 
-`AsyncStreamAccumulator` 封装异步迭代器，实现实时流式处理：
+**单条流式** `AsyncStreamAccumulator`（`cnllm/core/accumulators/single_accumulator.py`）：
+封装异步迭代器，`async for` 实时迭代，每次 yield 标准 OpenAI chunk。
 
-```python
-class AsyncStreamAccumulator:
-    """异步流式响应，支持 async for 实时迭代"""
+**批量流式** `AsyncBatchStreamAccumulator`（`cnllm/core/accumulators/batch_accumulator.py`）：
+封装异步批量调度结果，`async for` 实时迭代，每次 yield 标准 OpenAI chunk。
 
-    def __init__(self, async_iterator, adapter):
-        self._raw_iterator = async_iterator
-        self._adapter = adapter
-        self._chunks = []
-        self._seen_tool_call_indices = set()
-        self._seen_choice_indices = set()
-        self._done = False
-
-        if self._adapter._raw_response is None:
-            self._adapter._raw_response = {}
-        self._adapter._raw_response["chunks"] = []
-        self._adapter._cnllm_extra = {}
-
-    def __aiter__(self):
-        return self
-
-    async def __anext__(self):
-        if self._done:
-            raise StopAsyncIteration
-
-        try:
-            raw_chunk = await self._raw_iterator.__anext__()
-        except StopAsyncIteration:
-            self._done = True
-            self._add_done_marker()
-            raise
-
-        result = self._adapter._to_openai_stream_format(raw_chunk)
-
-        # 从原生 chunk 提取额外字段（reasoning_content, content, tool_calls）
-        self._accumulate_extra_fields(raw_chunk)
-
-        self._post_process_chunk(result)
-        self._chunks.append(result)
-        self._adapter._raw_response["chunks"].append(result)
-        return result
-```
+两者均支持迭代完成后通过 `resp.still` / `resp.think` / `resp.raw` 等属性访问完整累积数据。
 
 ## 4. 流式处理
 
@@ -263,20 +229,38 @@ async with asyncCNLLM(model="deepseek-chat", api_key="xxx") as client:
 ```python
 async with asyncCNLLM(model="deepseek-chat", api_key="xxx") as client:
     async for chunk in await client.chat.create("写一首诗", stream=True):
-        content = chunk.get("choices", [{}])[0].get("delta", {}).get("content", "")
-        print(content, end="", flush=True)
+        print(client.batch_result.still)
 ```
 
 ### 6.3 异步批量
 
 ```python
 async with asyncCNLLM(model="deepseek-chat", api_key="xxx") as client:
-    results = await client.chat.batch([
+    results = await client.chat.batch(prompt=[
         "问题1",
         "问题2",
         "问题3",
     ])
-    print(f"成功: {results.success_count}/{results.total}")
+```
+
+**实时迭代**（`for r in results` 逐 request 累积）：
+
+```python
+async with asyncCNLLM(model="deepseek-chat", api_key="xxx") as client:
+    results = await client.chat.batch(prompt=["问题1", "问题2", "问题3"])
+    for r in results:
+        print(f"进度：{results.status}")
+    print(results.still)   # 完整回复
+    print(results.usage)   # Token 用量汇总
+```
+
+**`keep` 参数**：
+
+```python
+results = await client.chat.batch(
+    prompt=["问题1", "问题2"],
+    keep={"still"},               # 迭代后只保留 still，节省内存
+)
 ```
 
 ### 6.4 异步 Embedding 单条
@@ -293,15 +277,32 @@ async with asyncCNLLM(model="embedding-2", api_key="xxx") as client:
 
 ```python
 async with asyncCNLLM(model="embedding-2", api_key="xxx") as client:
-    results = await client.embeddings.batch(inputs=[
-        "文本1",
-        "文本2",
-        "文本3",
-    ])
+    results = await client.embeddings.batch(
+        input=["文本1", "文本2", "文本3"],
+    )
     # 返回: EmbeddingResponse
-    for request_id, result in results.results.items():
-        embedding = result["data"][0]["embedding"]
-        print(f"{request_id}: 维度={len(embedding)}")
+    print(f"成功: {results.success_count}/{results.total}")
+    print(f"维度: {results.dimension}")
+    print(f"用量: {results.usage}")
+    print(f"批量信息: {results.batch_info}")
+
+    # 向量访问（推荐）:
+    vec0 = results.vectors[0]                # [0.1, 0.2, ...]
+    vec1 = results.vectors["request_1"]      # 同上
+
+    # 标准响应访问:
+    for rid, item in results.results.items():
+        embedding = item["data"][0]["embedding"]
+        print(f"{rid}: 维度={len(embedding)}")
+```
+
+**`keep` 参数**：Embedding 批量默认迭代后仅保留 `vectors`，如需保留 `results`：
+
+```python
+results = await client.embeddings.batch(
+    input=["文本1", "文本2"],
+    keep={"vectors", "results"},   # 迭代后 vectors 和 results 均保留
+)
 ```
 
 ## 7. 注意事项

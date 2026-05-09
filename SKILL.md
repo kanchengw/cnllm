@@ -1,6 +1,6 @@
 ---
 name: cnllm-chinese-llm-adapter
-version: 1.0.3
+version: 1.0.4
 description: >-
   OpenAI SDK 的中文大模型增强适配方案 / unified adapter for Chinese LLMs: DeepSeek,
   GLM/Zhipu (智谱), KIMI/Moonshot (月之暗面), MiniMax (稀宇),
@@ -93,15 +93,14 @@ resp = client.chat.create(messages=[{
 }])
 print(resp.still)
 
-# Text-only model with image → raises InvalidRequestError
-from cnllm import InvalidRequestError
+# Text-only model with image → raises TypeError
 client2 = CNLLM(model="glm-4.6", api_key="your_key")  # text-only
 try:
     client2.chat.create(messages=[{"role": "user", "content": [
         {"type": "text", "text": "What?"},
         {"type": "image_url", "image_url": {"url": "data:image/png;base64,..."}}
     ]}])
-except InvalidRequestError as e:
+except TypeError as e:
     print(f"Rejected: {e}")  # Guides user to multimodal models
 ```
 
@@ -150,8 +149,8 @@ resp = client.chat.batch(
     prompt=["Hello", "How are you?", "What is AI?"],
     stream=True
 )
-print(resp.still)            # per-request responses
-print(resp.request_counts)   # real-time success/fail/total
+print(resp.still["request_0"])   # per-request response text
+print(resp.status)                 # real-time success/fail/total/elapsed
 
 # Per-request config
 resp = client.chat.batch(
@@ -269,10 +268,9 @@ resp = client.chat.batch(prompt=[...])
 # Also accessible via client.batch_result.* in either sync/async
 
 # Top-level fields:
-resp.success          # list[str] — successful request_ids
-resp.fail             # list[str] — failed request_ids
-resp.request_counts   # dict — {success_count, fail_count, total}
-resp.elapsed          # float — total time in seconds
+resp.status           # dict — {success_count, fail_count, total, elapsed}
+resp.errors           # dict — {request_id: error_msg}
+resp.usage            # dict — {prompt_tokens, completion_tokens, total_tokens}
 
 # Per-request access (chat):
 resp.results["request_0"]    # OpenAI-format response per request
@@ -282,7 +280,7 @@ resp.tools["request_0"]      # tool_calls (chat only)
 resp.raw["request_0"]        # raw vendor response
 
 # Embeddings-only extra:
-resp.dimension       # int — embedding dimension
+resp.batch_info["dimension"]       # int — embedding dimension
 ```
 
 ### Error Handling
