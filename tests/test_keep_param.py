@@ -1,5 +1,5 @@
 """
-全面测试 keep 参数行为 — v0.9.0 新增功能
+全面测试 keep 参数行为
 
 覆盖范围：
 - EmbeddingResponse 默认 keep（vectors 保留，results 清除）

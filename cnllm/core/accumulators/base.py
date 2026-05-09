@@ -110,6 +110,7 @@ class StreamBaseAccumulator(BaseAccumulator):
         self._buffered_stop: Optional[Dict[str, Any]] = None
         self._pending_chunk: Optional[Dict[str, Any]] = None
         self._pending_raw_chunk: Optional[Dict[str, Any]] = None
+        self._formatted_chunks: List[Dict[str, Any]] = []
 
     @property
     def usage(self) -> Optional[Dict[str, Any]]:
@@ -125,6 +126,8 @@ class StreamBaseAccumulator(BaseAccumulator):
     
     def finalize(self) -> Dict:
         self._adapter._raw_response = self._accumulated_raw
+        if self._usage and self._formatted_chunks:
+            self._formatted_chunks[-1]["usage"] = dict(self._usage)
         return self._accumulated_raw
     
     def _get_accumulable_paths(self):

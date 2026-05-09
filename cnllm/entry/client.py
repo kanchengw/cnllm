@@ -542,10 +542,12 @@ class CNLLM:
             actual_retry_delay = retry_delay if retry_delay is not None else (self.parent.retry_delay or resolve_default("chat", "retry_delay"))
 
             # === 按 per-req stream 值分组 ===
+            stream_flags = {}
             stream_requests = []
             non_stream_requests = []
-            for req in batch_requests:
+            for idx, req in enumerate(batch_requests):
                 req_stream = req.pop("stream", False)
+                stream_flags[idx] = req_stream
                 if req_stream:
                     stream_requests.append(req)
                 else:
@@ -605,6 +607,10 @@ class CNLLM:
             else:
                 # === 混合模式 ===
                 from cnllm.utils.batch import MixedBatchScheduler
+                # 按原始顺序恢复 stream 标记
+                for idx, req in enumerate(batch_requests):
+                    if stream_flags.get(idx):
+                        req["stream"] = True
                 scheduler = MixedBatchScheduler(
                     client=self.parent,
                     timeout=actual_timeout,

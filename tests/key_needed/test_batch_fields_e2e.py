@@ -5,11 +5,13 @@ E2E 测试：批量响应字段完整性
 
 import os
 import sys
+from dotenv import load_dotenv
 import time
 import logging
 import warnings
 import pytest
 
+load_dotenv()
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 logging.basicConfig(level=logging.WARNING, format="%(levelname)s - %(message)s")
@@ -448,18 +450,4 @@ def run_all():
             failed += 1
             errors.append((test.__name__, str(e)))
             import traceback
-            print(f"  FAIL: {e}")
-            traceback.print_exc()
-
-    print(f"\n{'='*60}")
-    print(f"结果: {passed} 通过, {failed} 失败, {passed+failed} 总计")
-    if errors:
-        print("失败详情:")
-        for name, err in errors:
-            print(f"  - {name}: {err}")
-    print(f"{'='*60}")
-    return failed == 0
-
-
-if __name__ == "__main__":
-    run_a
+           

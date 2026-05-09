@@ -57,11 +57,28 @@ def filter_stream_chunk(
 class StreamAccumulator(StreamBaseAccumulator):
     """单个流式请求的累积器"""
 
-    def __init__(self, chunks_iterator: Iterator[Dict[str, Any]], adapter):
+    def __init__(self, chunks_iterator: Iterator[Dict[str, Any]] = None, adapter=None):
         super().__init__(adapter)
         self._raw_iterator = chunks_iterator
 
+    @classmethod
+    def from_chunks(cls, chunks):
+        """从已有的 OpenAI 格式 chunks 创建 StreamAccumulator（无 HTTP 流）。"""
+        instance = cls.__new__(cls)
+        StreamBaseAccumulator.__init__(instance, adapter=None)
+        instance._formatted_chunks = chunks  # 保留引用，调用方追加 chunks 后自动可见
+        instance._done = True
+        instance._raw_iterator = None
+        instance._chunks = []
+        instance._accumulated_raw = {}
+        instance._buffered_stop = None
+        instance._pending_chunk = None
+        instance._pending_raw_chunk = None
+        return instance
+
     def __iter__(self) -> Iterator[Dict[str, Any]]:
+        if self._raw_iterator is None:
+            return iter(self._formatted_chunks)
         return self
 
     def __next__(self) -> Dict[str, Any]:
@@ -131,9 +148,10 @@ class StreamAccumulator(StreamBaseAccumulator):
                         self._pending_raw_chunk = chunk
                         if self._usage is not None:
                             result["usage"] = self._usage
+                        self._formatted_chunks.append(old)
                         return old
-                    self._buffered_stop = result
-                    continue
+                        self._buffered_stop = result
+                        continue
 
                 # 非 stop，有缓存 → flush 缓存
                 if self._buffered_stop is not None:
@@ -143,8 +161,10 @@ class StreamAccumulator(StreamBaseAccumulator):
                     self._pending_raw_chunk = chunk
                     if self._usage is not None:
                         old["usage"] = self._usage
+                    self._formatted_chunks.append(old)
                     return old
 
+                self._formatted_chunks.append(result)
                 return result
             except StopIteration:
                 self._done = True
@@ -153,12 +173,34 @@ class StreamAccumulator(StreamBaseAccumulator):
                     self._buffered_stop = None
                     if self._usage is not None:
                         c["usage"] = self._usage
+                    self._formatted_chunks.append(c)
                     return c
                 self.finalize()
                 raise
     @property
     def chunks(self) -> List[Dict[str, Any]]:
         return self._chunks
+
+    def _accumulate(self):
+        if not hasattr(self, '_cached_count'):
+            self._cached_count = 0
+            self._accumulated_cache = {}
+        if self._cached_count != len(self._formatted_chunks):
+            if not self._formatted_chunks:
+                self._accumulated_cache = {}
+                self._cached_count = 0
+            else:
+                from .batch_accumulator import accumulate_openai_stream_chunks
+                self._accumulated_cache = accumulate_openai_stream_chunks(self._formatted_chunks)
+                self._cached_count = len(self._formatted_chunks)
+        return self._accumulated_cache
+
+    def __repr__(self):
+        if self._formatted_chunks:
+            return repr(self._accumulate())
+        if self._done:
+            return "{}"
+        return "<StreamAccumulator: waiting for chunks>"
 
 
 class AsyncStreamAccumulator(StreamBaseAccumulator):
@@ -229,9 +271,10 @@ class AsyncStreamAccumulator(StreamBaseAccumulator):
                         self._pending_raw_chunk = chunk
                         if self._usage is not None:
                             result["usage"] = self._usage
+                        self._formatted_chunks.append(old)
                         return old
-                    self._buffered_stop = result
-                    continue
+                        self._buffered_stop = result
+                        continue
 
                 if self._buffered_stop is not None:
                     old = self._buffered_stop
@@ -240,8 +283,10 @@ class AsyncStreamAccumulator(StreamBaseAccumulator):
                     self._pending_raw_chunk = chunk
                     if self._usage is not None:
                         old["usage"] = self._usage
+                    self._formatted_chunks.append(old)
                     return old
 
+                self._formatted_chunks.append(result)
                 return result
             except StopAsyncIteration:
                 self._done = True
@@ -250,12 +295,34 @@ class AsyncStreamAccumulator(StreamBaseAccumulator):
                     self._buffered_stop = None
                     if self._usage is not None:
                         c["usage"] = self._usage
+                    self._formatted_chunks.append(c)
                     return c
                 self.finalize()
                 raise
     @property
     def chunks(self) -> List[Dict[str, Any]]:
         return self._chunks
+
+    def _accumulate(self):
+        if not hasattr(self, '_cached_count'):
+            self._cached_count = 0
+            self._accumulated_cache = {}
+        if self._cached_count != len(self._formatted_chunks):
+            if not self._formatted_chunks:
+                self._accumulated_cache = {}
+                self._cached_count = 0
+            else:
+                from .batch_accumulator import accumulate_openai_stream_chunks
+                self._accumulated_cache = accumulate_openai_stream_chunks(self._formatted_chunks)
+                self._cached_count = len(self._formatted_chunks)
+        return self._accumulated_cache
+
+    def __repr__(self):
+        if self._formatted_chunks:
+            return repr(self._accumulate())
+        if self._done:
+            return "{}"
+        return "<StreamAccumulator: waiting for chunks>"
 
 
 class NonStreamAccumulator(NonStreamBaseAccumulator):

@@ -50,7 +50,7 @@ Project Documentation:
 
 ## Changelog
 
-### v0.9.0 (2026-05-09)
+### v0.9.1 (2026-05-09)
 
 - ✨ **`keep` parameter — Storage Control**
   - `batch()` adds `keep` parameter to control persistent storage of batch response fields
@@ -69,20 +69,11 @@ Project Documentation:
   - `embeddings.batch()` response now includes `vectors` field, storing embedding vectors returned from batch requests, accessed via `.vectors`
   - `embeddings.batch()` response now includes `batch_info` field, storing batch metadata like `batch_size`, accessed via `.batch_info`
 
-### v0.8.2 (2026-05-01)
-
-- 🔧 **Stream accumulation fix** 
-  - Fixed StreamAccumulator double-wrapping that caused `.still`/`.think` duplication
-- ✨ **reasoning_content in standard response** 
-  - `reasoning_content` is now included in `choices[0].message` , access via `.think` property
-- ✨ **reasoning_content in stream delta** 
-  - Streaming chunks now include `reasoning_content` in `choices[0].delta`, access via `.think`, returns real-time cumulative reasoning content
-
-### v0.8.1 (2026-04-30)
+### v0.9.0 (2026-04-30)
 
 - ✨ **Image Recognition** 
   - OpenAI-standard `content` array for image input(`type: "image_url"`)
-  - Multimodal validation raises `InvalidRequestError` on text-only models
+  - Multimodal validation raises `TypeError` on text-only models
   - Added new multimodal models across GLM, Kimi, Doubao, Xiaomi
 - ✨ **CNLLM as Agent Skill** 
   - Ships SKILL.md, allow agents to use CNLLM when writing code for Chinese LLMs
@@ -254,8 +245,12 @@ resp = client.chat.create(
     stream=True
 )
 for chunk in resp:
-    print(resp.still)  # Accumulates real-time response content
+    print(resp.still)  # Real-time accumulated model response text
+print(resp)
+# Complete accumulated response content: {'object': 'chat.completion.chunk', 'choices': [{'delta': {'content': 'Complete model response', 'reasoning_content': 'Complete reasoning process'}, 'finish_reason': 'stop'}], ...}
 ```
+
+**repr():** During `for` iteration, `print(resp)` displays the **real-time merged content and accumulated key fields** of chunks received so far; after iteration completes, it displays the fully accumulated response content. The `repr()` method helps users **observe streaming accumulated response content in real time**, while preserving the streaming response object type — an **iterator** containing all OpenAI standard streaming chunks.
 
 #### 2.1.3 Response Access
 
@@ -317,11 +312,12 @@ BatchResponse outer structure, where each response under `results[request_id]` i
 
 ```python
 {
-    "status": {"elapsed": 0.42, "success_count": 1, "fail_count": 1, "total": 2},  # Statistics
+    "status": {"elapsed": "3.42s", "success_count": 2, "fail_count": 1, "total": 3},  # Statistics
     "usage": {"prompt_tokens": 5, "total_tokens": 5},  # Batch processing total usage info
-    "errors": {"request_1": "error message"},  # Mapping of all failed requests' request_id and error messages
-    "results": {
-        "request_0": [chunk1, chunk2, chunk3],  # Mapping of all successful requests' request_id and standard responses
+    "errors": {"request_2": "error message"},  # Mapping of all failed requests' request_id and error messages
+    "results": {     # Mapping of all successful requests' request_id and standard responses
+        "request_0": {...},
+        "request_1": {...}
     },
     "think": {"request_0": "...", "request_1": "..."},
     "still": {"request_0": "...", "request_1": "..."},
@@ -364,7 +360,8 @@ print(client.batch_result.think["request_0"])  # Reasoning content for first req
 | ---- | ----- | ----- | ------------- | --------------------------------------------------- |
 | **Metadata** | Real-time statistics | `resp.status` / `batch_result.status` | `Dict` | `{"success_count": 2, "fail_count": 0, "total": 2, "elapsed": 0.42}` |
 | | Real-time Token usage | `resp.usage` / `batch_result.usage` | `Dict[str, int]` | `{"prompt_tokens": 50, "completion_tokens": 100, "total_tokens": 150}` |
-| **errors** | Error request information | `resp.errors` / `batch_result.errors` | `Dict[str, str]` | `{"request_1": "error message"}` |
+| **errors** | Error request information | `resp.errors` / `batch_result.errors` | `Dict[str, str]` | `{"request_0": "error message", "request_1": "error message"}` |
+| | Error information for single request | `resp.errors[0]` / `batch_result.errors[0]` | `str` | `"error message"` |
 | **results** | Standard response for successful requests | `resp.results` / `batch_result.results` | `Dict[str, Dict]` | `{"request_0": {...}, "request_1": {...}}` |
 | | Standard response for single request | `resp.results[0]` / `batch_result.results[0]` | `Dict` | `{"id": "...", "choices": [...], ...}` |
 | **think** | Reasoning process content | `resp.think` / `batch_result.think` | `Dict[str, str]` | `{"request_0": "...", "request_1": "..."}` |
@@ -376,11 +373,15 @@ print(client.batch_result.think["request_0"])  # Reasoning content for first req
 | **raw** | Model native response | `resp.raw` / `batch_result.raw` | `Dict[str, Dict]` | `{"request_0": {...}, "request_1": {...}}` |
 | | Model native response for single request | `resp.raw[0]` / `batch_result.raw[0]` | `Dict` | `{"id": "...", "choices": [...], ...}` |
 
-**repr():** Displays batch processing metadata fields, no large text:
+**repr():** Displays batch processing metadata fields or response content:
 
 ```python
 print(resp)
 # BatchResponse(status={...}, usage={...})
+
+print(resp.results)
+# If the batch contains streaming requests, the index for that request shows the current received chunks merged and accumulated key fields, without changing the iterator type:
+# {"request_0": {"choices": [{"delta": {"content": "streaming response"}}]}, "request_1": {"choices": [{"message": {"content": "non-streaming response"}}]}}
 ```
 
 **to_dict():** Converts response to dictionary, keeps specified fields; keeping fields not declared in `keep` generates warnings:
@@ -469,7 +470,8 @@ print(client.batch_result.vectors["request_0"])  # Embedding vector for first re
 | **Metadata** | Real-time statistics | `resp.status` / `batch_result.status` | `Dict` | `{"total": 2, "success_count": 2, "fail_count": 0, "elapsed": 0.42}` |
 | | Real-time Token usage | `resp.usage` / `batch_result.usage` | `Dict[str, int]` | `{"prompt_tokens": 10, "total_tokens": 10}` |
 | | Batch info | `resp.batch_info` / `batch_result.batch_info` | `Dict` | `{"batch_size": 2, "batch_count": 3, "dimension": 1024}` |
-| **errors** | Error request information | `resp.errors` / `batch_result.errors` | `Dict[str, str]` | `{"request_1": "error message"}` |
+| **errors** | Error request information | `resp.errors` / `batch_result.errors` | `Dict[str, str]` | `{"request_0": "error message", "request_1": "error message"}` |
+| | Error information for single request | `resp.errors[0]` / `batch_result.errors[0]` | `str` | `"error message"` |
 | **results** | Standard response for successful requests | `resp.results` / `batch_result.results` | `Dict[str, Dict]` | `{"request_0": {...}, "request_1": {...}}` |
 | | Standard response for single request | `resp.results[0]` / `batch_result.results[0]` | `Dict` | `{"object": "list", "data": [...], ...}` |
 | **vectors** | Embedding vector representation | `resp.vectors` / `batch_result.vectors` | `Dict[str, List[float]]` | `{"request_0": [0.1, 0.2, 0.3, ...], "request_1": [0.4, 0.5, ...]}` |
@@ -602,7 +604,7 @@ client = CNLLM(..., keep=["vectors"])
 | Strategy | Config | Behavior |
 |----------|--------|----------|
 | Warning mode (default) | `drop_params="warn"` | Logs warning, parameters dropped, request continues |
-| Strict mode | `drop_params="strict"` | Throws `InvalidRequestError`, request terminates |
+| Strict mode | `drop_params="strict"` | Throws `TypeError`, request terminates |
 | Silent ignore mode | `drop_params="ignore"` | Silently drops unknown parameters, no logs |
 
 **Notes:**

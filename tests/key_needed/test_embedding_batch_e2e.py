@@ -4,9 +4,11 @@ E2E 测试：Embedding 批量调用
 """
 import os
 import sys
+from dotenv import load_dotenv
 import time
 import pytest
 
+load_dotenv()
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 API_KEY = os.environ.get("GLM_API_KEY")

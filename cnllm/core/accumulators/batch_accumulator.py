@@ -16,7 +16,7 @@ import threading
 import warnings
 import asyncio
 from typing import Dict, Any, List, Optional, Iterator, AsyncIterator, Set, Union
-from .single_accumulator import filter_stream_chunk
+from .single_accumulator import filter_stream_chunk, StreamAccumulator
 from dataclasses import dataclass, field
 
 
@@ -68,6 +68,70 @@ class BatchResponseItem:
         self._error = error
 
 
+
+def accumulate_openai_stream_chunks(chunks):
+    """将 OpenAI 流式 chunks 累积为单条流式 dict（保留 delta 格式）。"""
+    if not chunks:
+        return {}
+    first = chunks[0]
+    result = {
+        "id": first.get("id", ""),
+        "object": "chat.completion.chunk",
+        "created": first.get("created", 0),
+        "model": first.get("model", ""),
+    }
+    choices_map = {}
+    for c in chunks:
+        for choice in c.get("choices", []):
+            idx = choice.get("index", 0)
+            if idx not in choices_map:
+                choices_map[idx] = {
+                    "index": idx,
+                    "delta": {"content": "", "reasoning_content": ""},
+                    "finish_reason": None,
+                }
+            delta = choice.get("delta", {})
+            acc_delta = choices_map[idx]["delta"]
+            if delta.get("role"):
+                acc_delta["role"] = delta["role"]
+            dcontent = delta.get("content")
+            if dcontent:
+                acc_delta["content"] = acc_delta.get("content", "") + dcontent
+            reasoning = delta.get("reasoning_content")
+            if reasoning:
+                acc_delta["reasoning_content"] = acc_delta.get("reasoning_content", "") + reasoning
+            tc_list = delta.get("tool_calls")
+            if tc_list:
+                if "tool_calls" not in acc_delta:
+                    acc_delta["tool_calls"] = []
+                for tc in tc_list:
+                    tc_idx = tc.get("index", len(acc_delta["tool_calls"]))
+                    while len(acc_delta["tool_calls"]) <= tc_idx:
+                        acc_delta["tool_calls"].append({"index": len(acc_delta["tool_calls"]), "function": {"arguments": ""}})
+                    existing = acc_delta["tool_calls"][tc_idx]
+                    if tc.get("id"):
+                        existing["id"] = tc["id"]
+                    if tc.get("type"):
+                        existing["type"] = tc["type"]
+                    if "function" in tc:
+                        if "function" not in existing:
+                            existing["function"] = {}
+                        if tc["function"].get("name"):
+                            existing["function"]["name"] = tc["function"]["name"]
+                        if tc["function"].get("arguments"):
+                            existing["function"]["arguments"] = existing["function"].get("arguments", "") + tc["function"]["arguments"]
+            fr = choice.get("finish_reason")
+            if fr:
+                choices_map[idx]["finish_reason"] = fr
+    result["choices"] = [choices_map[i] for i in sorted(choices_map)]
+    usage = chunks[-1].get("usage")
+    if usage:
+        result["usage"] = usage
+    return result
+
+
+
+
 class BatchResults:
     """批量结果容器，支持整数和字符串索引"""
     def __init__(self, results: Dict[str, Any]):
@@ -108,6 +172,10 @@ class BatchResults:
 
     def values(self):
         return self._results.values()
+
+    def __repr__(self):
+        """显示每个 request_id 对应的累积后 dict"""
+        return repr(dict(self._results))
 
 
 class IndexableDict:
@@ -469,7 +537,14 @@ class BatchResponse:
                              ("still", still), ("tools", tools),
                              ("raw", raw), ("errors", errors)]:
             if param is True:
-                data[field] = dict(getattr(self, f"_{field}"))
+                raw_dict = dict(getattr(self, f"_{field}"))
+                if field == "results":
+                    data[field] = {
+                        k: v._accumulate() if hasattr(v, '_accumulate') else v
+                        for k, v in raw_dict.items()
+                    }
+                else:
+                    data[field] = raw_dict
             elif param is False:
                 continue
             elif _explicit:
@@ -806,9 +881,7 @@ class BatchStreamAccumulator:
                 self._batch_response.set_usage(request_id, usage_val)
 
     def _finalize(self) -> None:
-        for request_id, chunks in self._openai_chunks.items():
-            if chunks and request_id not in self._batch_response._errors:
-                self._batch_response.add_result(request_id, chunks)
+        # results 已在迭代中实时注册，_finalize 仅负责标记完成
         self._batch_response.mark_done()
 
     def __iter__(self) -> Iterator[Dict[str, Any]]:
@@ -838,12 +911,12 @@ class BatchStreamAccumulator:
                 # 追踪 OpenAI 标准格式 chunks 列表
                 if request_id not in self._openai_chunks:
                     self._openai_chunks[request_id] = []
+                    # 首个 chunk 到达时即注册到 results，实现实时累积
+                    self._batch_response.add_result(request_id, StreamAccumulator.from_chunks(self._openai_chunks[request_id]))
                 self._openai_chunks[request_id].append(result)
-                # 请求完成时将 OpenAI 标准 chunk 列表写入 results（request by request）
+                # 请求完成后清理 _chunks 中的 context
                 choices = result.get("choices", [])
                 if choices and choices[0].get("finish_reason") is not None:
-                    if request_id in self._openai_chunks:
-                        self._batch_response.add_result(request_id, self._openai_chunks.pop(request_id))
                     if request_id in self._chunks:
                         del self._chunks[request_id]
                 result["request_id"] = request_id
@@ -1057,9 +1130,8 @@ class AsyncBatchStreamAccumulator:
                 self._batch_response.set_usage(request_id, usage_val)
 
     async def _finalize(self) -> None:
+        # results 已在迭代中实时注册，_finalize 仅处理 usage
         for request_id, chunks in self._openai_chunks.items():
-            if chunks:
-                self._batch_response.add_result(request_id, chunks)
             if chunks and isinstance(chunks[-1], dict):
                 last_usage = chunks[-1].get("usage")
                 if last_usage:
@@ -1091,12 +1163,12 @@ class AsyncBatchStreamAccumulator:
                 # 追踪 OpenAI 标准格式 chunks 列表
                 if request_id not in self._openai_chunks:
                     self._openai_chunks[request_id] = []
+                    # 首个 chunk 到达时即注册到 results，实现实时累积
+                    self._batch_response.add_result(request_id, StreamAccumulator.from_chunks(self._openai_chunks[request_id]))
                 self._openai_chunks[request_id].append(result)
-                # 请求完成时将 OpenAI 标准 chunk 列表写入 results（request by request）
+                # 请求完成后清理 _chunks 中的 context
                 choices = result.get("choices", [])
                 if choices and choices[0].get("finish_reason") is not None:
-                    if request_id in self._openai_chunks:
-                        self._batch_response.add_result(request_id, self._openai_chunks.pop(request_id))
                     if request_id in self._chunks:
                         del self._chunks[request_id]
                 result["request_id"] = request_id
@@ -1221,4 +1293,4 @@ class AsyncBatchNonStreamAccumulator:
                 error_data = {"error": str(item_result.error) if item_result.error else "unknown"}
                 self._batch_response.add_result(request_id, error_data)
         self._batch_response.mark_done()
-        return self._batch_response
+        return se
