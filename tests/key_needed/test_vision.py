@@ -4,7 +4,7 @@ CNLLM Vision E2E Test - 多模态图片理解 + 纯文本拒绝
 测试目标：
 1. 多模态模型接收 base64 图片 → 返回有意义的图片描述
 2. 多模态模型流式处理图片
-3. 纯文本模型传入图片 → 抛出 InvalidRequestError
+3. 纯文本模型传入图片 → 抛出 TypeError
 4. .still / .raw 属性访问
 5. 批量调用中纯文本模型拒图
 """
@@ -18,7 +18,6 @@ sys.stdout.reconfigure(encoding="utf-8")
 load_dotenv()
 
 from cnllm import CNLLM
-from cnllm.utils.exceptions import InvalidRequestError
 
 # ==============================
 # 厂商配置（按需修改）
@@ -132,7 +131,7 @@ class TestTextRejectImage:
 
     @requires_api_key
     def test_text_model_rejects_image(self):
-        """纯文本模型传入图片 → 抛出 InvalidRequestError"""
+        """纯文本模型传入图片 → 抛出 TypeError"""
         client = CNLLM(model=TEXT_MODEL, api_key=API_KEY)
         with pytest.raises(TypeError) as e:
             client.chat.create(messages=[{"role": "user", "content": [

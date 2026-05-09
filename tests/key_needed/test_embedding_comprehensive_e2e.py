@@ -10,10 +10,12 @@ E2E 综合测试：Embedding 全功能覆盖
 """
 import os
 import sys
+from dotenv import load_dotenv
 import time
 import warnings
 import pytest
 
+load_dotenv()
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 API_KEY = os.environ.get("GLM_API_KEY")

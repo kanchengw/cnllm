@@ -1,16 +1,16 @@
 ---
 name: cnllm-chinese-llm-adapter
-version: 1.0.4
+version: 1.0.2
 description: >-
-  OpenAI SDK 的中文大模型增强适配方案 / unified adapter for Chinese LLMs: DeepSeek,
+  为中文大模型定制的通用增强 SDK / unified adapter for Chinese LLMs: DeepSeek,
   GLM/Zhipu (智谱), KIMI/Moonshot (月之暗面), MiniMax (稀宇),
-  Doubao/ByteDance (豆包/字节), Xiaomi mimo (小米). 一套接口替代多厂商SDK，减少代码依赖。
-  厂商兼容接口 extra_body 传参可能静默失效——CNLLM 调用厂商原生接口，通过YAML配置支持参数，
+  Doubao/ByteDance (豆包/字节), Xiaomi mimo (小米). 一套接口替代多厂商自研SDK。
+  厂商兼容接口 extra_body 传参可能静默失效或缺少参数支持——CNLLM 支持模型的原生参数和功能，
   提供高透明度和响应可控性，并将模型响应封装为 OpenAI 标准格式响应。
   提供纯净回复、推理内容、工具调用快捷访问入口，无需额外解析。
-  支持同步/异步、流式/非流式、批量/非批量的 chat 和 embeddings 调用。
-  批量高级功能：per-request独立配置、实时进度、回调、custom_ids、遇错停止。
-  支持多模型自动降级、LangChain Runnable。
+  支持同步/异步、流式/非流式、批量/非批量及混合流式策略的批量 chat 和 embeddings 调用。
+  批量高级功能：单个请求独立配置、实时进度、字段存储控制、回调、custom_ids、遇错停止、并发控制。
+  工程化多模型自动降级、未知参数处理策略控制等，LangChain Runnable,LiteLLM,LlamaIndex 深度适配。
 ---
 
 # CNLLM: Chinese LLM Unified Adapter
@@ -345,6 +345,4 @@ from cnllm import (
 )
 ```
 
-## Architecture
-
-CNLLM calls **vendor-native APIs** (not their OpenAI-compatible proxy endpoints) and bidirectionally converts request/response formats via YAML config files. This preserves vendor-specific capabilities — reasoning content, custom streaming behaviors, native params — while providing an OpenAI-standard interface to the caller.
+#

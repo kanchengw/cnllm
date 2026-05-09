@@ -414,7 +414,7 @@ class BatchScheduler:
                     kwargs['retry_delay'] = self.retry_delay
                 response = self.client.chat.create(prompt=request, **kwargs)
             elif isinstance(request, dict):
-                request_with_batch = {k: v for k, v in request.items() if k != "_input_type"}
+                request_with_batch = {k: v for k, v in request.items() if k not in ("_input_type", "_orig_idx")}
                 if 'timeout' not in request_with_batch and self.timeout is not None:
                     request_with_batch['timeout'] = self.timeout
                 if 'max_retries' not in request_with_batch and self.max_retries is not None:
@@ -1147,7 +1147,7 @@ class AsyncBatchScheduler:
                             kwargs['retry_delay'] = self.retry_delay
                         return await self.client.chat.create(prompt=request, **kwargs)
                     elif isinstance(request, dict):
-                        request_with_batch = {k: v for k, v in request.items() if k != "_input_type"}
+                        request_with_batch = {k: v for k, v in request.items() if k not in ("_input_type", "_orig_idx")}
                         if 'timeout' not in request_with_batch and self.timeout is not None:
                             request_with_batch['timeout'] = self.timeout
                         if 'max_retries' not in request_with_batch and self.max_retries is not None:
@@ -1389,7 +1389,7 @@ class StreamBatchScheduler(BatchScheduler):
                     adapter = getattr(result, '_adapter', None)
                     stream = iter(result)
                 elif isinstance(item.request, dict):
-                    req_with_batch = {k: v for k, v in item.request.items() if k != "_input_type"}
+                    req_with_batch = {k: v for k, v in item.request.items() if k not in ("_input_type", "_orig_idx")}
                     if 'timeout' not in req_with_batch and self.timeout is not None:
                         req_with_batch['timeout'] = self.timeout
                     if 'max_retries' not in req_with_batch and self.max_retries is not None:
@@ -1564,7 +1564,7 @@ class AsyncStreamBatchScheduler(AsyncBatchScheduler):
                     adapter = getattr(result, '_adapter', None)
                     stream = result
                 elif isinstance(item.request, dict):
-                    req_with_batch = {k: v for k, v in item.request.items() if k != "_input_type"}
+                    req_with_batch = {k: v for k, v in item.request.items() if k not in ("_input_type", "_orig_idx")}
                     if 'timeout' not in req_with_batch and self.timeout is not None:
                         req_with_batch['timeout'] = self.timeout
                     if 'max_retries' not in req_with_batch and self.max_retries is not None:
@@ -1666,6 +1666,7 @@ class MixedBatchScheduler:
     def execute(self, requests, priorities=None):
         """按输入顺序逐个处理请求，返回 BatchResponse"""
         from cnllm.core.accumulators.batch_accumulator import BatchResponse, _DEFAULT_KEEP
+        from cnllm.core.accumulators.single_accumulator import StreamAccumulator
         import time as _time
 
         batch_response = BatchResponse()
@@ -1686,7 +1687,7 @@ class MixedBatchScheduler:
                         kwargs['retry_delay'] = self.retry_delay
                     result = self.client.chat.create(prompt=req, **kwargs)
                 elif isinstance(req, dict):
-                    req_copy = {k: v for k, v in req.items() if k != "_input_type"}
+                    req_copy = {k: v for k, v in req.items() if k not in ("_input_type", "_orig_idx")}
                     if 'timeout' not in req_copy and self.timeout is not None:
                         req_copy['timeout'] = self.timeout
                     if 'max_retries' not in req_copy and self.max_retries is not None:
@@ -1697,18 +1698,30 @@ class MixedBatchScheduler:
                 else:
                     raise ValueError(f"Invalid request type: {type(req).__name__}")
 
-                raw, formatted, extras = _extract_batch_item(result)
-                batch_response.set_raw(request_id, raw)
-                batch_response.add_result(request_id, formatted)
+                if isinstance(result, StreamAccumulator):
+                    chunks = list(result)
+                    batch_response.add_result(request_id, StreamAccumulator.from_chunks(chunks))
+                    batch_response.set_still(request_id, result.still)
+                    batch_response.set_think(request_id, result.think)
+                    batch_response.set_tools(request_id, result.tools)
+                    if result.usage:
+                        batch_response.set_usage(request_id, result.usage)
+                    if result._accumulated_raw:
+                        batch_response.set_raw(request_id, result._accumulated_raw)
+                    formatted = result._accumulated_raw
+                else:
+                    raw, formatted, extras = _extract_batch_item(result)
+                    batch_response.set_raw(request_id, raw)
+                    batch_response.add_result(request_id, formatted)
 
-                if extras.get("_still"):
-                    batch_response.set_still(request_id, extras["_still"])
-                if extras.get("_thinking"):
-                    batch_response.set_think(request_id, extras["_thinking"])
-                if extras.get("_tools"):
-                    batch_response.set_tools(request_id, extras["_tools"])
-                if extras.get("_usage"):
-                    batch_response.set_usage(request_id, extras["_usage"])
+                    if extras.get("_still"):
+                        batch_response.set_still(request_id, extras["_still"])
+                    if extras.get("_thinking"):
+                        batch_response.set_think(request_id, extras["_thinking"])
+                    if extras.get("_tools"):
+                        batch_response.set_tools(request_id, extras["_tools"])
+                    if extras.get("_usage"):
+                        batch_response.set_usage(request_id, extras["_usage"])
 
                 self._notify_callback(BatchItemResult(
                     index=i, request=req, response=formatted,
@@ -1762,6 +1775,7 @@ class AsyncMixedBatchScheduler:
     async def execute(self, requests, priorities=None):
         """按输入顺序逐个处理请求，返回 BatchResponse"""
         from cnllm.core.accumulators.batch_accumulator import BatchResponse
+        from cnllm.core.accumulators.single_accumulator import StreamAccumulator
         import time as _time
 
         batch_response = BatchResponse()
@@ -1782,7 +1796,7 @@ class AsyncMixedBatchScheduler:
                         kwargs['retry_delay'] = self.retry_delay
                     result = await self.client.chat.create(prompt=req, **kwargs)
                 elif isinstance(req, dict):
-                    req_copy = {k: v for k, v in req.items() if k != "_input_type"}
+                    req_copy = {k: v for k, v in req.items() if k not in ("_input_type", "_orig_idx")}
                     if 'timeout' not in req_copy and self.timeout is not None:
                         req_copy['timeout'] = self.timeout
                     if 'max_retries' not in req_copy and self.max_retries is not None:
@@ -1793,18 +1807,35 @@ class AsyncMixedBatchScheduler:
                 else:
                     raise ValueError(f"Invalid request type: {type(req).__name__}")
 
-                raw, formatted, extras = _extract_batch_item(result)
-                batch_response.set_raw(request_id, raw)
-                batch_response.add_result(request_id, formatted)
+                if isinstance(result, StreamAccumulator):
+                    chunks = list(result)
+                    batch_response.add_result(request_id, StreamAccumulator.from_chunks(chunks))
+                elif hasattr(result, '_formatted_chunks'):
+                    chunks = []
+                    async for c in result:
+                        chunks.append(c)
+                    batch_response.add_result(request_id, StreamAccumulator.from_chunks(chunks))
+                    batch_response.set_still(request_id, result.still)
+                    batch_response.set_think(request_id, result.think)
+                    batch_response.set_tools(request_id, result.tools)
+                    if result.usage:
+                        batch_response.set_usage(request_id, result.usage)
+                    if result._accumulated_raw:
+                        batch_response.set_raw(request_id, result._accumulated_raw)
+                    formatted = result._accumulated_raw
+                else:
+                    raw, formatted, extras = _extract_batch_item(result)
+                    batch_response.set_raw(request_id, raw)
+                    batch_response.add_result(request_id, formatted)
 
-                if extras.get("_still"):
-                    batch_response.set_still(request_id, extras["_still"])
-                if extras.get("_thinking"):
-                    batch_response.set_think(request_id, extras["_thinking"])
-                if extras.get("_tools"):
-                    batch_response.set_tools(request_id, extras["_tools"])
-                if extras.get("_usage"):
-                    batch_response.set_usage(request_id, extras["_usage"])
+                    if extras.get("_still"):
+                        batch_response.set_still(request_id, extras["_still"])
+                    if extras.get("_thinking"):
+                        batch_response.set_think(request_id, extras["_thinking"])
+                    if extras.get("_tools"):
+                        batch_response.set_tools(request_id, extras["_tools"])
+                    if extras.get("_usage"):
+                        batch_response.set_usage(request_id, extras["_usage"])
 
                 self._notify_callback(BatchItemResult(
                     index=i, request=req, response=formatted,

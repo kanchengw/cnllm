@@ -7,7 +7,7 @@ import asyncio
 from ..utils.exceptions import ModelNotSupportedError, MissingParameterError
 from ..utils.fallback import FallbackManager
 from ..core.accumulators.single_accumulator import AsyncNonStreamAccumulator, AsyncStreamAccumulator
-from ..core.embedding import EmbeddingsNamespace
+from ..core.embedding import EmbeddingsNamespace, AsyncEmbeddingsNamespace
 from ..core.param_registry import validate_for_scope, resolve_scope_params, resolve_default
 
 logger = logging.getLogger(__name__)
@@ -58,6 +58,11 @@ class _SyncProxy:
         asyncio.run(_close())
 
     @property
+    def embeddings(self):
+        client = self._ensure_client()
+        return _SyncEmbeddingsNamespace(client)
+
+    @property
     def chat(self):
         client = self._ensure_client()
         return _SyncChatNamespace(client)
@@ -72,9 +77,23 @@ class _SyncStreamResponse:
         self._pos = -1
         self._consumed = False
 
+    def __repr__(self):
+        self._ensure_consumed()
+        if self._chunks:
+            from cnllm.core.accumulators.batch_accumulator import accumulate_openai_stream_chunks
+            return repr(accumulate_openai_stream_chunks(self._chunks))
+        return "{}"
+
     def _ensure_consumed(self):
         if not self._consumed:
-            result = asyncio.run(self._consume_all())
+            try:
+                loop = asyncio.get_running_loop()
+                if loop.is_running():
+                    import concurrent.futures
+                    with concurrent.futures.ThreadPoolExecutor() as pool:
+                        result = pool.submit(asyncio.run, self._consume_all()).result()
+            except RuntimeError:
+                result = asyncio.run(self._consume_all())
             self._chunks = result["chunks"]
             self._snapshots = result["snapshots"]
             self._consumed = True
@@ -210,6 +229,43 @@ class _SyncContext:
     @property
     def chat(self):
         return self._proxy.chat
+
+
+class _SyncEmbeddingsNamespace:
+    """同步包装 EmbeddingsNamespace，支持事件循环检测"""
+
+    def __init__(self, client):
+        self._client = client
+
+    def create(self, *args, **kwargs):
+        async def _create():
+            ns = AsyncEmbeddingsNamespace(self._client)
+            return await ns.create(*args, **kwargs)
+
+        try:
+            loop = asyncio.get_running_loop()
+            if loop.is_running():
+                import concurrent.futures
+                with concurrent.futures.ThreadPoolExecutor() as pool:
+                    return pool.submit(asyncio.run, _create()).result()
+        except RuntimeError:
+            pass
+        return asyncio.run(_create())
+
+    def batch(self, *args, **kwargs):
+        async def _batch():
+            ns = AsyncEmbeddingsNamespace(self._client)
+            return await ns.batch(*args, **kwargs)
+
+        try:
+            loop = asyncio.get_running_loop()
+            if loop.is_running():
+                import concurrent.futures
+                with concurrent.futures.ThreadPoolExecutor() as pool:
+                    return pool.submit(asyncio.run, _batch()).result()
+        except RuntimeError:
+            pass
+        return asyncio.run(_batch())
 
 
 class asyncCNLLM:
@@ -708,10 +764,12 @@ class asyncCNLLM:
             actual_retry_delay = retry_delay if retry_delay is not None else (self.parent.retry_delay or resolve_default("chat", "retry_delay"))
 
             # === 按 per-req stream 值分组 ===
+            stream_flags = {}
             stream_requests = []
             non_stream_requests = []
-            for req in batch_requests:
+            for idx, req in enumerate(batch_requests):
                 req_stream = req.pop("stream", False)
+                stream_flags[idx] = req_stream
                 if req_stream:
                     stream_requests.append(req)
                 else:
@@ -745,7 +803,11 @@ class asyncCNLLM:
                 return accumulator
 
             else:
+                # === 混合模式 ===
                 from cnllm.utils.batch import AsyncMixedBatchScheduler
+                for idx, req in enumerate(batch_requests):
+                    if stream_flags.get(idx):
+                        req["stream"] = True
                 scheduler = AsyncMixedBatchScheduler(
                     client=self.parent,
                     timeout=actual_timeout,
@@ -759,3 +821,4 @@ class asyncCNLLM:
                     batch_response._keep = actual_keep
                 self._batch_response = batch_response
                 return batch_response
+   
