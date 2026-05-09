@@ -286,14 +286,18 @@ class MiniMaxEmbeddingAdapter(BaseEmbeddingAdapter):
         return response
 
     def _prepare_params(self, input_data: Union[str, List[str]], model: str = None, **kwargs) -> Dict[str, Any]:
+        from ..param_registry import validate_for_scope
         params = {
-            "api_key": self.api_key,
             "model": model or self.model,
             "input": input_data,
             **kwargs
         }
-        self._validator.validate_required_params(params)
-        params = self._validator.filter_supported_params(params)
+        params = validate_for_scope(
+            params=params,
+            scope="embed",
+            vendor_yaml=self._config or {},
+            drop_params=self.drop_params,
+        )
         return params
 
 

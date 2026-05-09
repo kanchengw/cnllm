@@ -6,77 +6,52 @@ request:
 
 required_fields:
   api_key:
-    adapter: [chat, embedding]
     skip: true
-  model:
-    adapter: [chat, embedding]
+  model: ~
 
 one_of:
   messages_or_prompt:
-    messages:
-      adapter: [chat]
-    prompt:
-      adapter: [chat]
+    messages: ~
+    prompt: ~
 
 optional_fields:
   base_url:
-    adapter: [chat, embedding]
     skip: true
     chat:
-      default: "https://ark.cn-beijing.volces.com/api/v3"
-      path: "chat/completions"
+      default: "https://ark.cn-beijing.volces.com/api"
+      path: "v3/chat/completions"
   fallback_models:
-    adapter: [chat]
     skip: true
   timeout:
-    adapter: [chat, embedding]
     skip: true
     default: 60.0
   max_retries:
-    adapter: [chat, embedding]
     skip: true
     default: 3
   retry_delay:
-    adapter: [chat, embedding]
     skip: true
     default: 1.0
-  temperature:
-    adapter: [chat]
-  top_p:
-    adapter: [chat]
-  max_tokens:
-    adapter: [chat]
-  max_completion_tokens:
-    adapter: [chat]
-  stream:
-    adapter: [chat]
-  stop:
-    adapter: [chat]
-  tools:
-    adapter: [chat]
-  tool_choice:
-    adapter: [chat]
-  user:
-    adapter: [chat]
-  presence_penalty:
-    adapter: [chat]
-  frequency_penalty:
-    adapter: [chat]
-  response_format:
-    adapter: [chat]
-  stream_options:
-    adapter: [chat]
+  temperature: ~
+  top_p: ~
+  max_tokens: ~
+  max_completion_tokens: ~
+  stream: ~
+  stop: ~
+  tools: ~
+  tool_choice: ~
+  user: ~
+  presence_penalty: ~
+  frequency_penalty: ~
+  response_format: ~
+  stream_options: ~
   thinking:
-    adapter: [chat]
     map: "thinking.type"
     transform:
       true: "enabled"
       false: "disabled"
       auto: "auto"
-  reasoning_effort:
-    adapter: [chat]
-  service_tier:
-    adapter: [chat]
+  reasoning_effort: ~
+  service_tier: ~
 
 model_mapping:
   chat:

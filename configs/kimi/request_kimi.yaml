@@ -6,77 +6,51 @@ request:
 
 required_fields:
   api_key:
-    adapter: [chat, embedding]
     skip: true
-  model:
-    adapter: [chat, embedding]
+  model: ~
 
 one_of:
   messages_or_prompt:
-    messages: 
-      adapter: [chat]
-    prompt: 
-      adapter: [chat]
+    messages: ~
+    prompt: ~
 
 optional_fields:
   base_url:
-    adapter: [chat, embedding]
     skip: true
     chat:
-      default: "https://api.moonshot.cn/v1"
-      path: "chat/completions"
+      default: "https://api.moonshot.cn"
+      path: "v1/chat/completions"
   fallback_models:
-    adapter: [chat]
     skip: true
   timeout:
-    adapter: [chat, embedding]
     skip: true
     default: 60.0
   max_retries:
-    adapter: [chat, embedding]
     skip: true
     default: 3
   retry_delay:
-    adapter: [chat, embedding]
     skip: true
     default: 1.0
-  temperature:
-    adapter: [chat]
-  top_p:
-    adapter: [chat]
-  max_completion_tokens:
-    adapter: [chat]
-  stream:
-    adapter: [chat]
-  stop:
-    adapter: [chat]
-  n:
-    adapter: [chat]
-  tools:
-    adapter: [chat]
-  tool_choice:
-    adapter: [chat]
-  user:
-    adapter: [chat]
-  presence_penalty:
-    adapter: [chat]
-  frequency_penalty:
-    adapter: [chat]
-  response_format:
-    adapter: [chat]
-  stream_options:
-    adapter: [chat]
+  temperature: ~
+  top_p: ~
+  max_completion_tokens: ~
+  stream: ~
+  stop: ~
+  n: ~
+  tools: ~
+  tool_choice: ~
+  user: ~
+  presence_penalty: ~
+  frequency_penalty: ~
+  response_format: ~
+  stream_options: ~
   thinking:
-    adapter: [chat]
     map: "thinking"
     transform:
       true: {"type": "enabled"}
       false: {"type": "disabled"}
-  prompt_cache_key:
-    adapter: [chat]
-  safety_identifier:
-    adapter: [chat]
-
+  prompt_cache_key: ~
+  safety_identifier: ~
 
 model_mapping:
   chat:

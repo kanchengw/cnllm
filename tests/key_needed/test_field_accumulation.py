@@ -340,7 +340,8 @@ class TestGLM5FieldAccumulation:
         _print_field_report(".tools (final)", final_tools)
 
         br = accumulator._batch_response
-        print(f"\n[BatchResponse] total={br.total} success={br.success_count} fail={br.fail_count}")
+        s = br.status
+        print(f"\n[BatchResponse] total={s['total']} success={s['success_count']} fail={s['fail_count']}")
         print(f"  ._raw keys={list(br._raw.keys())}")
         print(f"  ._still keys={list(br._still.keys())}")
         print(f"  ._think keys={list(br._think.keys())}")
@@ -545,7 +546,8 @@ class TestKimiK25FieldAccumulation:
 
         final_raw = client.chat.raw
         br = accumulator._batch_response
-        print(f"\n[BatchResponse] total={br.total} success={br.success_count}")
+        s = br.status
+        print(f"\n[BatchResponse] total={s['total']} success={s['success_count']}")
         print(f"  ._raw keys={list(br._raw.keys())}")
         print(f"  ._still keys={list(br._still.keys())}")
 

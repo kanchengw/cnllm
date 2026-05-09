@@ -49,7 +49,7 @@ class TestRequestYAML:
         base_url_config = optional["base_url"]
         assert isinstance(base_url_config, dict), "base_url 应为字典"
 
-        assert "adapter" in base_url_config, "base_url 应包含 adapter"
+        assert "chat" in base_url_config, "base_url 应包含 chat"
         assert "chat" in base_url_config or "embedding" in base_url_config, \
             "base_url 应包含 chat 或 embedding 子配置"
 

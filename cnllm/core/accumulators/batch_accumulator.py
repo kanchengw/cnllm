@@ -13,10 +13,23 @@
 """
 import time
 import threading
+import warnings
 import asyncio
 from typing import Dict, Any, List, Optional, Iterator, AsyncIterator, Set, Union
 from .single_accumulator import filter_stream_chunk
 from dataclasses import dataclass, field
+
+
+def _format_elapsed(seconds: float) -> str:
+    """将秒数格式化为可读字符串。
+
+    < 60s 时显示 "0.35s"；>= 60s 时显示 "1m5s"。
+    """
+    if seconds < 60:
+        return f"{seconds:.2f}s"
+    minutes = int(seconds // 60)
+    secs = int(seconds % 60)
+    return f"{minutes}m{secs}s"
 
 
 @dataclass
@@ -79,6 +92,20 @@ class BatchResults:
     def keys(self):
         return self._results.keys()
 
+    def __contains__(self, key: Union[str, int]) -> bool:
+        if isinstance(key, int):
+            request_id = f"request_{key}"
+        else:
+            request_id = key
+        return request_id in self._results
+
+    def get(self, key: Union[str, int], default=None) -> Optional[Any]:
+        if isinstance(key, int):
+            request_id = f"request_{key}"
+        else:
+            request_id = key
+        return self._results.get(request_id, default)
+
     def values(self):
         return self._results.values()
 
@@ -131,6 +158,9 @@ class IndexableDict:
         return self._data.get(request_id, default)
 
 
+_DEFAULT_KEEP = frozenset({"still", "think", "tools"})
+
+
 @dataclass
 class BatchResponse:
     """批量响应封装 - results 直接存储标准 OpenAI 格式"""
@@ -146,10 +176,47 @@ class BatchResponse:
     _done: bool = False
     _in_for_loop: bool = False
     _condition: threading.Condition = field(default_factory=threading.Condition)
+    _usage: Dict[str, Any] = field(default_factory=dict)
+    _keep: frozenset = field(default_factory=lambda: _DEFAULT_KEEP)
+    _errors: Dict[str, Any] = field(default_factory=dict)
+    _warned_non_keep_fields: Set[str] = field(default_factory=set)
+    _fields_cleared: bool = False
+    _success_count: int = 0
+    _fail_count: int = 0
 
     def _maybe_wait(self):
         if not self._in_for_loop and not self._done and self._start_time is not None:
             self.wait()
+
+    def _warn_non_keep_field(self, field: str) -> None:
+        if field not in self._warned_non_keep_fields:
+            self._warned_non_keep_fields.add(field)
+            default_keep = ", ".join(sorted(_DEFAULT_KEEP))
+            warnings.warn(
+                f"'{field}' 未持久化存储，若需迭代后访问请通过 keep 参数保留："
+                f"batch(keep=[\"{field}\"]) 或 batch(keep=[\"*\"])。"
+                f"不使用 keep 时默认保留 {default_keep} 及统计字段"
+            )
+
+    def _warn_non_keep_batch(self, fields: list) -> None:
+        unwarned = [f for f in fields if f not in self._warned_non_keep_fields]
+        if not unwarned:
+            return
+        self._warned_non_keep_fields.update(unwarned)
+        default_keep = ", ".join(sorted(_DEFAULT_KEEP))
+        fields_str = "', '".join(unwarned)
+        keep_examples = '", "'.join(unwarned)
+        warnings.warn(
+            f"'{fields_str}' 未持久化存储，若需迭代后访问请通过 keep 参数保留："
+            f'batch(keep=["{keep_examples}"]) 或 batch(keep=["*"]). '
+            f"不使用 keep 时默认保留 {default_keep} 及统计字段"
+        )
+
+    def _check_non_keep_warn(self, field: str) -> None:
+        if "*" in self._keep:
+            return
+        if field not in self._keep and self._fields_cleared:
+            self._warn_non_keep_field(field)
 
     def set_elapsed(self, elapsed: float) -> None:
         self._elapsed = elapsed
@@ -159,6 +226,7 @@ class BatchResponse:
 
     @property
     def elapsed(self) -> float:
+        self._maybe_wait()
         if self._elapsed is not None:
             return self._elapsed
         if self._start_time is None:
@@ -169,6 +237,7 @@ class BatchResponse:
     @property
     def results(self) -> BatchResults:
         self._maybe_wait()
+        self._check_non_keep_warn("results")
         return BatchResults(self._results)
 
     def _is_item_success(self, item: Any) -> bool:
@@ -190,43 +259,52 @@ class BatchResponse:
         return False
 
     @property
-    def success(self) -> List[str]:
+    def errors(self) -> Dict[str, Any]:
         self._maybe_wait()
-        return [cid for cid, item in self._results.items() if self._is_item_success(item)]
+        return self._errors
 
     @property
-    def fail(self) -> List[str]:
-        self._maybe_wait()
-        return [cid for cid, item in self._results.items() if self._is_item_error(item)]
-
-    @property
-    def request_counts(self) -> Dict[str, int]:
+    def status(self) -> Dict[str, Any]:
         self._maybe_wait()
         return {
-            "success_count": len([cid for cid, item in self._results.items() if self._is_item_success(item)]),
-            "fail_count": len([cid for cid, item in self._results.items() if self._is_item_error(item)]),
-            "total": len(self._results)
+            "elapsed": _format_elapsed(self.elapsed),
+            "success_count": self._success_count,
+            "fail_count": self._fail_count,
+            "total": self._total if self._total is not None else self._success_count + self._fail_count
         }
-
-    @property
-    def success_count(self) -> int:
-        self._maybe_wait()
-        return len([cid for cid, item in self._results.items() if self._is_item_success(item)])
-
-    @property
-    def fail_count(self) -> int:
-        self._maybe_wait()
-        return len([cid for cid, item in self._results.items() if self._is_item_error(item)])
-
-    @property
-    def total(self) -> int:
-        if self._total is not None:
-            return self._total
-        self._maybe_wait()
-        return len(self._results)
 
     def add_result(self, request_id: str, data: Any) -> None:
         self._results[request_id] = data
+        if self._is_item_error(data):
+            error_msg = data.get("error", str(data))
+            self._errors[request_id] = error_msg
+            self._fail_count += 1
+            if request_id in self._results:
+                del self._results[request_id]
+        else:
+            self._success_count += 1
+            if request_id in self._errors:
+                del self._errors[request_id]
+        if isinstance(data, dict) and "usage" in data and "error" not in data:
+            usage = data["usage"]
+            if not self._usage:
+                self._usage = dict(usage)
+            else:
+                for k, v in usage.items():
+                    if isinstance(v, (int, float)) and isinstance(self._usage.get(k), (int, float)):
+                        self._usage[k] = self._usage.get(k, 0) + v
+                    else:
+                        self._usage[k] = v
+        with self._condition:
+            self._condition.notify_all()
+
+    def add_error(self, request_id: str, error_msg: Any) -> None:
+        """添加请求错误"""
+        error_str = str(error_msg) if not isinstance(error_msg, str) else error_msg
+        if request_id in self._results:
+            del self._results[request_id]
+        self._errors[request_id] = error_str
+        self._fail_count += 1
         with self._condition:
             self._condition.notify_all()
 
@@ -234,6 +312,24 @@ class BatchResponse:
         self._done = True
         with self._condition:
             self._condition.notify_all()
+
+    def _clear_non_kept_fields(self) -> None:
+        """清理不在 _keep 中的字段以释放内存"""
+        self._fields_cleared = True
+        if "*" in self._keep:
+            return
+        if "results" not in self._keep:
+            self._results.clear()
+        if "errors" not in self._keep:
+            self._errors.clear()
+        if "think" not in self._keep:
+            self._think.clear()
+        if "still" not in self._keep:
+            self._still.clear()
+        if "tools" not in self._keep:
+            self._tools.clear()
+        if "raw" not in self._keep:
+            self._raw.clear()
 
     def wait(self, timeout: Optional[float] = None) -> None:
         """阻塞直到所有请求完成"""
@@ -246,22 +342,31 @@ class BatchResponse:
     @property
     def think(self) -> IndexableDict:
         self._maybe_wait()
+        self._check_non_keep_warn("think")
         return IndexableDict(self._think)
 
     @property
     def still(self) -> IndexableDict:
         self._maybe_wait()
+        self._check_non_keep_warn("still")
         return IndexableDict(self._still)
 
     @property
     def tools(self) -> IndexableDict:
         self._maybe_wait()
+        self._check_non_keep_warn("tools")
         return IndexableDict(self._tools)
 
     @property
     def raw(self) -> IndexableDict:
         self._maybe_wait()
+        self._check_non_keep_warn("raw")
         return IndexableDict(self._raw)
+
+    @property
+    def usage(self) -> Dict[str, Any]:
+        self._maybe_wait()
+        return dict(self._usage)
 
     def set_think(self, request_id: str, value: str) -> None:
         self._think[request_id] = value
@@ -274,6 +379,26 @@ class BatchResponse:
 
     def set_raw(self, request_id: str, value: Dict[str, Any]) -> None:
         self._raw[request_id] = value
+
+    def set_usage(self, request_id: str, value: Dict[str, Any]) -> None:
+        if not self._usage:
+            self._usage = dict(value)
+        else:
+            for k, v in value.items():
+                if isinstance(v, (int, float)) and isinstance(self._usage.get(k), (int, float)):
+                    self._usage[k] = self._usage.get(k, 0) + v
+                else:
+                    self._usage[k] = v
+
+    def update_usage(self, request_id: str, value: Dict[str, Any]) -> None:
+        if request_id not in self._usage:
+            self._usage[request_id] = {}
+        existing = self._usage[request_id]
+        for k, v in value.items():
+            if isinstance(v, (int, float)) and isinstance(existing.get(k), (int, float)):
+                existing[k] = existing.get(k, 0) + v
+            else:
+                existing[k] = v
 
     def update_think(self, request_id: str, value: str) -> None:
         if request_id not in self._think:
@@ -302,6 +427,7 @@ class BatchResponse:
                     self._condition.wait(timeout=0.5)
         finally:
             self._in_for_loop = False
+            self._clear_non_kept_fields()
 
     async def __aiter__(self):
         self._in_for_loop = True
@@ -319,45 +445,174 @@ class BatchResponse:
                 await asyncio.sleep(0.05)
         finally:
             self._in_for_loop = False
+            self._clear_non_kept_fields()
 
     def __len__(self) -> int:
         return len(self._results)
 
-    def to_dict(self, results: bool = True, stats: bool = False,
-                think: bool = False, still: bool = False,
-                tools: bool = False, raw: bool = False) -> Dict[str, Any]:
+    def to_dict(self, results: bool = None, think: bool = None, still: bool = None,
+                tools: bool = None, raw: bool = None, errors: bool = None,
+                usage: bool = None, status: bool = None) -> Dict[str, Any]:
+        # None = 按 _keep 自动决定；True = 强制包含；False = 强制不包含
+        # status/usage 默认始终包含（元数据），可显式传 False 排除
         data = {}
-        if results:
-            data["results"] = dict(self._results)
-        if stats:
-            data["success"] = self.success
-            data["fail"] = self.fail
-            data["request_counts"] = self.request_counts
-            data["elapsed"] = self.elapsed
-        if think:
-            data["think"] = dict(self._think)
-        if still:
-            data["still"] = dict(self._still)
-        if tools:
-            data["tools"] = dict(self._tools)
-        if raw:
-            data["raw"] = dict(self._raw)
+        # 元数据（默认包含，除非显式 False）
+        if status is not False:
+            data["status"] = self.status
+        if usage is not False:
+            data["usage"] = dict(self._usage)
+        # 检查是否有任意字段被显式指定
+        _explicit = any(v is not None for v in (results, think, still, tools, raw, errors))
+        # 数据字段
+        non_keep_cleared = []
+        for field, param in [("results", results), ("think", think),
+                             ("still", still), ("tools", tools),
+                             ("raw", raw), ("errors", errors)]:
+            if param is True:
+                data[field] = dict(getattr(self, f"_{field}"))
+            elif param is False:
+                continue
+            elif _explicit:
+                continue  # 有显式参数时，不自动加入 keep 字段
+            elif "*" in self._keep or field in self._keep:
+                data[field] = dict(getattr(self, f"_{field}"))
+            elif self._fields_cleared:
+                non_keep_cleared.append(field)
+        if non_keep_cleared:
+            self._warn_non_keep_batch(non_keep_cleared)
         return data
 
     def __repr__(self):
-        counts = self.request_counts
         return (f"BatchResponse("
-                f"success={counts.get('success_count', 0)}, "
-                f"fail={counts.get('fail_count', 0)}, "
-                f"total={counts.get('total', 0)}, "
-                f"elapsed={self.elapsed:.2f}s)")
+                f"status={self.status}, "
+                f"usage={self.usage})")
+
+
+class _BatchStreamIterator:
+    """Iterator[Dict] wrapper for BatchStreamAccumulator.
+
+    Yields OpenAI standard stream chunks. After iteration, access
+    batch-level results via .results, .status, .errors, .usage, .elapsed, etc.
+    """
+    def __init__(self, accumulator: 'BatchStreamAccumulator'):
+        self._batch_response = accumulator._batch_response
+        self._iterator = iter(accumulator)
+
+    def __iter__(self):
+        return self
+
+    def __next__(self) -> Dict[str, Any]:
+        return next(self._iterator)
+
+    @property
+    def results(self) -> BatchResults:
+        return self._batch_response.results
+
+    @property
+    def status(self) -> Dict[str, Any]:
+        return self._batch_response.status
+
+    @property
+    def errors(self) -> Dict[str, Any]:
+        return self._batch_response.errors
+
+    @property
+    def usage(self) -> Dict[str, Any]:
+        return self._batch_response.usage
+
+    @property
+    def elapsed(self) -> float:
+        return self._batch_response.elapsed
+
+    @property
+    def think(self) -> IndexableDict:
+        return self._batch_response.think
+
+    @property
+    def still(self) -> IndexableDict:
+        return self._batch_response.still
+
+    @property
+    def tools(self) -> IndexableDict:
+        return self._batch_response.tools
+
+    @property
+    def raw(self) -> IndexableDict:
+        return self._batch_response.raw
+
+    def to_dict(self, **kwargs) -> Dict[str, Any]:
+        return self._batch_response.to_dict(**kwargs)
+
+    def __repr__(self):
+        return repr(self._batch_response)
+
+
+class _AsyncBatchStreamIterator:
+    """AsyncIterator[Dict] wrapper for AsyncBatchStreamAccumulator.
+
+    Yields OpenAI standard stream chunks. After iteration, access
+    batch-level results via .results, .status, .errors, .usage, .elapsed, etc.
+    """
+    def __init__(self, accumulator: 'AsyncBatchStreamAccumulator'):
+        self._batch_response = accumulator._batch_response
+        self._accumulator = accumulator
+
+    def __aiter__(self):
+        return self._accumulator.__aiter__()
+
+    async def __anext__(self) -> Dict[str, Any]:
+        return await self._accumulator.__anext__()
+
+    @property
+    def results(self) -> BatchResults:
+        return self._batch_response.results
+
+    @property
+    def status(self) -> Dict[str, Any]:
+        return self._batch_response.status
+
+    @property
+    def errors(self) -> Dict[str, Any]:
+        return self._batch_response.errors
+
+    @property
+    def usage(self) -> Dict[str, Any]:
+        return self._batch_response.usage
+
+    @property
+    def elapsed(self) -> float:
+        return self._batch_response.elapsed
+
+    @property
+    def think(self) -> IndexableDict:
+        return self._batch_response.think
+
+    @property
+    def still(self) -> IndexableDict:
+        return self._batch_response.still
+
+    @property
+    def tools(self) -> IndexableDict:
+        return self._batch_response.tools
+
+    @property
+    def raw(self) -> IndexableDict:
+        return self._batch_response.raw
+
+    def to_dict(self, **kwargs) -> Dict[str, Any]:
+        return self._batch_response.to_dict(**kwargs)
+
+    def __repr__(self):
+        return repr(self._batch_response)
 
 
 class BatchStreamAccumulator:
-    def __init__(self, chunks_iterator, adapter, total: int = None):
+    def __init__(self, chunks_iterator, adapter, total: int = None, keep: frozenset = None):
         self._raw_iterator = chunks_iterator
         self._adapter = adapter
         self._batch_response = BatchResponse()
+        if keep is not None:
+            self._batch_response._keep = keep
         if total is not None:
             self._batch_response.set_total(total)
         self._start_time: Optional[float] = None
@@ -367,7 +622,8 @@ class BatchStreamAccumulator:
         self._seen_tool_call_indices: Dict[str, Set[int]] = {}
         self._seen_choice_indices: Dict[str, Set[int]] = {}
         self._seen_finish_indices: Dict[str, Set[int]] = {}
-        self._responder = None
+        self._openai_chunks: Dict[str, List[Dict]] = {}
+        self._responder = adapter._get_responder() if adapter else None
 
     @property
     def _batch_response_obj(self) -> BatchResponse:
@@ -394,20 +650,23 @@ class BatchStreamAccumulator:
         return self._batch_response.results
 
     @property
-    def success(self) -> List[str]:
-        return self._batch_response.success
+    def errors(self) -> Dict[str, Any]:
+        return self._batch_response.errors
 
     @property
-    def fail(self) -> List[str]:
-        return self._batch_response.fail
-
-    @property
-    def request_counts(self) -> Dict[str, int]:
-        return self._batch_response.request_counts
+    def status(self) -> Dict[str, Any]:
+        return self._batch_response.status
 
     @property
     def elapsed(self) -> float:
         return self._batch_response.elapsed
+
+    @property
+    def usage(self) -> Dict[str, Any]:
+        return self._batch_response.usage
+
+    def to_dict(self, **kwargs) -> Dict[str, Any]:
+        return self._batch_response.to_dict(**kwargs)
 
     def _get_accumulable_paths(self):
         if self._responder is None:
@@ -476,9 +735,11 @@ class BatchStreamAccumulator:
         return final
 
     def _accumulate_chunk(self, chunk: Dict, request_id: str, extras: Dict = None) -> None:
+        if chunk.get("status") == "error":
+            self._batch_response.add_error(request_id, chunk.get("error", "Unknown error"))
+            return
         if request_id not in self._chunks:
             self._chunks[request_id] = []
-            self._batch_response.add_result(request_id, chunk)
         self._chunks[request_id].append(chunk)
 
         accumulable_paths = self._get_accumulable_paths()
@@ -519,18 +780,8 @@ class BatchStreamAccumulator:
 
         self._batch_response.set_raw(request_id, self._accumulated_raw[request_id])
 
-        if extras:
-            thinking = extras.get("_thinking", "")
-            if thinking:
-                self._batch_response.update_think(request_id, thinking)
-            still_val = extras.get("_still", "")
-            if still_val:
-                self._batch_response.update_still(request_id, still_val)
-            tools_val = extras.get("_tools", {})
-            if tools_val:
-                self._batch_response.set_tools(request_id, tools_val)
-
-        if self._responder and not extras:
+        # 始终通过 responder 逐 chunk 提取 thinking/still/tools（增量累积）
+        if self._responder:
             extra_fields = self._responder._extract_stream_extra_fields(chunk)
             if "_thinking" in extra_fields:
                 self._batch_response.update_think(request_id, extra_fields["_thinking"])
@@ -548,42 +799,70 @@ class BatchStreamAccumulator:
                                 existing_tools[idx] = tc
                 self._batch_response.set_tools(request_id, existing_tools)
 
+        # extras 仅用于 usage（避免 thinking/still/tools 通过 extras 传递导致重复累积）
+        if extras:
+            usage_val = extras.get("_usage", {})
+            if usage_val:
+                self._batch_response.set_usage(request_id, usage_val)
+
     def _finalize(self) -> None:
-        for request_id, chunks in self._chunks.items():
-            final_resp = self._merge_chunks(chunks)
-            self._batch_response.add_result(request_id, final_resp)
+        for request_id, chunks in self._openai_chunks.items():
+            if chunks and request_id not in self._batch_response._errors:
+                self._batch_response.add_result(request_id, chunks)
         self._batch_response.mark_done()
 
     def __iter__(self) -> Iterator[Dict[str, Any]]:
         self._start_time = time.time()
         self._batch_response._start_time = self._start_time
-        for wrapped_chunk in self._raw_iterator:
-            request_id = wrapped_chunk.get("request_id")
-            if not request_id:
-                continue
-            chunk = wrapped_chunk.get("chunk", wrapped_chunk)
-            extras = wrapped_chunk.get("extras", {})
-            self._accumulate_chunk(chunk, request_id, extras=extras)
-            result = self._adapter._to_openai_stream_format(chunk)
-            if result is None:
-                continue
-            filter_stream_chunk(
-                result,
-                self._seen_choice_indices.setdefault(request_id, set()),
-                self._seen_tool_call_indices.setdefault(request_id, set()),
-                self._seen_finish_indices.setdefault(request_id, set())
-            )
-            yield result
-        self._end_time = time.time()
-        self._batch_response._end_time = self._end_time
-        self._finalize()
+        self._batch_response._in_for_loop = True
+        try:
+            for wrapped_chunk in self._raw_iterator:
+                request_id = wrapped_chunk.get("request_id")
+                if not request_id:
+                    import logging
+                    logger = logging.getLogger(__name__)
+                    logger.warning("BatchStreamAccumulator: 收到缺少 request_id 的 chunk，已跳过")
+                    continue
+                chunk = wrapped_chunk.get("chunk", wrapped_chunk)
+                extras = wrapped_chunk.get("extras", {})
+                self._accumulate_chunk(chunk, request_id, extras=extras)
+                result = self._adapter._to_openai_stream_format(chunk)
+                if result is None:
+                    continue
+                filter_stream_chunk(
+                    result,
+                    self._seen_choice_indices.setdefault(request_id, set()),
+                    self._seen_tool_call_indices.setdefault(request_id, set()),
+                    self._seen_finish_indices.setdefault(request_id, set())
+                )
+                # 追踪 OpenAI 标准格式 chunks 列表
+                if request_id not in self._openai_chunks:
+                    self._openai_chunks[request_id] = []
+                self._openai_chunks[request_id].append(result)
+                # 请求完成时将 OpenAI 标准 chunk 列表写入 results（request by request）
+                choices = result.get("choices", [])
+                if choices and choices[0].get("finish_reason") is not None:
+                    if request_id in self._openai_chunks:
+                        self._batch_response.add_result(request_id, self._openai_chunks.pop(request_id))
+                    if request_id in self._chunks:
+                        del self._chunks[request_id]
+                result["request_id"] = request_id
+                yield result
+        finally:
+            self._end_time = time.time()
+            self._batch_response._end_time = self._end_time
+            self._batch_response._in_for_loop = False
+            self._finalize()
+            self._batch_response._clear_non_kept_fields()
 
 
 class AsyncBatchStreamAccumulator:
-    def __init__(self, chunks_iterator, adapter, total: int = None):
+    def __init__(self, chunks_iterator, adapter, total: int = None, keep: frozenset = None):
         self._raw_iterator = chunks_iterator
         self._adapter = adapter
         self._batch_response = BatchResponse()
+        if keep is not None:
+            self._batch_response._keep = keep
         if total is not None:
             self._batch_response.set_total(total)
         self._start_time: Optional[float] = None
@@ -593,8 +872,9 @@ class AsyncBatchStreamAccumulator:
         self._seen_tool_call_indices: Dict[str, Set[int]] = {}
         self._seen_choice_indices: Dict[str, Set[int]] = {}
         self._seen_finish_indices: Dict[str, Set[int]] = {}
+        self._openai_chunks: Dict[str, List[Dict]] = {}
         self._done = False
-        self._responder = None
+        self._responder = adapter._get_responder() if adapter else None
 
     @property
     def _batch_response_obj(self) -> BatchResponse:
@@ -621,20 +901,23 @@ class AsyncBatchStreamAccumulator:
         return self._batch_response.results
 
     @property
-    def success(self) -> List[str]:
-        return self._batch_response.success
+    def errors(self) -> Dict[str, Any]:
+        return self._batch_response.errors
 
     @property
-    def fail(self) -> List[str]:
-        return self._batch_response.fail
-
-    @property
-    def request_counts(self) -> Dict[str, int]:
-        return self._batch_response.request_counts
+    def status(self) -> Dict[str, Any]:
+        return self._batch_response.status
 
     @property
     def elapsed(self) -> float:
         return self._batch_response.elapsed
+
+    @property
+    def usage(self) -> Dict[str, Any]:
+        return self._batch_response.usage
+
+    def to_dict(self, **kwargs) -> Dict[str, Any]:
+        return self._batch_response.to_dict(**kwargs)
 
     def _get_accumulable_paths(self):
         if self._responder is None:
@@ -703,9 +986,11 @@ class AsyncBatchStreamAccumulator:
         return final
 
     def _accumulate_chunk(self, chunk: Dict, request_id: str, extras: Dict = None) -> None:
+        if chunk.get("status") == "error":
+            self._batch_response.add_error(request_id, chunk.get("error", "Unknown error"))
+            return
         if request_id not in self._chunks:
             self._chunks[request_id] = []
-            self._batch_response.add_result(request_id, chunk)
         self._chunks[request_id].append(chunk)
 
         accumulable_paths = self._get_accumulable_paths()
@@ -746,18 +1031,8 @@ class AsyncBatchStreamAccumulator:
 
         self._batch_response.set_raw(request_id, self._accumulated_raw[request_id])
 
-        if extras:
-            thinking = extras.get("_thinking", "")
-            if thinking:
-                self._batch_response.update_think(request_id, thinking)
-            still_val = extras.get("_still", "")
-            if still_val:
-                self._batch_response.update_still(request_id, still_val)
-            tools_val = extras.get("_tools", {})
-            if tools_val:
-                self._batch_response.set_tools(request_id, tools_val)
-
-        if self._responder and not extras:
+        # 始终通过 responder 逐 chunk 提取 thinking/still/tools（增量累积）
+        if self._responder:
             extra_fields = self._responder._extract_stream_extra_fields(chunk)
             if "_thinking" in extra_fields:
                 self._batch_response.update_think(request_id, extra_fields["_thinking"])
@@ -775,10 +1050,20 @@ class AsyncBatchStreamAccumulator:
                                 existing_tools[idx] = tc
                 self._batch_response.set_tools(request_id, existing_tools)
 
+        # extras 仅用于 usage（避免 thinking/still/tools 通过 extras 传递导致重复累积）
+        if extras:
+            usage_val = extras.get("_usage", {})
+            if usage_val:
+                self._batch_response.set_usage(request_id, usage_val)
+
     async def _finalize(self) -> None:
-        for request_id, chunks in self._chunks.items():
-            final_resp = self._merge_chunks(chunks)
-            self._batch_response.add_result(request_id, final_resp)
+        for request_id, chunks in self._openai_chunks.items():
+            if chunks:
+                self._batch_response.add_result(request_id, chunks)
+            if chunks and isinstance(chunks[-1], dict):
+                last_usage = chunks[-1].get("usage")
+                if last_usage:
+                    self._batch_response.set_usage(request_id, last_usage)
 
     def __aiter__(self):
         return self
@@ -803,102 +1088,137 @@ class AsyncBatchStreamAccumulator:
                     self._seen_tool_call_indices.setdefault(request_id, set()),
                     self._seen_finish_indices.setdefault(request_id, set())
                 )
+                # 追踪 OpenAI 标准格式 chunks 列表
+                if request_id not in self._openai_chunks:
+                    self._openai_chunks[request_id] = []
+                self._openai_chunks[request_id].append(result)
+                # 请求完成时将 OpenAI 标准 chunk 列表写入 results（request by request）
+                choices = result.get("choices", [])
+                if choices and choices[0].get("finish_reason") is not None:
+                    if request_id in self._openai_chunks:
+                        self._batch_response.add_result(request_id, self._openai_chunks.pop(request_id))
+                    if request_id in self._chunks:
+                        del self._chunks[request_id]
+                result["request_id"] = request_id
                 return result
             except StopAsyncIteration:
                 self._done = True
                 await self._finalize()
                 self._batch_response.mark_done()
+                self._batch_response._clear_non_kept_fields()
                 raise
 
 
 class BatchNonStreamAccumulator:
     """批量非流式请求的累积器"""
-    def __init__(self, batch_result, adapter, elapsed: float = 0.0, responder=None):
+    def __init__(self, batch_result, adapter=None, elapsed: float = 0.0, responder=None, keep=None):
         self._batch_result = batch_result
         self._adapter = adapter
-        self._responder = responder
+        self._responder = responder or (adapter._get_responder() if adapter else None)
+
         self._batch_response = BatchResponse()
-        
         if hasattr(batch_result, 'elapsed'):
             elapsed = batch_result.elapsed
         if hasattr(batch_result, 'total'):
             total = batch_result.total
         else:
             total = len(getattr(batch_result, 'results', {}))
-        
         self._batch_response.set_elapsed(elapsed)
         self._batch_response.set_total(total)
+        if keep is not None:
+            self._batch_response._keep = keep
 
     def process(self) -> BatchResponse:
         if isinstance(self._batch_result, BatchResponse):
             return self._batch_result
-            
+
         for item_result in self._batch_result.results:
-            request_id = f"request_{item_result.index}"
+            request_id = item_result.request_id or f"request_{item_result.index}"
             raw_resp = item_result.response
-            
+
             if raw_resp and item_result.status == "success":
-                self._batch_response.set_raw(request_id, raw_resp)
+                # Handle NonStreamAccumulator / accumulator-like response objects
+                if hasattr(raw_resp, '_response'):
+                    raw_dict = raw_resp._response
+                else:
+                    raw_dict = raw_resp
+
+                self._batch_response.set_raw(request_id, raw_dict)
+
                 if self._responder:
-                    extra_fields = self._responder._extract_extra_fields(raw_resp)
+                    extra_fields = self._responder._extract_extra_fields(raw_dict)
                     if "_thinking" in extra_fields:
                         self._batch_response.set_think(request_id, extra_fields["_thinking"])
                     if "_still" in extra_fields:
                         self._batch_response.set_still(request_id, extra_fields["_still"])
                     if "_tools" in extra_fields:
                         self._batch_response.set_tools(request_id, extra_fields["_tools"])
+                    if "_usage" in extra_fields:
+                        self._batch_response.set_usage(request_id, extra_fields["_usage"])
                 if hasattr(self._adapter, '_to_openai_format'):
-                    filtered = self._adapter._to_openai_format(raw_resp, self._adapter.model)
+                    filtered = self._adapter._to_openai_format(raw_dict, self._adapter.model)
                 else:
-                    filtered = self._filter_extra_fields(raw_resp)
+                    filtered = raw_dict
                 self._batch_response.add_result(request_id, filtered)
             else:
                 error_data = {"error": str(item_result.error) if item_result.error else "unknown"}
                 self._batch_response.add_result(request_id, error_data)
+        self._batch_response.mark_done()
         return self._batch_response
 
 
 class AsyncBatchNonStreamAccumulator:
     """批量异步非流式请求的累积器"""
-    def __init__(self, batch_result, adapter, elapsed: float = 0.0, responder=None):
+    def __init__(self, batch_result, adapter=None, elapsed: float = 0.0, responder=None, keep=None):
         self._batch_result = batch_result
         self._adapter = adapter
-        self._responder = responder
+        self._responder = responder or (adapter._get_responder() if adapter else None)
+
         self._batch_response = BatchResponse()
+        if hasattr(batch_result, 'elapsed'):
+            elapsed = batch_result.elapsed
+        if hasattr(batch_result, 'total'):
+            total = batch_result.total
+        else:
+            total = len(getattr(batch_result, 'results', {}))
         self._batch_response.set_elapsed(elapsed)
-        self._batch_response.set_total(batch_result.total)
+        self._batch_response.set_total(total)
+        if keep is not None:
+            self._batch_response._keep = keep
 
     async def process(self) -> BatchResponse:
+        if isinstance(self._batch_result, BatchResponse):
+            return self._batch_result
+
         for item_result in self._batch_result.results:
-            request_id = f"request_{item_result.index}"
+            request_id = item_result.request_id or f"request_{item_result.index}"
             raw_resp = item_result.response
-            
+
             if raw_resp and item_result.status == "success":
-                self._batch_response.set_raw(request_id, raw_resp)
+                # Handle NonStreamAccumulator / accumulator-like response objects
+                if hasattr(raw_resp, '_response'):
+                    raw_dict = raw_resp._response
+                else:
+                    raw_dict = raw_resp
+
+                self._batch_response.set_raw(request_id, raw_dict)
                 if self._responder:
-                    extra_fields = self._responder._extract_extra_fields(raw_resp)
+                    extra_fields = self._responder._extract_extra_fields(raw_dict)
                     if "_thinking" in extra_fields:
                         self._batch_response.set_think(request_id, extra_fields["_thinking"])
                     if "_still" in extra_fields:
                         self._batch_response.set_still(request_id, extra_fields["_still"])
                     if "_tools" in extra_fields:
                         self._batch_response.set_tools(request_id, extra_fields["_tools"])
+                    if "_usage" in extra_fields:
+                        self._batch_response.set_usage(request_id, extra_fields["_usage"])
                 if hasattr(self._adapter, '_to_openai_format'):
-                    filtered = self._adapter._to_openai_format(raw_resp, self._adapter.model)
+                    filtered = self._adapter._to_openai_format(raw_dict, self._adapter.model)
                 else:
-                    filtered = self._filter_extra_fields(raw_resp)
+                    filtered = raw_dict
                 self._batch_response.add_result(request_id, filtered)
             else:
                 error_data = {"error": str(item_result.error) if item_result.error else "unknown"}
                 self._batch_response.add_result(request_id, error_data)
+        self._batch_response.mark_done()
         return self._batch_response
-
-    def _filter_extra_fields(self, response: Dict) -> Dict:
-        if not response:
-            return {}
-        filtered = {}
-        standard_fields = {"id", "object", "created", "model", "choices", "usage", "system_fingerprint"}
-        for key, value in response.items():
-            if key in standard_fields:
-                filtered[key] = value
-        return filtered

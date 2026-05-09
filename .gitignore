@@ -10,6 +10,7 @@ test_venv/
 backup*/
 scripts/
 CLAUDE.md
+edit_tool.py
 # IDE / Editor
 .trae/
 # Claude Code — local config (private)

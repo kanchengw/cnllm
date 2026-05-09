@@ -20,6 +20,7 @@ from ..utils.exceptions import (
 from ..utils.stream import StreamHandler, AsyncStreamHandler
 from .accumulators.single_accumulator import NonStreamAccumulator, StreamAccumulator
 from ..utils.validator import ParamValidator
+from .param_registry import validate_for_scope, resolve_default
 
 logger = logging.getLogger(__name__)
 
@@ -76,6 +77,7 @@ class BaseAdapter:
         retry_delay: float = None,
         base_url: str = None,
         fallback_models: Optional[Dict[str, Optional[str]]] = None,
+        drop_params: str = "warn",
         **kwargs
     ):
         self.api_key = api_key
@@ -84,6 +86,7 @@ class BaseAdapter:
         self.max_retries = max_retries
         self.retry_delay = retry_delay
         self.fallback_models = fallback_models or {}
+        self.drop_params = drop_params
         self._raw_response = None
         self._cnllm_extra = {}
         self._last_adapter = None
@@ -91,11 +94,11 @@ class BaseAdapter:
         self._validator = ParamValidator(self.CONFIG_DIR, adapter_type="chat")
         self.base_url = self._validator.validate_base_url(base_url)
         if self.timeout is None:
-            self.timeout = self._validator.get_default_value("timeout") or 30
+            self.timeout = resolve_default("chat", "timeout") or 30
         if self.max_retries is None:
-            self.max_retries = self._validator.get_default_value("max_retries") or 3
+            self.max_retries = resolve_default("chat", "max_retries") or 3
         if self.retry_delay is None:
-            self.retry_delay = self._validator.get_default_value("retry_delay") or 1.0
+            self.retry_delay = resolve_default("chat", "retry_delay") or 1.0
 
     @classmethod
     def _load_class_config(cls) -> Dict[str, Any]:
@@ -140,17 +143,8 @@ class BaseAdapter:
                 return default
         return value if value is not None else default
 
-    def _validate_required_params(self, params: Dict[str, Any]) -> None:
-        self._validator.validate_required_params(params)
-
     def _validate_one_of(self, params: Dict[str, Any]) -> None:
         self._validator.validate_one_of(params)
-
-    def _filter_supported_params(self, params: Dict[str, Any]) -> Dict[str, Any]:
-        return self._validator.filter_supported_params(params)
-
-    def _get_default_value(self, *keys, default=None):
-        return self._validator.get_default_value(*keys, default=default)
 
     def get_vendor_model(self, model: str) -> str:
         mapping = self._get_config_value("model_mapping", default={})
@@ -185,7 +179,6 @@ class BaseAdapter:
 
     def _check_image_support(self, params: Dict[str, Any]) -> None:
         """验证当前模型是否支持图片输入"""
-        from ..utils.exceptions import InvalidRequestError
         messages = params.get("messages")
         if not messages:
             return
@@ -194,9 +187,8 @@ class BaseAdapter:
             vision_models = self._get_vision_models()
             if model not in vision_models:
                 suffix = f": {vision_models}" if vision_models else ""
-                raise InvalidRequestError(
-                    message=f"模型 '{model}' 不支持图片输入。请使用其他多模态模型{suffix}",
-                    provider=self.ADAPTER_NAME
+                raise TypeError(
+                    f"模型 '{model}' 不支持图片输入。请使用其他多模态模型{suffix}"
                 )
 
     def get_api_path(self) -> str:
@@ -207,6 +199,19 @@ class BaseAdapter:
         if self.base_url:
             return self.base_url
         return self._get_config_value("request", "base_url", default="")
+
+    def get_yaml_base_url_default(self) -> str:
+        """读取 YAML 中 base_url 的 default 值（未经 validate_base_url 处理）。
+
+        给 BaseHttpClient._build_url 规则5使用，判断用户 URL 是否需要补全。
+        """
+        base_url_config = self._get_config_value("optional_fields", "base_url", default={})
+        if not isinstance(base_url_config, dict):
+            return ""
+        type_config = base_url_config.get(self._validator.adapter_type, {})
+        if isinstance(type_config, dict):
+            return type_config.get("default", "")
+        return ""
 
     def get_header_mappings(self) -> Dict[str, str]:
         mappings = {}
@@ -305,7 +310,6 @@ class BaseAdapter:
             model = self.model
 
         params = {
-            "api_key": self.api_key,
             "model": model,
             "messages": messages,
             "temperature": temperature,
@@ -314,8 +318,12 @@ class BaseAdapter:
             **kwargs
         }
 
-        self._validator.validate_required_params(params)
-        params = self._filter_supported_params(params)
+        params = validate_for_scope(
+            params=params,
+            scope="chat",
+            vendor_yaml=self._config or {},
+            drop_params=self.drop_params,
+        )
         self._validate_one_of(params)
 
         self._check_image_support(params)
@@ -331,7 +339,8 @@ class BaseAdapter:
             max_retries=self.max_retries,
             retry_delay=self.retry_delay,
             provider=self.ADAPTER_NAME,
-            header_mappings=self.get_header_mappings()
+            header_mappings=self.get_header_mappings(),
+            yaml_default=self.get_yaml_base_url_default(),
         )
 
         extra_headers = {}
@@ -420,6 +429,9 @@ class BaseAdapter:
                             existing[k] = v
                 else:
                     tools_dict[idx] = dict(tc)
+        usage = result.get("usage")
+        if usage:
+            self._cnllm_extra["_usage"] = usage
 
     async def acreate_completion(
         self,
@@ -440,7 +452,6 @@ class BaseAdapter:
             model = self.model
 
         params = {
-            "api_key": self.api_key,
             "model": model,
             "messages": messages,
             "temperature": temperature,
@@ -449,8 +460,12 @@ class BaseAdapter:
             **kwargs
         }
 
-        self._validator.validate_required_params(params)
-        params = self._filter_supported_params(params)
+        params = validate_for_scope(
+            params=params,
+            scope="chat",
+            vendor_yaml=self._config or {},
+            drop_params=self.drop_params,
+        )
         self._validate_one_of(params)
 
         self._check_image_support(params)
@@ -466,7 +481,8 @@ class BaseAdapter:
             max_retries=self.max_retries,
             retry_delay=self.retry_delay,
             provider=self.ADAPTER_NAME,
-            header_mappings=self.get_header_mappings()
+            header_mappings=self.get_header_mappings(),
+            yaml_default=self.get_yaml_base_url_default(),
         )
 
         extra_headers = {}

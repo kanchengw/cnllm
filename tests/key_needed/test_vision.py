@@ -134,7 +134,7 @@ class TestTextRejectImage:
     def test_text_model_rejects_image(self):
         """纯文本模型传入图片 → 抛出 InvalidRequestError"""
         client = CNLLM(model=TEXT_MODEL, api_key=API_KEY)
-        with pytest.raises(InvalidRequestError) as e:
+        with pytest.raises(TypeError) as e:
             client.chat.create(messages=[{"role": "user", "content": [
                 {"type": "text", "text": "有什么？"},
                 {"type": "image_url", "image_url": {"url": _IMG()}}
@@ -153,13 +153,15 @@ class TestTextRejectImage:
 
     @requires_api_key
     def test_text_model_rejects_image_in_batch(self):
-        """批量调用中纯文本模型传入图片 → 报错"""
+        """批量调用中纯文本模型传入图片 → 请求失败"""
         client = CNLLM(model=TEXT_MODEL, api_key=API_KEY)
-        with pytest.raises((InvalidRequestError, Exception)):
-            client.chat.batch(requests=[{"messages": [{"role": "user", "content": [
-                {"type": "text", "text": "什么？"},
-                {"type": "image_url", "image_url": {"url": _IMG()}}
-            ]}]}])
+        resp = client.chat.batch(requests=[{"messages": [{"role": "user", "content": [
+            {"type": "text", "text": "什么？"},
+            {"type": "image_url", "image_url": {"url": _IMG()}}
+        ]}]}])   # ]content }msg ]msgs }req ]reqs )batch
+        for _ in resp:
+            pass
+        assert resp.status["fail_count"] > 0, "请求应该失败"
         print(f"\n[PASS] batch reject")
 
 

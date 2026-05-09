@@ -6,83 +6,58 @@ request:
 
 required_fields:
   api_key:
-    adapter: [chat, embedding]
     skip: true
-  model:
-    adapter: [chat, embedding]
+  model: ~
   input:
-    adapter: [embedding]
+    scope: embed
 
 one_of:
   messages_or_prompt:
-    messages: 
-      adapter: [chat]
-    prompt: 
-      adapter: [chat]
+    messages: ~
+    prompt: ~
 
 optional_fields:
   base_url:
-    adapter: [chat, embedding]
     skip: true
     chat:
-      default: "https://open.bigmodel.cn"
-      path: "api/paas/v4/chat/completions"
+      default: "https://open.bigmodel.cn/api/paas"
+      path: "v4/chat/completions"
     embedding:
-      default: "https://open.bigmodel.cn"
-      path: "/api/paas/v4/embeddings"
+      default: "https://open.bigmodel.cn/api/paas"
+      path: "v4/embeddings"
   fallback_models:
-    adapter: [chat]
     skip: true
   timeout:
-    adapter: [chat, embedding]
     skip: true
     default: 60.0
   max_retries:
-    adapter: [chat, embedding]
     skip: true
     default: 3
   retry_delay:
-    adapter: [chat, embedding]
     skip: true
     default: 1.0
-  temperature:
-    adapter: [chat]
-  top_p:
-    adapter: [chat]
-  max_tokens:
-    adapter: [chat]
-  stream:
-    adapter: [chat]
-  stop:
-    adapter: [chat]
-  tools:
-    adapter: [chat]
-  tool_choice:
-    adapter: [chat]
+  temperature: ~
+  top_p: ~
+  max_tokens: ~
+  stream: ~
+  stop: ~
+  tools: ~
+  tool_choice: ~
   thinking:
-    adapter: [chat]
     transform:
       true: {"type": "enabled"}
       false: {"type": "disabled"}
   user:
-    adapter: [chat]
     map: "user_id"
-  do_sample:
-    adapter: [chat]
-  request_id:
-    adapter: [chat]
-  response_format:
-    adapter: [chat]
-  tool_stream:
-    adapter: [chat]
-  presence_penalty:
-    adapter: [chat]
-  frequency_penalty:
-    adapter: [chat]
-  n:
-    adapter: [chat]
+  do_sample: ~
+  request_id: ~
+  response_format: ~
+  tool_stream: ~
+  presence_penalty: ~
+  frequency_penalty: ~
+  n: ~
   dimensions:
-    adapter: [embedding]
+    scope: embed
 
 model_mapping:
   chat:

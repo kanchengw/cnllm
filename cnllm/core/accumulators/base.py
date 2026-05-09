@@ -33,6 +33,11 @@ class BaseAccumulator:
         return {}
 
     @property
+    def usage(self) -> Dict[str, Any]:
+        val = self._adapter._cnllm_extra.get("_usage", {}) if self._adapter else {}
+        return dict(val) if isinstance(val, dict) else {}
+
+    @property
     def raw(self) -> Dict[str, Any]:
         return self._adapter._raw_response if self._adapter else {}
 
@@ -101,6 +106,14 @@ class StreamBaseAccumulator(BaseAccumulator):
         self._seen_finish_indices: set = set()
         self._done = False
     
+        self._usage: Optional[Dict[str, Any]] = None
+        self._buffered_stop: Optional[Dict[str, Any]] = None
+        self._pending_chunk: Optional[Dict[str, Any]] = None
+        self._pending_raw_chunk: Optional[Dict[str, Any]] = None
+
+    @property
+    def usage(self) -> Optional[Dict[str, Any]]:
+        return self._usage
     @property
     def raw(self) -> Dict[str, Any]:
         return self._accumulated_raw

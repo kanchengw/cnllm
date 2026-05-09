@@ -6,66 +6,45 @@ request:
 
 required_fields:
   api_key:
-    adapter: [chat, embedding]
     skip: true
-  model:
-    adapter: [chat, embedding]
+  model: ~
 
 one_of:
   messages_or_prompt:
-    messages: 
-      adapter: [chat]
-    prompt: 
-      adapter: [chat]
+    messages: ~
+    prompt: ~
 
 optional_fields:
   base_url:
-    adapter: [chat, embedding]
     skip: true
     chat:
-      default: "https://api.xiaomimimo.com/v1"
-      path: "chat/completions"
+      default: "https://api.xiaomimimo.com"
+      path: "v1/chat/completions"
   fallback_models:
-    adapter: [chat]
     skip: true
   timeout:
-    adapter: [chat, embedding]
     skip: true
     default: 60.0
   max_retries:
-    adapter: [chat, embedding]
     skip: true
     default: 3
   retry_delay:
-    adapter: [chat, embedding]
     skip: true
     default: 1.0
-  temperature:
-    adapter: [chat]
-  max_completion_tokens:
-    adapter: [chat]
-  top_p:
-    adapter: [chat]
-  presence_penalty:
-    adapter: [chat]
-  frequency_penalty:
-    adapter: [chat]
-  stop:
-    adapter: [chat]
-  user:
-    adapter: [chat]
-  stream:
-    adapter: [chat]
+  temperature: ~
+  max_completion_tokens: ~
+  top_p: ~
+  presence_penalty: ~
+  frequency_penalty: ~
+  stop: ~
+  user: ~
+  stream: ~
   thinking:
-    adapter: [chat]
     transform:
       true: {"type": "enabled"}
       false: {"type": "disabled"}
-  tools:
-    adapter: [chat]
-  tool_choice:
-    adapter: [chat]
-
+  tools: ~
+  tool_choice: ~
 
 model_mapping:
   chat:

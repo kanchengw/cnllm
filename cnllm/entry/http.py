@@ -28,18 +28,62 @@ class BaseHttpClient:
         max_retries: int = None,
         retry_delay: float = None,
         provider: str = "unknown",
-        header_mappings: Dict[str, str] = None
+        header_mappings: Dict[str, str] = None,
+        yaml_default: str = None,
     ):
-        self.api_key = ''.join(api_key.strip().split())
+        self.api_key = "".join(api_key.strip().split())
         self.base_url = base_url.strip()
         self.timeout = timeout
         self.max_retries = max_retries
         self.retry_delay = retry_delay
         self.provider = provider
         self.header_mappings = header_mappings or {}
+        self.yaml_default = yaml_default.strip() if yaml_default else None
 
         self._sync_client: Optional[httpx.Client] = None
         self._async_client: Optional[httpx.AsyncClient] = None
+
+    _URL_VERSION_PATTERN = None  # compiled lazily in _build_url
+
+    def _build_url(self, path: str) -> str:
+        """根据 5 条 URL 规则构造完整请求 URL。
+
+        规则1: base_url 已包含完整 path → 原样返回
+        规则2: base_url 以 /v{digit} 结尾 → 追加 path
+        规则5: base_url 是 yaml_default 的前缀 → 补齐到 yaml_default 再拼 path
+        规则3/4: 兜底 → base_url / path
+        """
+        base = self.base_url.rstrip("/")
+        clean_path = path.strip().lstrip("/")
+
+        if not clean_path:
+            return base
+
+        # 规则1: 完整路径
+        if base.endswith(f"/{clean_path}"):
+            return base
+
+        # 规则2: 到版本号为止（去掉 path 中重复的版本前缀）
+        if self._URL_VERSION_PATTERN is None:
+            import re
+            self._URL_VERSION_PATTERN = re.compile(r"/v\d+$")
+        m = self._URL_VERSION_PATTERN.search(base)
+        if m:
+            vdir = m.group(0)  # e.g. "/v1"
+            resource = clean_path
+            # 如果 path 以相同版本号开头（如 "v1/chat/completions"），去掉版本前缀
+            prefix = vdir.lstrip("/") + "/"
+            if resource.startswith(prefix):
+                resource = resource[len(prefix):]
+            return f"{base}/{resource}"
+
+        # 规则5: base_url 是 yaml_default 的前缀
+        if self.yaml_default and self.yaml_default.startswith(base):
+            yaml_base = self.yaml_default.rstrip("/")
+            return f"{yaml_base}/{clean_path}"
+
+        # 规则3/4: 兜底
+        return f"{base}/{clean_path}"
 
     def _get_sync_client(self) -> httpx.Client:
         if self._sync_client is None:
@@ -103,22 +147,20 @@ class BaseHttpClient:
         elif status_code == 429:
             raise RateLimitError(provider=self.provider)
         elif status_code == 400:
-            msg = error_detail.get("error", {}).get("message") or str(response.text)[:200] if response.text else "请求参数错误"
+            msg = error_detail.get("error", {}).get("message") or str(response.text)[:200] if response.text else "\u8bf7\u6c42\u53c2\u6570\u9519\u8bef"
             raise InvalidRequestError(message=msg, provider=self.provider)
         elif status_code >= 500:
-            msg = error_detail.get("error", {}).get("message") or f"API 服务器错误 ({status_code})"
+            msg = error_detail.get("error", {}).get("message") or f"API \u670d\u52a1\u5668\u9519\u8bef ({status_code})"
             raise ServerError(message=msg, provider=self.provider)
         else:
             raise InvalidRequestError(
-                message=f"API 请求失败 (HTTP {status_code})",
+                message=f"API \u8bf7\u6c42\u5931\u8d25 (HTTP {status_code})",
                 provider=self.provider
             )
 
     def post(self, path: str, payload: Dict[str, Any], extra_headers: Dict[str, str] = None) -> Dict[str, Any]:
         headers = self._build_headers(extra_headers)
-        base = self.base_url.rstrip("/")
-        url_path = path.lstrip("/")
-        url = f"{base}/{url_path}"
+        url = self._build_url(path)
 
         for attempt in range(self.max_retries):
             try:
@@ -142,7 +184,7 @@ class BaseHttpClient:
                     return response.json()
                 except json.JSONDecodeError:
                     raise InvalidRequestError(
-                        message=f"API 返回了无效的 JSON 响应 (HTTP {response.status_code})",
+                        message=f"API \u8fd4\u56de\u4e86\u65e0\u6548\u7684 JSON \u54cd\u5e94 (HTTP {response.status_code})",
                         provider=self.provider
                     )
 
@@ -173,13 +215,11 @@ class BaseHttpClient:
                     continue
                 raise NetworkError(provider=self.provider)
 
-        raise ModelAPIError(f"重试 {self.max_retries} 次后仍然失败", provider=self.provider)
+        raise ModelAPIError(f"\u91cd\u8bd5 {self.max_retries} \u6b21\u540e\u4ecd\u7136\u5931\u8d25", provider=self.provider)
 
     def post_stream(self, path: str, payload: Dict[str, Any], extra_headers: Dict[str, str] = None) -> Iterator[bytes]:
         headers = self._build_headers(extra_headers)
-        base = self.base_url.rstrip("/")
-        url_path = path.lstrip("/")
-        url = f"{base}/{url_path}"
+        url = self._build_url(path)
 
         for attempt in range(self.max_retries):
             try:
@@ -196,7 +236,7 @@ class BaseHttpClient:
 
                     for line in response.iter_lines():
                         if line:
-                            yield line.encode('utf-8')
+                            yield line.encode("utf-8")
                 return
 
             except httpx.TimeoutException:
@@ -226,13 +266,11 @@ class BaseHttpClient:
                     continue
                 raise NetworkError(provider=self.provider)
 
-        raise ModelAPIError(f"重试 {self.max_retries} 次后仍然失败", provider=self.provider)
+        raise ModelAPIError(f"\u91cd\u8bd5 {self.max_retries} \u6b21\u540e\u4ecd\u7136\u5931\u8d25", provider=self.provider)
 
     async def apost(self, path: str, payload: Dict[str, Any], extra_headers: Dict[str, str] = None) -> Dict[str, Any]:
         headers = self._build_headers(extra_headers)
-        base = self.base_url.rstrip("/")
-        url_path = path.lstrip("/")
-        url = f"{base}/{url_path}"
+        url = self._build_url(path)
 
         for attempt in range(self.max_retries):
             try:
@@ -256,7 +294,7 @@ class BaseHttpClient:
                     return response.json()
                 except json.JSONDecodeError:
                     raise InvalidRequestError(
-                        message=f"API 返回了无效的 JSON 响应 (HTTP {response.status_code})",
+                        message=f"API \u8fd4\u56de\u4e86\u65e0\u6548\u7684 JSON \u54cd\u5e94 (HTTP {response.status_code})",
                         provider=self.provider
                     )
 
@@ -306,20 +344,18 @@ class BaseHttpClient:
                 raise
 
             except Exception as e:
-                logger = __import__('logging').getLogger(__name__)
+                logger = __import__("logging").getLogger(__name__)
                 logger.error(f"[{self.provider}] Unexpected error: {type(e).__name__}: {e}")
                 if attempt < self.max_retries - 1:
                     await asyncio.sleep(self.retry_delay)
                     continue
                 raise NetworkError(provider=self.provider)
 
-        raise ModelAPIError(f"重试 {self.max_retries} 次后仍然失败", provider=self.provider)
+        raise ModelAPIError(f"\u91cd\u8bd5 {self.max_retries} \u6b21\u540e\u4ecd\u7136\u5931\u8d25", provider=self.provider)
 
     async def apost_stream(self, path: str, payload: Dict[str, Any], extra_headers: Dict[str, str] = None) -> AsyncIterator[bytes]:
         headers = self._build_headers(extra_headers)
-        base = self.base_url.rstrip("/")
-        url_path = path.lstrip("/")
-        url = f"{base}/{url_path}"
+        url = self._build_url(path)
 
         for attempt in range(self.max_retries):
             try:
@@ -336,7 +372,7 @@ class BaseHttpClient:
 
                     async for line in response.aiter_lines():
                         if line:
-                            yield line.encode('utf-8')
+                            yield line.encode("utf-8")
                 return
 
             except httpx.TimeoutException:
@@ -366,4 +402,4 @@ class BaseHttpClient:
                     continue
                 raise NetworkError(provider=self.provider)
 
-        raise ModelAPIError(f"重试 {self.max_retries} 次后仍然失败", provider=self.provider)
+        raise ModelAPIError(f"\u91cd\u8bd5 {self.max_retries} \u6b21\u540e\u4ecd\u7136\u5931\u8d25", provider=self.provider)

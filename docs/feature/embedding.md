@@ -37,7 +37,8 @@ cnllm/
 │       ├── minimax.py        # MiniMaxEmbeddingAdapter, MiniMaxEmbeddingResponder
 │       └── glm.py            # GLMEmbeddingAdapter, GLMEmbeddingResponder
 ├── utils/
-│   └── accumulator.py        # EmbeddingResponse 类
+│   └── accumulators/
+│       └── embedding_accumulator.py  # EmbeddingResponse 类
 └── entry/
     ├── client.py             # CNLLM 添加 embeddings 属性
     └── async_client.py       # AsyncCNLLM 添加 embeddings 属性
@@ -219,11 +220,25 @@ print(result["usage"]["total_tokens"])  # 5
 **完整结构**:
 ```python
 {
-    "request_counts": {
+    "status": {
+        "success_count": 2,
+        "fail_count": 0,
         "total": 2,
+        "elapsed": "0.35s"
+    },
+    "usage": {
+        "prompt_tokens": 11,
+        "total_tokens": 11
+    },
+    "batch_info": {
+        "batch_size": 2,
+        "batch_count": 1,
         "dimension": 1024
     },
-    "elapsed": 0.35,
+    "vectors": {
+        "request_0": [0.1, 0.2, ...],
+        "request_1": [0.3, 0.4, ...]
+    },
     "results": {
         "request_0": {
             "object": "list",
@@ -244,48 +259,86 @@ print(result["usage"]["total_tokens"])  # 5
 ```python
 # print 输出（简洁统计，不显示大文本）:
 print(result)
-# EmbeddingResponse(request_counts={'total': 2, 'dimension': 1024}, elapsed=0.35)
+# EmbeddingResponse(status={'success_count': 2, 'fail_count': 0, 'total': 2, 'elapsed': '0.35s'}, usage={'prompt_tokens': 11, 'total_tokens': 11}, batch_info={'batch_size': 2, 'batch_count': 1, 'dimension': 1024})
 
-print(result.results)
-# BatchResults(count=2, ids=['request_0', 'request_1'])
+# 向量访问（推荐）:
+result.vectors["request_0"]      # [0.1, 0.2, ...]
+result.vectors[0]                # [0.1, 0.2, ...]
 
-print(result[0])
-# 获取 request_0 的响应 {"object": "list", "data": [...], ...}
+# 标准响应访问:
+result.results["request_0"]      # {"object": "list", "data": [...], ...}
+result.results[0]                # 同上
+result.results["doc_001"]        # 自定义 request_ids 时
 
-print(result["doc_001"])
-# 获取 doc_001 的响应（自定义 request_ids 时）
-
-print(result[0]["data"][0]["embedding"])
-# 获取第一个向量的值 [0.1, 0.2, ...]
+# 合并统计:
+result.usage                     # {"prompt_tokens": 11, "total_tokens": 11}
+result.batch_info                # {"batch_size": 2, "batch_count": 1, "dimension": 1024}
 ```
 
 ### 4.3 EmbeddingResponse 类
 
-**位置**: `cnllm/utils/accumulator.py`
+**位置**: `cnllm/core/accumulators/embedding_accumulator.py`
 
-**属性**:
+**统计属性**（无阻塞，实时可用）:
 
 | 属性 | 类型 | 说明 |
 |------|------|------|
-| `request_counts` | `Dict` | 统计信息 (total, dimension) |
-| `total` | `int` | 总数 |
-| `dimension` | `int` | 向量维度 |
-| `elapsed` | `float` | 耗时（秒） |
-| `results` | `Dict[str, Any]` | request_id → embedding 响应 |
+| `status` | `Dict` | 统计信息: success_count, fail_count, total, elapsed |
+| `status["success_count"]` | `int` | 成功数 |
+| `status["fail_count"]` | `int` | 失败数 |
+| `status["total"]` | `int` | 请求总数 |
+| `status["elapsed"]` | `str` | 耗时（如 "0.35s"） |
+| `usage` | `Dict[str, int]` | Token 用量汇总 (prompt_tokens, total_tokens) |
+| `batch_info` | `Dict` | 批量信息 (batch_size, batch_count, dimension) |
+| `batch_info["dimension"]` | `int` | 向量维度 |
+| `vectors` | `Dict[str, list]` | 向量数据 (request_id → embedding list) |
+| `errors` | `Dict[str, str]` | 错误信息 (request_id → error_msg) |
+| `results` | `Dict[str, Dict]` | 完整响应 (需 keep=["*"] 保留) |
+
+**数据属性**（支持 int/str 索引）:
+
+| 属性 | 类型 | 说明 |
+|------|------|------|
+| `vectors` | `Dict[str, List[float]]` | request_id → 向量（推荐使用，默认保留） |
+| `results` | `Dict[str, Dict]` | request_id → OpenAI 标准 embedding 响应（迭代后默认释放） |
 
 **方法**:
 
 | 方法 | 说明 |
 |------|------|
-| `to_dict()` | 转换为 dict，默认只保留 results |
-| `__repr__()` | 显示如 `EmbeddingResponse(request_counts={'total': 2, 'dimension': 1024}, elapsed=0.35)` |
+| `to_dict()` | 转换为 dict，默认返回 vectors + 统计字段 |
+| `__repr__()` | 显示如 `EmbeddingResponse(success=[...], fail=[...], request_counts={...}, elapsed=..., usage={...}, batch_info={...})` |
 | `__getitem__(key)` | 支持整数索引 `response[0]` 或字符串 `response["request_0"]` |
+| `for r in response` | 实时迭代，每次 yield 当前快照（迭代结束后释放非 keep 字段） |
 
 **to_dict() 参数**:
 ```python
-result.to_dict()                        # 只保留 results (默认)
-result.to_dict(stats=True)              # 包含 results + 统计字段
-result.to_dict(results=True, stats=True, usage=True)  # 包含所有信息
+result.to_dict()                          # 默认：返回 vectors + 统计字段
+result.to_dict(results=True)              # 返回 results + 统计字段
+result.to_dict(stats=False)               # 只返回 vectors，不含统计字段
+```
+
+**keep 参数** — 控制迭代后保留的字段：
+
+Embeddings 批量默认 `keep={"vectors"}`，即 `for` 循环迭代结束后只保留向量，`results` 被释放以节省内存。
+
+```python
+# 默认行为：迭代后 vectors 保留，results 释放
+resp = client.embeddings.batch(input=["文本1", "文本2"])
+for _ in resp:
+    pass
+resp.vectors["request_0"]    # 可访问 ✓
+resp.results["request_0"]    # 已释放（访问会触发警告）
+
+# 自定义 keep：迭代后同时保留 vectors 和 results
+resp = client.embeddings.batch(
+    input=["文本1", "文本2"],
+    keep={"vectors", "results"}
+)
+for _ in resp:
+    pass
+resp.vectors["request_0"]    # 可访问 ✓
+resp.results["request_0"]    # 可访问 ✓
 ```
 
 ## 5. 使用示例
@@ -447,10 +500,14 @@ python test_embedding/test_minimax_embedding.py
 | 特性 | Chat Batch | Embedding Batch |
 |------|------------|-----------------|
 | 响应类 | `BatchResponse` | `EmbeddingResponse` |
-| 统计字段 | success/errors/request_counts/elapsed | 同 |
+| 统计字段 | success/fail/request_counts/elapsed/usage | 同 |
 | think/still/tools/raw | 支持 | 不需要 |
+| vectors | 不支持 | 支持 |
+| batch_info | 不支持 | 支持 (batch_size, batch_count, dimension) |
 | 流式支持 | 支持 | 不需要 |
 | 整数索引 | 支持 | 支持 |
-| 自定义 request_id | 不支持 | 支持 |
+| 自定义 request_id | 支持 | 支持 |
+| 默认 keep (迭代后保留) | 全部保留 | 仅保留 vectors |
+| `for` 循环实时迭代 | ✅ request by request | ✅ request by request |
 | 配置方式 | 独立 yml | 合并到 chat yml |
 | 厂商特有参数 | 通过 transform | 通过 adapter + default |
