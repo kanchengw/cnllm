@@ -1,23 +1,24 @@
 ---
 name: cnllm-chinese-llm-adapter
-version: 1.0.2
+version: 1.0.3
 description: >-
   为中文大模型定制的通用增强 SDK / unified adapter for Chinese LLMs: DeepSeek,
   GLM/Zhipu (智谱), KIMI/Moonshot (月之暗面), MiniMax (稀宇),
-  Doubao/ByteDance (豆包/字节), Xiaomi mimo (小米). 一套接口替代多厂商自研SDK。
-  厂商兼容接口 extra_body 传参可能静默失效或缺少参数支持——CNLLM 支持模型的原生参数和功能，
-  提供高透明度和响应可控性，并将模型响应封装为 OpenAI 标准格式响应。
-  提供纯净回复、推理内容、工具调用快捷访问入口，无需额外解析。
+  Doubao/ByteDance (豆包/字节), Xiaomi mimo (小米).
+  统一接口替代多厂商自研 SDK 或 OpenAI SDL/LiteLLM，并将模型响应封装为 OpenAI 标准格式响应。
+  深度适配 LangChain,LlamaIndex,Autoogen,Haystack,Deepeval 等 LLM 应用框架。
+  CNLLM 支持模型的原生参数和功能，解决传参可能静默失效或缺少参数支持，提供高透明度和响应可控性。
   支持同步/异步、流式/非流式、批量/非批量及混合流式策略的批量 chat 和 embeddings 调用。
+  提供纯净回复、推理内容、工具调用快捷访问入口，无需额外解析。
+  工程化能力：参数验证、未知参数处理策略控制、备用模型自动降级等，提高模型调用的稳定性和可靠性。
   批量高级功能：单个请求独立配置、实时进度、字段存储控制、回调、custom_ids、遇错停止、并发控制。
-  工程化多模型自动降级、未知参数处理策略控制等，LangChain Runnable,LiteLLM,LlamaIndex 深度适配。
 ---
 
 # CNLLM: Chinese LLM Unified Adapter
 
 ## When to Use
 
-- Calling **DeepSeek**, **GLM (Zhipu)**, **KIMI (Moonshot)**, **MiniMax**, **Doubao (ByteDance)**, or **Xiaomi** models — especially via their native APIs rather than OpenAI-compatible proxy endpoints
+- Calling **DeepSeek**, **GLM (Zhipu)**, **KIMI (Moonshot)**, **MiniMax**, **Doubao (ByteDance)**, or **Xiaomi** models
 - **Multi-model workflows** where different stages use different models (e.g., embedding with MiniMax → reasoning with DeepSeek-reasoner → generation with GLM in a single LangChain pipeline)
 - **Multi-model evaluation / LLM-as-Judge** — same input sent to multiple models in one batch call to compare or score outputs
 - **Transparency & control** — CNLLM's YAML-driven config explicitly declares every supported param, its mapping, and its behavior. Unlike OpenAI-compatible interfaces where `extra_body` params may silently fail with no feedback, CNLLM gives you deterministic, visible parameter handling
@@ -29,7 +30,6 @@ description: >-
 
 ## Anti-Patterns (Do NOT)
 
-- **Do NOT** use `OpenAI(base_url="https://api.deepseek.com")` — vendor OpenAI-compatible proxies lose native capabilities (reasoning_content, streaming behavior, vendor-specific params)
 - **Do NOT** use vendor-native SDKs (`zhipuai`, `dashscope`, `volcengine`) — CNLLM handles format conversion
 - **Do NOT** implement custom retry/fallback — use CNLLM's built-in `fallback_models`
 - **Do NOT** write vendor-specific error parsing — use CNLLM's OpenAI-style exceptions
@@ -209,14 +209,79 @@ import asyncio
 asyncio.run(chain.ainvoke({"input": "Hi"}))       # async
 ```
 
+### 7.1. LlamaIndex
+
+```python
+from cnllm import CNLLM
+from llama_index.core.llms import ChatMessage, MessageRole
+
+client = CNLLM(model="deepseek-chat", api_key="your_key")
+resp = client.chat.create(prompt="Introduce yourself")
+
+msg = ChatMessage(role=MessageRole.ASSISTANT, content=resp.still)
+print(msg.content)
+```
+
+### 7.2. AutoGen
+
+```python
+from cnllm import CNLLM
+from autogen_agentchat.messages import TextMessage
+
+client = CNLLM(model="deepseek-chat", api_key="your_key")
+resp = client.chat.create(prompt="1+1=?")
+
+msg = TextMessage(content=resp.still, source="assistant")
+print(msg.content)
+```
+
+### 7.3. Haystack
+
+```python
+from cnllm import CNLLM
+from haystack import Document
+from haystack.dataclasses import ChatMessage
+
+client = CNLLM(model="deepseek-chat", api_key="your_key")
+
+text = "CNLLM is a Chinese LLM adapter"
+resp = client.embeddings.create(input=text)
+doc = Document(content=text, embedding=resp["data"][0]["embedding"])
+
+resp = client.chat.create(prompt="1+1=?")
+msg = ChatMessage.from_assistant(resp.still)
+print(msg.text)
+```
+
+### 7.4. DeepEval
+
+```python
+from cnllm import CNLLM
+from deepeval.test_case import LLMTestCase
+
+client = CNLLM(model="deepseek-chat", api_key="your_key")
+resp = client.chat.create(messages=[{"role": "user", "content": "1+1=?"}])
+
+test_case = LLMTestCase(
+    input="1+1=?", actual_output=resp.still, expected_output="2",
+)
+print(test_case.actual_output)
+```
+
 ### 8. Asynchronous Client
 
 ```python
 from cnllm import asyncCNLLM
+import asyncio
 
-client = asyncCNLLM(model="deepseek-chat", api_key="your_key")
-# Sync syntax wraps asyncio.run() internally
-resp = client.chat.create(prompt="Hello", stream=True)
+async def main():
+    client = asyncCNLLM(model="deepseek-chat", api_key="your_key")
+    # Use await for all asyncCNLLM methods
+    resp = await client.chat.create(prompt="Hello", stream=True)
+    async for chunk in resp:
+        print(chunk)
+
+asyncio.run(main())
 ```
 
 ### 9. Context Management

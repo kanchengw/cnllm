@@ -50,28 +50,31 @@ client.close()
 # 2. Async single streaming — repr after iteration
 # ================================================================
 print("\n=== 2. Async single streaming ===")
-aclient = asyncCNLLM(model=MODEL, api_key=API_KEY)
 
-resp = aclient.chat.create(
-    messages=[{"role": "user", "content": "用一句话介绍自己"}],
-    stream=True
-)
-for _ in resp:
-    pass
+async def _run_test2():
+    aclient = asyncCNLLM(model=MODEL, api_key=API_KEY)
+    resp = await aclient.chat.create(
+        messages=[{"role": "user", "content": "用一句话介绍自己"}],
+        stream=True
+    )
+    async for _ in resp:
+        pass
 
-r = eval(repr(resp))
-m = r["choices"][0]["delta"]
-print("  id:", r.get("id"))
-print("  object:", r.get("object"))
-print("  created:", r.get("created"))
-print("  model:", r.get("model"))
-print("  finish_reason:", r["choices"][0]["finish_reason"])
-print("  usage:", r.get("usage"))
-print("  still content:", repr(m.get("content", "")[:100]))
-print("  resp.still:", repr(resp.still[:100]) if resp.still else "NONE")
-if resp.think:
-    print("  think match:", m.get("reasoning_content", "") == resp.think)
-    print("  think content:", repr(m.get("reasoning_content", "")[:100]))
+    r = eval(repr(resp))
+    m = r["choices"][0]["delta"]
+    print("  id:", r.get("id"))
+    print("  object:", r.get("object"))
+    print("  created:", r.get("created"))
+    print("  model:", r.get("model"))
+    print("  finish_reason:", r["choices"][0]["finish_reason"])
+    print("  usage:", r.get("usage"))
+    print("  still content:", repr(m.get("content", "")[:100]))
+    print("  resp.still:", repr(resp.still[:100]) if resp.still else "NONE")
+    if resp.think:
+        print("  think match:", m.get("reasoning_content", "") == resp.think)
+        print("  think content:", repr(m.get("reasoning_content", "")[:100]))
+
+asyncio.run(_run_test2())
 
 # ================================================================
 # 3. Sync mixed streaming batch — results field types

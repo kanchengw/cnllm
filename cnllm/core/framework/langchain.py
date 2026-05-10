@@ -36,6 +36,10 @@ class LangChainRunnable(Runnable):
             raise TypeError(f"Unsupported list element type: {type(input[0]).__name__}")
         if isinstance(input, BaseMessage):
             return [{"role": self._map_role(input.type), "content": input.content}]
+        if isinstance(input, str):
+            return [{"role": "user", "content": input}]
+        if hasattr(input, 'messages'):
+            return [{"role": self._map_role(m.type), "content": m.content} for m in input.messages]
         raise TypeError(f"Unsupported input type: {type(input).__name__}. "
                         "When using with ChatPromptTemplate, input should be a dict matching template variables.")
 

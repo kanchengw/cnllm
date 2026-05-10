@@ -12,13 +12,13 @@
 
 Chinese LLMs have reached the top tier in capabilities, yet in real production environments they face a lack of infrastructure. An unavoidable **dilemma** is:
 
-When using OpenAI SDK with vendor-provided compatible interfaces, **unsupported native parameters are silently ignored**, leading to **uncontrollable results and missing features**; using vendor proprietary SDKs requires **extra field parsing and structure transformation**. When workflows involve multiple models from different vendors, different code adaptations are needed for each model, resulting in **increased engineering workload and maintenance costs**.
+When using OpenAI SDK/LiteLLM with vendor-provided compatible interfaces, **unsupported native parameters are silently ignored**, leading to **uncontrollable results and missing features**; using vendor proprietary SDKs requires **extra field parsing and structure transformation**. When workflows involve multiple models from different vendors, different code adaptations are needed for each model, resulting in **increased engineering workload and maintenance costs**.
 
 CNLLM provides a **unified OpenAI-compatible interface layer** and a set of **standardized parameter rules and response format specifications**. CNLLM achieves **bidirectional mapping** of requests and responses through standardized YAML configuration files tailored for each vendor, mapping CNLLM standard parameters to vendor-accepted parameter names, passing through other native parameters, and finally automatically encapsulating heterogeneous model responses into OpenAI standard responses.
 
 This implementation path uniformly defines CNLLM standard parameters, aligns with OpenAI standard response structures, preserves the complete capabilities of Chinese LLMs, and ensures scalability for integrating more vendors. Compared to OpenAI SDK and vendor proprietary SDKs, CNLLM also implements **systematic enhancements** for key field parsing, frontend streaming rendering, and engineering batch processing scenarios.
 
-Through CNLLM, developers can seamlessly use Chinese LLMs in the OpenAI ecosystem — LangChain, LlamaIndex, LiteLLM, and other mainstream ML application frameworks. Especially in development and application scenarios requiring multi-model collaboration, using CNLLM can **significantly reduce adaptation, parsing, feature implementation, and maintenance workload, and effectively lower token consumption in AI agent development**.
+Through CNLLM, developers can seamlessly use Chinese LLMs in the OpenAI ecosystem — LangChain, LlamaIndex, AutoGen, Haystack, DeepEval and other mainstream large language model application frameworks. Especially in development and application scenarios requiring multi-model collaboration, using CNLLM can **significantly reduce adaptation, parsing, feature implementation, and maintenance workload, and effectively lower token consumption in AI agent development**.
 
 - **Unified Interface** - One set of interfaces and parameters to call different Chinese LLMs, returns OpenAI API standard format
 - **Complete Model Capabilities** - Calls Chinese LLMs' native interfaces (or backward-compatible interfaces), supports all model native parameters, preserving complete model capabilities
@@ -49,6 +49,15 @@ Project Documentation:
 ***
 
 ## Changelog
+
+### v0.9.2 (2026-05-10)
+
+- 🔧 **Framework Test Cases**
+  - Added `tests/framework` directory, containing test cases for CNLLM integration with langchain, llamaindex, autogen, haystack, deepeval frameworks in production scenarios
+- 🔧 **Refactoring**
+  - Removed `StreamChunks`, merged into `StreamAccumulator`
+  - Removed seamless async support (`_SyncProxy` and 5 other classes), now async clients must use async syntax
+  - `StreamAccumulator._accumulate()` caching, `from_chunks()` class method etc.
 
 ### v0.9.1 (2026-05-09)
 
@@ -151,15 +160,19 @@ resp = client.chat.create(...)
 
 #### 1.2.2 Async Client
 
-**Seamless Async**:
-The async client wraps `asyncio.run()`, supporting **sync syntax for async calls**, and also supporting users actively wrapping `asyncio.run()` and using async syntax to manage the event loop.
+Async clients need to be called via `await`, and streaming responses are iterated via `async for`:
 
 ```python
 from cnllm import asyncCNLLM
+import asyncio
 
-client = asyncCNLLM(
-    model="minimax-m2.7", api_key="your_api_key")
-resp = client.chat.create(...)
+async def main():
+    client = asyncCNLLM(
+        model="minimax-m2.7", api_key="your_api_key")
+    resp = await client.chat.create(...)
+    print(resp)
+
+asyncio.run(main())
 ```
 
 ### 1.3 Context Management
@@ -863,6 +876,76 @@ async def main():
             print(r.content)
 
 asyncio.run(main())
+```
+
+### 6.2. LlamaIndex — Response Consumption
+
+CNLLM responses can be used to construct LlamaIndex `ChatMessage`:
+
+```python
+from cnllm import CNLLM
+from llama_index.core.llms import ChatMessage, MessageRole
+
+client = CNLLM(model="deepseek-chat", api_key="your_key")
+resp = client.chat.create(prompt="Introduce yourself in one sentence")
+
+msg = ChatMessage(role=MessageRole.ASSISTANT, content=resp.still)
+print(msg.content)
+```
+
+### 6.3. AutoGen — LLM Backend
+
+CNLLM integrates with AutoGen via OpenAI-compatible responses:
+
+```python
+from cnllm import CNLLM
+from autogen_agentchat.messages import TextMessage
+
+client = CNLLM(model="deepseek-chat", api_key="your_key")
+resp = client.chat.create(prompt="1+1=?")
+
+msg = TextMessage(content=resp.still, source="assistant")
+print(msg.content)
+```
+
+### 6.4. Haystack — Document & ChatMessage
+
+CNLLM embeddings feed into Haystack Document, chat output constructs ChatMessage:
+
+```python
+from cnllm import CNLLM
+from haystack import Document
+from haystack.dataclasses import ChatMessage
+
+client = CNLLM(model="deepseek-chat", api_key="your_key")
+
+# embedding → Document
+text = "CNLLM is a Chinese LLM adapter"
+resp = client.embeddings.create(input=text)
+doc = Document(content=text, embedding=resp["data"][0]["embedding"])
+print(f"Vector dimension: {len(doc.embedding)}")
+
+# chat → ChatMessage
+resp = client.chat.create(prompt="1+1=?")
+msg = ChatMessage.from_assistant(resp.still)
+print(msg.text)
+```
+
+### 6.5. DeepEval — Evaluation Test Cases
+
+CNLLM output feeds into DeepEval evaluation:
+
+```python
+from cnllm import CNLLM
+from deepeval.test_case import LLMTestCase
+
+client = CNLLM(model="deepseek-chat", api_key="your_key")
+resp = client.chat.create(messages=[{"role": "user", "content": "1+1=?"}])
+
+test_case = LLMTestCase(
+    input="1+1=?", actual_output=resp.still, expected_output="2",
+)
+print(test_case.actual_output)
 ```
 
 ### License
