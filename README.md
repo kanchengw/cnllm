@@ -12,13 +12,13 @@
 
 中文大模型的能力已跻身第一梯队，但在实际的生产环境中却缺面临基础设施的匮乏。一个无法忽视的、**两难的痛点**在于：
 
-通过 OpenAI SDK 来使用厂商提供的兼容接口时，**不支持的原生参数被静默忽略**，导致**结果不可控以及功能缺失**；而使用厂商自研 SDK 则需要进行**额外的字段解析、结构转换**，当工作流涉及使用不同厂商的多个模型，更要为不同模型做不同的代码适配，导致**工程量和维护成本上升**。
+通过 OpenAI SDK/LiteLLM 来使用厂商提供的兼容接口时，**不支持的原生参数被静默忽略**，导致**结果不可控以及功能缺失**；而使用厂商自研 SDK 则需要进行**额外的字段解析、结构转换**，当工作流涉及使用不同厂商的多个模型，更要为不同模型做不同的代码适配，导致**工程量和维护成本上升**。
 
 CNLLM 提供了一个**统一的 OpenAI 兼容接口层**与一套**标准化的参数规则和响应格式规范**。CNLLM 通过为各厂商量身定制的标准化 YAML 配置文件，实现请求和响应的**双端映射**，将 CNLLM 标准参数映射为厂商接受的参数名，并透传其他原生参数，最终再将异构的模型响应自动封装为 OpenAI 标准响应。
 
 此实现路径统一定义了 CNLLM 标准参数，对齐了 OpenAI 标准响应结构，又保留了中文大模型的完整能力，并且保证了接入更多厂商的可扩展性。相较于 OpenAI SDK 和厂商自研 SDK，CNLLM 还实现了对于**关键字段的解析、前端流式渲染、工程化批量处理**等场景的系统性增强。
 
-通过 CNLLM，开发者可以无障碍地在 OpenAI 生态内的 langchain、LlamaIndex、LiteLLM 等主流机器学习应用框架中使用中文大模型；尤其在需要多模型协作的开发和应用场景中，使用 CNLLM 可显著**减少适配解析、功能实现及维护工程量，并有效降低 AI agent 开发中的 Token 消耗**。
+通过 CNLLM，开发者可以无障碍地在 OpenAI 生态内的 langchain、LlamaIndex、AutoGen、Haystack、DeepEval 等主流大模型应用框架中使用中文大模型；尤其在需要多模型协作的开发和应用场景中，使用 CNLLM 可**显著减少适配解析、功能实现及维护工程量，并有效降低 AI agent 开发中的 Token 消耗**。
 
 - **统一接口** - 一套接口和参数调用不同中文大模型，返回 OpenAI API 标准格式
 - **完整模型能力** - 底层调用中文大模型原生接口（或向下兼容接口），支持所有模型原生参数，保留模型的完整能力
@@ -49,6 +49,15 @@ CNLLM 提供了一个**统一的 OpenAI 兼容接口层**与一套**标准化的
 ***
 
 ## 更新日志
+
+### v0.9.2 (2026-05-10)
+
+- 🔧 **框架用例测试**
+  - 新增 `tests/framework` 目录，含生产场景中 CNLLM 与 langchain、llamaindex、autogen、haystack、deepeval 框架协作的用例测试
+- 🔧 **修改**
+  - 移除 `StreamChunks`，合并为 `StreamAccumulator`
+  - 移除无感异步支持（`_SyncProxy` 等 5 个类），现在异步客户端必须使用异步语法
+  - `StreamAccumulator._accumulate()` 缓存、`from_chunks()` 类方法等
 
 ### v0.9.1 (2026-05-09)
 
@@ -151,15 +160,19 @@ resp = client.chat.create(...)
 
 #### 1.2.2 异步客户端
 
-**无感异步调用**：
-异步客户端封装了`asyncio.run()`，支持使用**同步语法实现异步调用**，也支持用户主动包裹`asyncio.run()`并使用异步语法来管理事件循环。
+异步客户端需要通过 `await` 调用，流式响应通过 `async for` 迭代：
 
 ```python
 from cnllm import asyncCNLLM
+import asyncio
 
-client = asyncCNLLM(
-    model="minimax-m2.7", api_key="your_api_key")
-resp = client.chat.create(...)
+async def main():
+    client = asyncCNLLM(
+        model="minimax-m2.7", api_key="your_api_key")
+    resp = await client.chat.create(...)
+    print(resp)
+
+asyncio.run(main())
 ```
 
 ### 1.3 上下文管理
@@ -384,7 +397,7 @@ print(resp)
 # BatchResponse(status={...}, usage={...})
 
 print(resp.results)
-# 批量任务中若包含流式请求，该请求的索引下会展示当前收到的 chunks 合并和关键字段的累积结果，不改变迭代器类型：
+# resp.results[流式请求id] 下会展示当前收到的 chunks 合并和关键字段的累积结果，不改变迭代器类型：
 # {"request_0": {"choices": [{"delta": {"content": "流式回复"}}]}, "request_1": {"choices": [{"message": {"content": "非流式回复"}}]}}
 ```
 
@@ -869,6 +882,76 @@ async def main():
             print(r.content)
 
 asyncio.run(main())
+```
+
+### 6.2. LlamaIndex — 响应消费
+
+CNLLM 的响应可直接构造 LlamaIndex 的 ChatMessage：
+
+```python
+from cnllm import CNLLM
+from llama_index.core.llms import ChatMessage, MessageRole
+
+client = CNLLM(model="deepseek-chat", api_key="your_key")
+resp = client.chat.create(prompt="用一句话介绍自己")
+
+msg = ChatMessage(role=MessageRole.ASSISTANT, content=resp.still)
+print(msg.content)
+```
+
+### 6.3. AutoGen — LLM 后端
+
+CNLLM 通过 OpenAI 兼容接口与 AutoGen 配合：
+
+```python
+from cnllm import CNLLM
+from autogen_agentchat.messages import TextMessage
+
+client = CNLLM(model="deepseek-chat", api_key="your_key")
+resp = client.chat.create(prompt="1+1=?")
+
+msg = TextMessage(content=resp.still, source="assistant")
+print(msg.content)
+```
+
+### 6.4. Haystack — Document 与 ChatMessage
+
+CNLLM 的 embedding 注入 Haystack Document，chat 输出构造 ChatMessage：
+
+```python
+from cnllm import CNLLM
+from haystack import Document
+from haystack.dataclasses import ChatMessage
+
+client = CNLLM(model="deepseek-chat", api_key="your_key")
+
+# embedding → Document
+text = "CNLLM 是一个中文大模型适配器"
+resp = client.embeddings.create(input=text)
+doc = Document(content=text, embedding=resp["data"][0]["embedding"])
+print(f"向量维度: {len(doc.embedding)}")
+
+# chat → ChatMessage
+resp = client.chat.create(prompt="1+1=?")
+msg = ChatMessage.from_assistant(resp.still)
+print(msg.text)
+```
+
+### 6.5. DeepEval — 评估测试用例
+
+CNLLM 的输出用于 DeepEval 评估：
+
+```python
+from cnllm import CNLLM
+from deepeval.test_case import LLMTestCase
+
+client = CNLLM(model="deepseek-chat", api_key="your_key")
+resp = client.chat.create(messages=[{"role": "user", "content": "1+1=?"}])
+
+test_case = LLMTestCase(
+    input="1+1=?", actual_output=resp.still, expected_output="2",
+)
+print(test_case.actual_output)
 ```
 
 ### 许可证

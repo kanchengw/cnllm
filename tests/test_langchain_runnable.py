@@ -151,16 +151,27 @@ class TestLangChainRunnable:
         assert results[0].content == "AR1"
         assert results[1].content == "AR2"
 
-    # ── 非标准输入应报错 ──
+    # ── 字符串自动转换 ──
 
-    def test_invoke_str_raises(self):
+    def test_invoke_str(self):
         mock_client, _ = self.setup_mocks()
+        mock_client.chat.create.return_value = {
+            "choices": [{"message": {"content": "Hello"}}]
+        }
         runnable = LangChainRunnable(mock_client)
-        with pytest.raises(TypeError):
-            runnable.invoke("Hi")
+        result = runnable.invoke("Hi")
+        assert result.content == "Hello"
 
-    def test_batch_str_list_raises(self):
+    def test_batch_str_list(self):
         mock_client, _ = self.setup_mocks()
+        mock_batch_result = MagicMock()
+        mock_batch_result.results = [
+            {"choices": [{"message": {"content": "R1"}}]},
+            {"choices": [{"message": {"content": "R2"}}]},
+        ]
+        mock_client.chat.batch.return_value = mock_batch_result
         runnable = LangChainRunnable(mock_client)
-        with pytest.raises(TypeError):
-            runnable.batch(["A", "B"])
+        results = runnable.batch(["A", "B"])
+        assert len(results) == 2
+        assert results[0].content == "R1"
+        assert results[1].content == "R2"
