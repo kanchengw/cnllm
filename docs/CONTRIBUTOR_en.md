@@ -1,132 +1,60 @@
 # Vendor Adapter Development Guide
 
-CNLLM's text processing framework is now complete. For detailed system architecture, see [System Architecture](ARCHITECTURE_en.md).
-This document outlines the standard process for developing new vendor adapters based on experience from MiniMax and Xiaomi mimo adapter development.
+This document outlines the complete process for developing a new vendor adapter for CNLLM, based on experience from adapting DeepSeek, GLM, KIMI, MiniMax, Doubao, and Xiaomi.
 
-## Development Flow Overview
+---
 
-```mermaid
-flowchart TD
-    Stage1["Stage 1: Preparation"] --> Stage2["Stage 2: Vendor YAML Configuration"]
-    Stage2 --> Stage3["Stage 3: Vendor Adapter Development"]
-    Stage3 --> Stage4["Stage 4: Testing & Validation"]
+## Architecture Overview
 
-    Stage1 --> A1["1.1 Confirm API Format<br/>1.2 Analyze Request/Response Differences<br/>1.3 Create Configuration Files"]
-    Stage2 --> A2["2.1 Create configs/<vendor>/<br/>2.2 Write request_<vendor>.yaml<br/>2.3 Write response_<vendor>.yaml"]
-    Stage3 --> A3["3.1 Create vendor/<vendor>.py<br/>3.2 Inherit BaseAdapter + Responder + VendorError<br/>3.3 Implement Vendor-Specific Logic"]
-    Stage4 --> A4["Unit Tests / Integration Tests / Scripts Validation"]
+```
+User Call Layer (CNLLM.chat.create / embeddings.create)
+     │
+     ▼
+Parameter System (param_registry.py)
+  - PARAM_REGISTRY: Global parameter definitions (scope/type/default)
+  - validate_for_scope: Validates parameters by capability domain + vendor YAML
+     │
+     ▼
+Adapter Layer (vendor/<vendor>.py)
+  - BaseAdapter / BaseEmbeddingAdapter
+  - _build_payload: Reads YAML → Builds API request body
+  - _get_request_url: Assembles API address
+     │
+     ▼
+HTTP Layer (http.py)
+  - BaseHttpClient: httpx sync/async requests
+     │
+     ▼
+Response Layer (responder.py)
+  - Responder: Reads response_<vendor>.yaml → Maps to OpenAI standard format
+  - StreamAccumulator: Streaming chunks accumulation
+     │
+     ▼
+Response Packaging
+  - resp.still / resp.think / resp.tools / resp.raw
 ```
 
-***
+---
 
-## Stage 1: Preparation
+## File Checklist
 
-### 1.1 Architecture Overview
+Adding a new vendor requires the following files:
 
-```mermaid
-flowchart LR
-    subgraph UserLayer
-        A[chat.create Call] & C[Vendor API Endpoint] & E[OpenAI Standard Structure]
-    end
+| File | Purpose | Required |
+|------|---------|----------|
+| `configs/<vendor>/request_<vendor>.yaml` | Request parameter mapping, model list, error codes | ✅ |
+| `configs/<vendor>/response_<vendor>.yaml` | Response field path mapping | ✅ |
+| `cnllm/core/vendor/<vendor>.py` | Adapter + Responder + VendorError | ✅ |
+| `cnllm/core/vendor/__init__.py` | Register to vendor list | ✅ |
+| `tests/key_needed/test_<vendor>_e2e.py` | End-to-end test | Recommended |
 
-    subgraph RequestMapping
-        F[CNLLM Request Fields → Vendor Request Fields] & B[Adapter]
-    end
+---
 
-    B --> C
+## Stage 1: YAML Request Configuration
 
-    subgraph ResponseMapping
-        H[Vendor Response Fields → OpenAI Standard Fields] & G[Responder]
-    end
+`configs/<vendor>/request_<vendor>.yaml` defines request format, parameter mapping, model name mapping, and error codes.
 
-    A --> B
-    C --> G
-    G --> E
-```
-
-### 1.2 Confirm Field Differences
-
-#### Request Field Differences (MiniMax as example)
-
-**CNLLM standard request fields** are based on **OpenAI standard parameters**, with additional fields like `thinking` that are common among Chinese vendors.
-This design allows users to follow one field standard when switching between different models.
-
-**Non-OpenAI standard request fields**
-
-Fields like `thinking` deep thinking mode are not OpenAI standard fields, but have been unified as **CNLLM standard request fields**.
-In CNLLM standard request fields, Xiaomi mimo's `thinking": {"type": "enabled"}` and `"thinking": {"type": "disabled"}` are unified to `thinking=true` or `thinking=false` for better user experience.
-
-When CNLLM request fields differ from vendor fields, map them in **vendor YAML configuration files**:
-
-**Request Headers**
-
-| CNLLM Standard Request Fields | Vendor Request Fields |
-| :------------: | :-------------: |
-| `api_key` | `Authorization` |
-
-**Request Body Fields**
-
-| CNLLM Standard Fields | Vendor Fields |
-| :-----------------: | :---------------------: |
-| `model` | `model` |
-| `messages` | `messages` |
-| `temperature` | `temperature` |
-| `top_p` | `top_p` |
-| `stream` | `stream` |
-| `stop` | `stop` |
-| `presence_penalty` | `presence_penalty` |
-| `frequency_penalty` | `frequency_penalty` |
-| `user` | `user` |
-| `tools` | `tools` |
-| `tool_choice` | `tool_choice` |
-| `max_completion_tokens` | `max_completion_tokens` |
-| `thinking` | `thinking` |
-| - | `mask` |
-| - | `top_k` |
-
-### 1.3 Response Field Differences
-
-CNLLM standard **response fields** unify vendor response fields to **OpenAI standard response format**.
-
-When vendor response fields differ from OpenAI standard fields, map them in **vendor configuration files**:
-
-| CNLLM Standard Response Fields | Vendor Response Fields |
-| :-------------------: | :--------------------------------------------: |
-| `id` | `id` |
-| `created` | `created` |
-| `model` | `model` |
-| `content` | `choices[0].message.content` |
-| `tool_calls` | `choices[0].message.tool_calls` |
-| `prompt_tokens` | `usage.prompt_tokens` |
-| `completion_tokens` | `usage.completion_tokens` |
-| `total_tokens` | `usage.total_tokens` |
-| `reasoning_tokens` | `usage.completion_tokens_details.reasoning_tokens` |
-| `system_fingerprint` | - |
-| `choices[0].logprobs` | - |
-| - | `choices[0].message.reasoning_content` |
-
-***
-
-## Stage 2: Vendor YAML Configuration
-
-### 2.1 YAML Logic Implementation
-
-| Step | Purpose | Access Point | Scope | Judgment | New Parameters |
-| --- | --- | --- | --- | --- | --- |
-| 1 | Required param validation | `validate_required_params` | required_fields | adapter | - |
-| 2 | Supported param validation | `filter_supported_params` | required_fields + optional_fields | - | - |
-| 3 | Mutually exclusive param validation | `validate_one_of` | one_of | - | - |
-| 4 | Get default values | `get_default_value` | Hardcoded: timeout, max_retries, retry_delay | - | timeout, max_retries, retry_delay |
-| 5 | Validate base_url + get full path | `validate_base_url` + `get_api_path` | base_url | - | New: base_url + api_path |
-| 6 | Request header mapping | `get_header_mappings` | required_fields + optional_fields + one_of | skip: true | - |
-| 7 | Build request body | `_build_payload` | required_fields + optional_fields + one_of | Field mapping: no skip | - |
-| 8 | Model name mapping | `get_vendor_model` | model_mapping | - | - |
-
-**Scope Definition**:
-- `adapter`: Adapter-level identifier like `chat` or `embedding`
-- `chat`/`embedding`: Configuration sub-levels (e.g., `base_url` has `chat:` or `embedding:` sub-levels)
-
-### 2.2 Request Configuration configs/request_{vendor}.yaml
+### Basic Structure
 
 ```yaml
 request:
@@ -134,194 +62,389 @@ request:
   headers:
     Content-Type: "application/json"
     Authorization: "Bearer ${api_key}"
+
+required_fields:
+  api_key:
+    skip: true        # Not in request body, used as HTTP Header
+  model: ~            # ~ means pass through directly
+  input:              # Only needed for embedding
+    scope: embed
+
+one_of:
+  messages_or_prompt:
+    messages: ~
+    prompt: ~
+
+optional_fields:
+  base_url:
+    skip: true
+    chat:
+      default: "https://api.example.com/v1"
+      path: "chat/completions"
+    embedding:
+      default: "https://api.example.com/v1"
+      path: "embeddings"
+  timeout:
+    skip: true
+    default: 60.0
+  temperature: ~
+  top_p: ~
+  max_tokens: ~
+  stream: ~
+  stop: ~
+  tools: ~
+  tool_choice: ~
+  thinking:
+    map: "thinking.type"          # Field name mapping
+    transform:                    # Value transformation
+      true: "enabled"
+      false: "disabled"
+  user:
+    map: "user_id"                # Different field name mapping
+
+model_mapping:
+  chat:
+    deepseek-chat: "deepseek-chat"
+    deepseek-reasoner: "deepseek-reasoner"
+  embedding:                      # embedding models (optional)
+    your-embed-model: "your-embed-model"
+
+error_check:
+  code_path: "error.code"
+  success_code: null
+  message_path: "error.message"
+  error_codes:
+    InvalidParameter:
+      type: "invalid_request_error"
+      suggestion: "Request contains invalid parameters"
+    RateLimitExceeded:
+      type: "rate_limit_error"
+      suggestion: "Request rate exceeded, please retry later"
 ```
 
-### 2.3 Response Configuration configs/response_{vendor}.yaml
+### Field Configuration Options
+
+| Config | Meaning | Example |
+|--------|---------|---------|
+| `~` (null) | Parameter name unchanged, pass through directly | `temperature: ~` |
+| `scope: embed` | Only effective for embedding calls | `input: { scope: embed }` |
+| `skip: true` | Skip request body (for Header mapping, client parameters) | `api_key: { skip: true }` |
+| `map: "xxx"` | Field name mapping | `thinking: { map: "thinking.type" }` |
+| `transform` | Value transformation | `true: "enabled"` |
+| `default` | Default value | `default: 60.0` |
+
+### Model Mapping
+
+Keys under `model_mapping.chat` and `model_mapping.embedding` are **model names used by CNLLM users**, and values are the model names sent to the API.
 
 ```yaml
-fields:  # Response configuration uses path mapping, different from request configuration
+model_mapping:
+  chat:
+    glm-4.6: "glm-4.6"           # Same name
+    doubao-seed-2-0-pro:          # Different name + vision flag
+      model: "doubao-seed-2-0-pro-260215"
+      vision: true
+```
+
+---
+
+## Stage 2: YAML Response Configuration
+
+`configs/<vendor>/response_<vendor>.yaml` defines vendor response → OpenAI standard format path mapping.
+
+### Non-Streaming Response
+
+```yaml
+fields:
   id: "id"
   created: "created"
   model: "model"
   content: "choices[0].message.content"
   tool_calls: "choices[0].message.tool_calls"
-  # ... other field mappings
+  reasoning_content: "choices[0].message.reasoning_content"
+  prompt_tokens: "usage.prompt_tokens"
+  completion_tokens: "usage.completion_tokens"
+  total_tokens: "usage.total_tokens"
 
-defaults:  # Default values for fields that may not exist in vendor responses
+defaults:
   object: "chat.completion"
   index: 0
   role: "assistant"
   finish_reason: "stop"
 
-stream_fields:  # Streaming response path mappings
-  object: "chat.completion.chunk"
-  index: 0
-  content_path: "choices[0].delta.content"
-  tool_calls_path: "choices[0].delta.tool_calls"
-  reasoning_content_path: "choices[0].delta.reasoning_content"
+embedding_fields:                 # embedding response (optional)
+  embedding: "data[0].embedding"
+  embedding_object: "data[0].object"
 
-error_check:  # Errors in response configuration occur after model response
-  sensitive_check:
-    input_sensitive_type_path: "input_sensitive_type"
-    output_sensitive_type_path: "output_sensitive_type"
+embedding_defaults:
+  object: "list"
+  embedding_object: "embedding"
 ```
 
-***
+### Streaming Response
+
+```yaml
+stream_fields:
+  object: "chat.completion.chunk"
+  index: 0
+  role: "assistant"
+  finish_reason: null
+  content_path:
+    path: "choices[0].delta.content"
+    accumulate: true
+  tool_calls_path:
+    path: "choices[0].delta.tool_calls"
+    accumulate: true
+  reasoning_content_path:
+    path: "choices[0].delta.reasoning_content"
+    accumulate: true
+```
+
+---
 
 ## Stage 3: Adapter Development
 
-### 3.1 Create Adapter File
-
-Vendor adapters need to inherit three base components:
+### 3.1 Chat Adapter
 
 ```python
-# Location: cnllm/core/vendor/<vendor>.py
+# cnllm/core/vendor/<vendor>.py
+import logging
+from typing import Dict, Any, Optional
 from ..adapter import BaseAdapter
 from ..responder import Responder
 from ...utils.vendor_error import VendorError, VendorErrorRegistry
 
-class <Vendor>Adapter(BaseAdapter):
-    """<Vendor> Adapter"""
+logger = logging.getLogger(__name__)
+
+
+class <Vendor>VendorError(VendorError):
     VENDOR_NAME = "<vendor>"
+
+    @classmethod
+    def from_response(cls, raw_response: dict) -> Optional["<Vendor>VendorError"]:
+        error = raw_response.get("error", {})
+        code = error.get("code")
+        if code is None:
+            return None
+        message = error.get("message", "")
+        return cls(code=code, message=message, vendor=cls.VENDOR_NAME, raw_response=raw_response)
+
+
+VendorErrorRegistry.register("<vendor>", <Vendor>VendorError)
+
 
 class <Vendor>Responder(Responder):
     CONFIG_DIR = "<vendor>"
 
-class <Vendor>VendorError(VendorError):
-    VENDOR_NAME = "<vendor>"
+
+class <Vendor>Adapter(BaseAdapter):
+    ADAPTER_NAME = "<vendor>"
+    CONFIG_DIR = "<vendor>"
+
+    def __init__(self, api_key: str, model: str, **kwargs):
+        super().__init__(api_key=api_key, model=model, **kwargs)
+        self.responder = <Vendor>Responder()
+
+    def _get_responder(self):
+        return self.responder
+
+    def _to_openai_format(self, raw: Dict[str, Any], model: str) -> Dict[str, Any]:
+        return self.responder.to_openai_format(raw, model)
+
+    def _do_to_openai_stream_format(self, raw: Dict[str, Any], model: str) -> Dict[str, Any]:
+        return self.responder.to_openai_stream_format(raw, model)
+
+
+<Vendor>Adapter._register()
 ```
 
-### 3.2 Inherit Base Components
+### 3.2 Embedding Adapter (Optional)
 
-#### BaseAdapter
-
-Vendor adapters only need to implement vendor-specific logic, common methods are already implemented in BaseAdapter:
-
-**Already implemented methods:**
-
-- `get_supported_models()` - Get list of supported models
-- `get_adapter_name_for_model()` - Get adapter name from model
-- `get_vendor_model()` - Model name mapping
-- `get_api_path()` - Get API path
-- `get_base_url()` - Get base URL
-- `get_header_mappings()` - Get request header mappings
-- `_validate_required_params()` - Validate required parameters
-- `_validate_one_of()` - Validate mutually exclusive parameters
-- `_filter_supported_params()` - Filter unsupported parameters
-- `_build_payload()` - Build request body
-- `create_completion()` - Make request
-- `_handle_stream()` - Handle streaming response
-- `_get_responder()` - Get Responder instance
-
-**Vendor-specific logic to implement:**
-
-For example, Xiaomi mimo's special request parameter `"thinking": {"type": "disabled"}` mapping logic needs extra implementation in the vendor adapter.
-
-#### Responder
-
-Vendor responders only need to implement vendor-specific logic, common methods are already implemented in Responder:
-
-**Already implemented methods:**
-
-- `to_openai_format()` - Non-streaming response conversion
-- `to_openai_stream_format()` - Streaming response conversion
-- `check_error()` - Check business errors and sensitive content
-- `_check_sensitive()` - Sensitive content detection
-- `collect_stream_result()` - Streaming result accumulation
-
-**Configuration dependency:**
-
-Responder field mapping logic is mostly declared in YAML configuration, vendors usually only need to define `CONFIG_DIR`.
+If the vendor supports embedding models, add an EmbeddingAdapter:
 
 ```python
-class XiaomiResponder(Responder):
-    CONFIG_DIR = "xiaomi"
-```
+from ..embedding import BaseEmbeddingAdapter, EmbeddingResponder
 
-#### VendorError
 
-Vendor errors only need to implement vendor-specific logic:
+class <Vendor>EmbeddingAdapter(BaseEmbeddingAdapter):
+    ADAPTER_NAME = "<vendor>"
+    CONFIG_DIR = "<vendor>"
 
-**Already implemented methods:**
-
-- `to_dict()` - Convert to dictionary
-
-**Configuration dependency:**
-
-Error parsing logic is mostly declared in YAML configuration:
-
-```python
-class MiniMaxVendorError(VendorError):
-    VENDOR_NAME = "minimax"
+    def __init__(self, api_key: str, model: str = None, base_url: str = None, **kwargs):
+        super().__init__(
+            api_key=api_key, model=model, base_url=base_url,
+            config_file=f"request_{self.CONFIG_DIR}.yaml", **kwargs
+        )
 
     @classmethod
-    def from_response(cls, raw_response: dict) -> Optional["MiniMaxVendorError"]:
-        base_resp = raw_response.get("base_resp", {})
-        code = base_resp.get("status_code")
-        if code is None:
-            return None
-        message = base_resp.get("status_msg", "")
-        return cls(code=code, message=message, vendor=cls.VENDOR_NAME, raw_response=raw_response)
+    def _load_class_config(cls):
+        if cls._class_config is not None:
+            return cls._class_config
+        import yaml, os
+        config_path = os.path.join(
+            os.path.dirname(__file__), "../../..", "configs", cls.CONFIG_DIR,
+            f"request_{cls.CONFIG_DIR}.yaml"
+        )
+        try:
+            with open(config_path) as f:
+                cls._class_config = yaml.safe_load(f) or {}
+                mapping = cls._class_config.get("model_mapping", {})
+                if isinstance(mapping, dict) and "embedding" in mapping:
+                    mapping = mapping["embedding"]
+                cls._supported_models = list(mapping.keys()) if isinstance(mapping, dict) else []
+                return cls._class_config
+        except FileNotFoundError:
+            cls._class_config = {}
+            cls._supported_models = []
+            return {}
 
-VendorErrorRegistry.register(MiniMaxVendorError.VENDOR_NAME, MiniMaxVendorError)
+    def _get_responder(self) -> EmbeddingResponder:
+        return EmbeddingResponder(self.CONFIG_DIR)
+
+
+<Vendor>EmbeddingAdapter._register()
 ```
 
-***
+### 3.3 Register to Vendor Package
 
-## Stage 4: Testing & Validation
+```python
+# cnllm/core/vendor/__init__.py
+from .<vendor> import <Vendor>Adapter, <Vendor>Responder
 
-### 4.1 Existing Test Cases
+__all__.extend(["<Vendor>Adapter", "<Vendor>Responder"])
+```
 
-**Unit tests (no API calls):**
+### 3.4 Special Logic Handling
 
-- `test_adapter_config.py` - Adapter configuration loading
-- `test_adapter_payload.py` - Request payload construction
-- `test_responder_format.py` - Response format conversion
-- `test_responder_reasoning.py` - Reasoning content tests
-- `test_stream.py` - Streaming output tests
-- `test_yaml_request.py` - Request YAML configuration
-- `test_yaml_response.py` - Response YAML configuration
-- `test_langchain_runnable.py` - LangChain Runnable integration
+If the vendor's request/response format differs from the standard, override corresponding methods in the adapter:
 
-**Integration tests (requires real API keys):**
+| Method to Override | Scenario |
+|---|---|
+| `_build_payload()` | Request body structure differs from standard |
+| `_get_request_url()` | URL assembly rules are special |
+| `create()` | Call logic differs significantly from standard flow |
+| `_to_openai_format()` | Response conversion requires custom logic |
+| `_handle_stream()` | Streaming parsing logic differs |
+| `check_error()` | Error detection logic differs |
 
-- `test_client.py` - Basic client functionality
-- `test_openai_format.py` - OpenAI format comparison
-- `test_stream_accumulator.py` - Streaming accumulator
-- `test_vendor_error.py` - Vendor error handling
-- `test_fallback_model_logic.py` - Fallback logic tests
+---
 
-### 4.2 Scripts
+## Stage 4: Parameter Registration (Optional)
 
-**`validate_model_compatible.py`** - Model compatibility validation script
+If the vendor introduces new standard parameters, declare them in `PARAM_REGISTRY` in `cnllm/core/param_registry.py`:
 
-**Features:**
+```python
+PARAM_REGISTRY = {
+    # ...
+    "your_new_param": ParamDef(
+        types=(str, int),               # Allowed types
+        scope={"chat"},                  # Capability domain: chat / embed
+        default=None,                    # Default value
+        batch_level=False,               # Whether only batch available
+    ),
+}
+```
 
-- Test potential compatible models for existing adapters
-- Test streaming output
-- Test Fallback mechanism
-- Test LangChain Runnable integration
-- Validate alignment with OpenAI standard format
+Parameters declared in `_SKIP_FIELDS` do not need to appear in YAML to be used (e.g., `api_key`, `base_url`).
 
-**Environment variables:**
+---
 
-- `API_KEY`
-- `CNLLM_SKIP_MODEL_VALIDATION=true` - Skip model mapping validation
+## Stage 5: Testing
 
-**`test_e2e_installed.py`**
+### 5.1 Unit Tests
 
-End-to-end test script simulating production use after pip install.
+Add tests in the `tests/` directory, covering:
 
-**Features:**
+- YAML config loading works correctly
+- Parameter mapping is correct
+- Payload building is correct
+- Response format conversion is correct
 
-- Import installed cnllm package instead of local modules
-- Validate package functionality after installation
-- Test basic chat, streaming, Fallback
+### 5.2 E2E Tests
 
-**Environment variables:**
+Add end-to-end tests in the `tests/key_needed/` directory:
 
-- `API_KEY`
+```python
+"""
+<Vendor> E2E Test.
+"""
+import os, sys
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+from dotenv import load_dotenv
+load_dotenv()
 
-## Final Step: Documentation Update
+API_KEY = os.getenv("<VENDOR>_API_KEY")
+MODEL = "<vendor-model>"
 
-- [ ] Update `docs/vendor/<vendor>.md` with detailed adapter implementation notes
+
+def test_chat_basic():
+    if not API_KEY:
+        print("SKIP: no API key"); return
+    from cnllm import CNLLM
+    client = CNLLM(model=MODEL, api_key=API_KEY)
+    resp = client.chat.create(prompt="1+1=?")
+    assert resp.still is not None
+    client.close()
+
+
+if __name__ == "__main__":
+    test_chat_basic()
+    print("Done.")
+```
+
+---
+
+## Stage 6: Update Documentation
+
+- Add new vendor to model list in `README.md`
+- Add new vendor to model list in `README_en.md`
+- Add new vendor to model list in `SKILL.md`
+
+---
+
+## Parameter System Principles
+
+### Relationship Between PARAM_REGISTRY and YAML
+
+```
+User parameter → validate_for_scope → Filtered parameter → Each vendor adapter
+              │
+              ├─ PARAM_REGISTRY check: type, scope
+              ├─ vendor YAML check: whether allowed in optional_fields
+              └─ drop_params strategy: strict/warn/ignore
+```
+
+- Parameter in `PARAM_REGISTRY` + scope matches → Pass through directly (skip YAML validation)
+- Parameter in `_SKIP_FIELDS` → Skip all validation
+- Parameter not in registry but in vendor YAML's `optional_fields` → Pass through (vendor-specific parameter passthrough)
+- None match → Handle by `drop_params` strategy
+
+### Type Checking
+
+| Parameter Feature | Handling |
+|----------|----------|
+| In `PARAM_REGISTRY` + scope matches | ✅ Pass through |
+| In `_SKIP_FIELDS` | ✅ Skip (not in payload) |
+| In vendor YAML `optional_fields` | ✅ Vendor-specific parameter passthrough |
+| None match | ⚠️ `drop_params` handling |
+
+---
+
+## Development Tools
+
+### edit_tool.py
+
+All `.py` code file modifications must be done through `edit_tool.py`:
+
+```python
+from edit_tool import edit_file, backup_file, backup_all
+
+edit_file("path/to/file.py", old_text, new_text, description="What changed")
+edit_file("path/to/file.py", old_text, new_text, replace_all=True)
+backup_file("path/to/file.py")
+backup_all()
+```
+
+Edit workflow: Read → Edit → Compile verification → Line count check → Backup.
+
+Backups are stored under `backups/<filename>/`, keeping the latest 10 versions for each file.

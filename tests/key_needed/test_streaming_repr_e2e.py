@@ -37,10 +37,10 @@ print("  created:", r.get("created"))
 print("  model:", r.get("model"))
 print("  finish_reason:", r["choices"][0]["finish_reason"])
 print("  usage:", r.get("usage"))
-print("  still content:", repr(m.get("content", "")[:100]))
-print("  resp.still:", repr(resp.still[:100]) if resp.still else "NONE")
+print("  still content:", repr(m.get("content", "")))
+print("  resp.still:", repr(resp.still) if resp.still else "NONE")
 if resp.think:
-    print("  think content:", repr(m.get("reasoning_content", "")[:100]))
+    print("  think content:", repr(m.get("reasoning_content", "")))
     print("  think match:", m.get("reasoning_content", "") == resp.think)
 else:
     print("  think: NONE")
@@ -68,11 +68,11 @@ async def _run_test2():
     print("  model:", r.get("model"))
     print("  finish_reason:", r["choices"][0]["finish_reason"])
     print("  usage:", r.get("usage"))
-    print("  still content:", repr(m.get("content", "")[:100]))
-    print("  resp.still:", repr(resp.still[:100]) if resp.still else "NONE")
+    print("  still content:", repr(m.get("content", "")))
+    print("  resp.still:", repr(resp.still) if resp.still else "NONE")
     if resp.think:
         print("  think match:", m.get("reasoning_content", "") == resp.think)
-        print("  think content:", repr(m.get("reasoning_content", "")[:100]))
+        print("  think content:", repr(m.get("reasoning_content", "")))
 
 asyncio.run(_run_test2())
 
@@ -101,7 +101,7 @@ for rid in req_ids:
     if isinstance(v, StreamAccumulator):
         print(f"    chunks count: {len(v._chunks)}")
         acc = v._accumulate()
-        print(f"    acc content: {repr(acc['choices'][0]['delta'].get('content','')[:80])}")
+        print(f"    acc content: {repr(acc['choices'][0]['delta'].get('content',''))}")
 
 # Check still match for each
 for rid in req_ids:
@@ -111,7 +111,7 @@ for rid in req_ids:
         acc_content = v._accumulate()["choices"][0]["delta"]["content"]
     else:
         acc_content = v["choices"][0]["message"]["content"]
-    print(f"  still[{rid}] match: {acc_content == s}, content={repr(s[:80] if s else 'NONE')}")
+    print(f"  still[{rid}] match: {acc_content == s}, content={repr(s if s else 'NONE')}")
 
 client3.close()
 
@@ -134,8 +134,8 @@ for rid in resp4.results.keys():
     m = r_acc["choices"][0]["delta"]
     match = m["content"] == resp4.still[rid]
     print(f"  {rid}: still match={match}")
-    print(f"    acc content: {repr(m['content'][:80])}")
-    print(f"    still value: {repr(resp4.still[rid][:80] if resp4.still[rid] else 'NONE')}")
+    print(f"    acc content: {repr(m['content'])}")
+    print(f"    still value: {repr(resp4.still[rid] if resp4.still[rid] else 'NONE')}")
 
 client4.close()
 

@@ -45,6 +45,7 @@ PARAM_REGISTRY: Dict[str, ParamDef] = {
     "prompt":            ParamDef(types=(str,),                   scope={"chat"}),
     "temperature":       ParamDef(types=(float, int),             scope={"chat"}),
     "max_tokens":        ParamDef(types=(int,),                   scope={"chat"}),
+    "max_completion_tokens": ParamDef(types=(int,),                scope={"chat"}),
     "top_p":             ParamDef(types=(float, int),             scope={"chat"}),
     "stop":              ParamDef(types=(str, list),              scope={"chat"}),
     "stream":            ParamDef(types=(bool,),                  scope={"chat"}),
@@ -56,7 +57,12 @@ PARAM_REGISTRY: Dict[str, ParamDef] = {
     "presence_penalty":  ParamDef(types=(float, int),             scope={"chat"}),
     "frequency_penalty": ParamDef(types=(float, int),             scope={"chat"}),
     "logit_bias":        ParamDef(types=(dict,),                  scope={"chat"}),
-    "user":              ParamDef(types=(str,),                   scope={"chat"}),
+    "seed":              ParamDef(types=(int,),                    scope={"chat"}),
+    "stream_options":    ParamDef(types=(dict,),                   scope={"chat"}),
+    "logprobs":          ParamDef(types=(bool,),                   scope={"chat"}),
+    "top_logprobs":      ParamDef(types=(int,),                    scope={"chat"}),
+    "reasoning_effort":  ParamDef(types=(str,),                    scope={"chat"}),
+    "user":              ParamDef(types=(str,),                   scope={"chat", "embed"}),
 
     # ========== Embedding 通用参数 ==========
     "input":             ParamDef(types=(str, list),              scope={"embed"}),
@@ -246,6 +252,7 @@ def validate_for_scope(
     scope: str,
     vendor_yaml: Optional[Dict[str, Any]] = None,
     drop_params: str = "warn",
+    protocol_excluded_params: Optional[Set[str]] = None,
 ) -> Dict[str, Any]:
     """统一参数验证入口。"""
     clean: Dict[str, Any] = {}
@@ -284,6 +291,10 @@ def validate_for_scope(
             # 步骤 A.5：YAML 标记为 skip 的参数即使有注册表定义也跳过
             yaml_mapping = _get_vendor_yaml_mapping(vendor_yaml, key)
             if yaml_mapping is not None and isinstance(yaml_mapping, dict) and yaml_mapping.get("skip"):
+                continue
+            # 步骤 A.6：protocol 排他性过滤 — 由 adapter 提供的被 protocol 排除的参数集合
+            if protocol_excluded_params and key in protocol_excluded_params:
+                unknown_params[key] = value
                 continue
             clean[key] = value
             continue

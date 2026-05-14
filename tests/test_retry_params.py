@@ -20,8 +20,11 @@ sys.stdout.reconfigure(encoding='utf-8')
 load_dotenv()
 
 from cnllm.entry.client import CNLLM
-from cnllm.utils.batch import BatchScheduler, StreamBatchScheduler, EmbeddingBatchScheduler, EmbeddingBatchItemResult
-from cnllm.core.embedding import BaseEmbeddingAdapter, EmbeddingsNamespace
+from cnllm.utils.scheduler.base import BatchScheduler
+from cnllm.utils.scheduler.chat import StreamBatchScheduler
+from cnllm.utils.scheduler.embedding import EmbeddingBatchScheduler, EmbeddingBatchItemResult
+from cnllm.core.embedding import BaseEmbeddingAdapter
+from cnllm.core.embedding import EmbeddingsNamespace
 
 
 class TestChatSingleParameterPassing:

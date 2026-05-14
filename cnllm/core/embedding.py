@@ -2,6 +2,7 @@ import time
 import logging
 import os
 import asyncio
+import httpx
 from typing import Dict, Any, List, Union, Optional
 
 from .accumulators.embedding_accumulator import EmbeddingResponse
@@ -133,6 +134,8 @@ class BaseEmbeddingAdapter:
 
     _class_config: Dict[str, Any] = None
     _supported_models: list = []
+    # 模型级参数白名单：{模型名 -> 支持的参数集合}，未列出 = 无限制
+    _model_params: Dict[str, set] = {}
 
     @classmethod
     def _register(cls, name: str = None, responder_class: type = None):
@@ -248,6 +251,26 @@ class BaseEmbeddingAdapter:
         if self.model:
             self._validator.validate_model(self.model)
 
+    def _filter_model_params(self, params: Dict[str, Any], model: str) -> Dict[str, Any]:
+        """从 params 中移除当前模型不支持的参数（黑名单语义），按 drop_params 策略处理"""
+        if not self._model_params or model not in self._model_params:
+            return params
+        unsupported = self._model_params[model]
+        filtered = dict(params)
+        for key in unsupported:
+            if key in filtered:
+                msg = f"参数 {key!r} 不被模型 {model!r} 支持，已忽略"
+                if self.drop_params == "strict":
+                    from ..utils.exceptions import InvalidRequestError
+                    raise InvalidRequestError(
+                        message=f"{msg}。可设置 drop_params='warn' 警告并忽略，或 drop_params='ignore' 静默忽略",
+                        provider=self.ADAPTER_NAME
+                    )
+                elif self.drop_params == "warn":
+                    logger.warning(msg)
+                del filtered[key]
+        return filtered
+
     def _get_config_value(self, *keys, default=None):
         value = self._config
         for key in keys:
@@ -270,32 +293,16 @@ class BaseEmbeddingAdapter:
         return ""
 
     def _get_request_url(self, base_url: str = None, **kwargs) -> str:
-        base = (base_url or self.base_url).rstrip("/")
+        from cnllm.entry.http import build_url
         api_path = self._validator.get_api_path().lstrip("/")
         if not api_path:
-            return base
-
-        # 规则1：已包含完整路径
-        if base.endswith(f"/{api_path}"):
-            return base
-
-        # 规则2：到版本号为止（path 首段），追加剩余部分
-        first_seg, _, rest = api_path.partition("/")
-        if rest and base.endswith(f"/{first_seg}"):
-            return f"{base}/{rest}"
-
-        # 规则5：用户 URL 是 YAML default 的前缀 → 补全
+            return (base_url or self.base_url).rstrip("/")
         yaml_default = self._get_yaml_base_url_default()
-        if yaml_default:
-            yaml_default = yaml_default.rstrip("/")
-            if yaml_default.startswith(base + "/") or yaml_default == base:
-                base = yaml_default
-
-        # 规则3/4：兜底追加完整 path
-        return f"{base}/{api_path}"
+        return build_url(base_url or self.base_url, api_path, yaml_default=yaml_default)
 
     def _build_payload(self, params: Dict[str, Any]) -> Dict[str, Any]:
         model = params.get("model") or self.model
+        params = self._filter_model_params(params, model)
         model_mapping = self._get_config_value("model_mapping", default={})
         if isinstance(model_mapping, dict) and "embedding" in model_mapping:
             model_mapping = model_mapping.get("embedding", {})
@@ -361,7 +368,6 @@ class BaseEmbeddingAdapter:
         return headers
 
     def _post(self, url: str, payload: Dict[str, Any], timeout: int = None, api_key: str = None, **kwargs) -> Dict[str, Any]:
-        import httpx
         headers = self._build_headers(api_key=api_key, **kwargs)
         actual_timeout = timeout if timeout is not None else self.timeout
         if actual_timeout is None:
@@ -667,8 +673,14 @@ class BaseEmbeddingAdapter:
 class EmbeddingsNamespace:
     def __init__(self, parent):
         self.parent = parent
+        self._batch_response = None
 
-    def _get_adapter(self, model: str = None, drop_params: str = None, api_key: str = None):
+    @property
+    def batch_result(self):
+        """最近一次 embedding batch 调用的结果对象"""
+        return self._batch_response
+
+    def _get_adapter(self, model: str = None, api_key: str = None, drop_params: str = None, **kwargs):
         if model is None:
             model = getattr(self.parent, 'model', None) or BaseEmbeddingAdapter.get_default_model()
         adapter_class = BaseEmbeddingAdapter.get_adapter_for_model(model)
@@ -712,30 +724,29 @@ class EmbeddingsNamespace:
             kwargs, "embed",
             drop_params=actual_drop_params or getattr(self.parent, 'drop_params', 'warn'),
         )
-        if model is not None:
-            adapter = self._get_adapter(model, drop_params=actual_drop_params)
-            return adapter.create(input, model=model, **clean_kwargs)
-        # 无显式 model：尝试客户端 model + fallback_models
-        from ..utils.fallback import FallbackManager
-        last_error = None
-        primary = getattr(self.parent, 'model', None)
+        primary = model or getattr(self.parent, 'model', None)
         fb_config = getattr(self.parent, 'fallback_models', {})
+        if not primary and not fb_config:
+            from ..utils.exceptions import MissingParameterError
+            raise MissingParameterError("embeddings.create() 需要 model 参数")
         if primary:
-            try:
-                adapter = self._get_adapter(primary, drop_params=actual_drop_params)
-                return adapter.create(input, model=primary, **clean_kwargs)
-            except Exception as e:
-                last_error = e
-        for fb_model, fb_key in fb_config.items():
-            try:
-                adapter = self._get_adapter(fb_model, drop_params=actual_drop_params, api_key=fb_key)
-                return adapter.create(input, model=fb_model, **clean_kwargs)
-            except Exception:
-                continue
-        if primary:
-            from ..utils.exceptions import FallbackError
-            raise FallbackError(f"embedding 所有模型失败, 最后错误: {last_error}") from last_error
-        from ..utils.exceptions import MissingParameterError
+            from ..utils.fallback import FallbackManager
+            fb_manager = FallbackManager(
+                fallback_config=fb_config,
+                primary_api_key=getattr(self.parent, 'api_key', None),
+                get_adapter_func=self._get_adapter,
+                timeout=getattr(self.parent, 'timeout', None),
+                max_retries=getattr(self.parent, 'max_retries', None),
+                retry_delay=getattr(self.parent, 'retry_delay', None),
+                base_url=getattr(self.parent, 'base_url', None),
+                drop_params=actual_drop_params or getattr(self.parent, 'drop_params', 'warn'),
+            )
+            return fb_manager.execute_embedding_fallback(
+                primary_model=primary,
+                primary_api_key=getattr(self.parent, 'api_key', None),
+                input_data=input,
+                **clean_kwargs
+            )
         raise MissingParameterError("embeddings.create() 需要 model 参数（未配置客户端 model 且调用入口未传入）")
 
     def _resolve_batch_params(self, *, max_concurrent=None, rps=None, batch_size=None, keep=None):
@@ -768,7 +779,7 @@ class EmbeddingsNamespace:
         keep: Optional[set] = None,
         **kwargs
     ) -> EmbeddingResponse:
-        from cnllm.utils.batch import EmbeddingBatchScheduler
+        from cnllm.utils.scheduler.embedding import EmbeddingBatchScheduler
         from cnllm.core.accumulators.embedding_accumulator import EmbeddingResponse as EmbResponse
 
         if input is None:
@@ -811,7 +822,35 @@ class EmbeddingsNamespace:
         if actual_keep is not None:
             response._keep = actual_keep if isinstance(actual_keep, frozenset) else frozenset(actual_keep)
 
-        adapter = self._get_adapter(model, drop_params=actual_drop_params)
+        # 批量任务整体 fallback：主模型失败时整个 batch 走 fallback 模型
+        batch_model = model or getattr(self.parent, 'model', None)
+        models_to_try = [(batch_model, actual_drop_params, None)]
+        fb_config = getattr(self.parent, 'fallback_models', {})
+        for fb_model, fb_config_entry in fb_config.items():
+            fb_api_key = fb_config_entry["api_key"]
+            models_to_try.append((fb_model, actual_drop_params, fb_api_key))
+
+        adapter = None
+        last_error = None
+        for try_model, try_drop, try_key in models_to_try:
+            if try_model is None:
+                continue
+            try:
+                adapter = self._get_adapter(try_model, drop_params=try_drop, api_key=try_key)
+                break
+            except Exception as e:
+                last_error = e
+                continue
+
+        if adapter is None:
+            if last_error:
+                if len(models_to_try) <= 1:
+                    raise last_error
+                from ..utils.exceptions import FallbackError
+                msg = "embedding batch all models failed"
+                raise FallbackError(msg) from last_error
+            raise ValueError("embeddings.batch() 需要有效的 model 参数")
+
         scheduler = EmbeddingBatchScheduler(
             adapter=adapter,
             max_concurrent=actual_max_concurrent,
@@ -824,11 +863,10 @@ class EmbeddingsNamespace:
             stop_on_error=actual_stop_on_error,
             callbacks=actual_callbacks,
         )
-        scheduler._execute_batch_response = response
-
+        self._batch_response = response
         def _bg_run():
             try:
-                scheduler.execute(input, **per_request_kwargs)
+                scheduler.execute(input, response=response, **per_request_kwargs)
             except BaseException:
                 pass
             finally:
@@ -847,7 +885,7 @@ class AsyncEmbeddingsNamespace:
     def __init__(self, parent):
         self.parent = parent
 
-    def _get_adapter(self, model: str = None, drop_params: str = None, api_key: str = None):
+    def _get_adapter(self, model: str = None, api_key: str = None, drop_params: str = None, **kwargs):
         if model is None:
             model = getattr(self.parent, 'model', None) or BaseEmbeddingAdapter.get_default_model()
         adapter_class = BaseEmbeddingAdapter.get_adapter_for_model(model)
@@ -891,28 +929,28 @@ class AsyncEmbeddingsNamespace:
             kwargs, "embed",
             drop_params=actual_drop_params or getattr(self.parent, 'drop_params', 'warn'),
         )
-        if model is not None:
-            adapter = self._get_adapter(model, drop_params=actual_drop_params)
-            return await adapter.acreate(input, model=model, **clean_kwargs)
-        from ..utils.fallback import FallbackManager
-        last_error = None
-        primary = getattr(self.parent, 'model', None)
+        primary = model or getattr(self.parent, 'model', None)
         fb_config = getattr(self.parent, 'fallback_models', {})
+        if not primary and not fb_config:
+            from ..utils.exceptions import MissingParameterError
         if primary:
-            try:
-                adapter = self._get_adapter(primary, drop_params=actual_drop_params)
-                return await adapter.acreate(input, model=primary, **clean_kwargs)
-            except Exception as e:
-                last_error = e
-        for fb_model, fb_key in fb_config.items():
-            try:
-                adapter = self._get_adapter(fb_model, drop_params=actual_drop_params, api_key=fb_key)
-                return await adapter.acreate(input, model=fb_model, **clean_kwargs)
-            except Exception:
-                continue
-        if primary:
-            from ..utils.exceptions import FallbackError
-            raise FallbackError(f"embedding 所有模型失败, 最后错误: {last_error}") from last_error
+            from ..utils.fallback import FallbackManager
+            fb_manager = FallbackManager(
+                fallback_config=fb_config,
+                primary_api_key=getattr(self.parent, 'api_key', None),
+                get_adapter_func=self._get_adapter,
+                timeout=getattr(self.parent, 'timeout', None),
+                max_retries=getattr(self.parent, 'max_retries', None),
+                retry_delay=getattr(self.parent, 'retry_delay', None),
+                base_url=getattr(self.parent, 'base_url', None),
+                drop_params=actual_drop_params or getattr(self.parent, 'drop_params', 'warn'),
+            )
+            return await fb_manager.aexecute_embedding_fallback(
+                primary_model=primary,
+                primary_api_key=getattr(self.parent, 'api_key', None),
+                input_data=input,
+                **clean_kwargs
+            )
         from ..utils.exceptions import MissingParameterError
         raise MissingParameterError("embeddings.create() 需要 model 参数")
 
@@ -946,7 +984,7 @@ class AsyncEmbeddingsNamespace:
         keep: Optional[set] = None,
         **kwargs
     ) -> EmbeddingResponse:
-        from cnllm.utils.batch import AsyncEmbeddingBatchScheduler
+        from cnllm.utils.scheduler.embedding import AsyncEmbeddingBatchScheduler
         from cnllm.core.accumulators.embedding_accumulator import EmbeddingResponse as EmbResponse
 
         if input is None:
@@ -979,6 +1017,10 @@ class AsyncEmbeddingsNamespace:
         if actual_drop_params is not None:
             per_request_kwargs["drop_params"] = actual_drop_params
 
+        actual_timeout = timeout if timeout is not None else getattr(self.parent, 'timeout', None)
+        actual_max_retries = max_retries if max_retries is not None else getattr(self.parent, 'max_retries', None)
+        actual_retry_delay = retry_delay if retry_delay is not None else getattr(self.parent, 'retry_delay', None)
+
         response = EmbResponse()
         response._request_counts["total"] = len(input)
         if actual_custom_ids:
@@ -986,7 +1028,35 @@ class AsyncEmbeddingsNamespace:
         if actual_keep is not None:
             response._keep = actual_keep if isinstance(actual_keep, frozenset) else frozenset(actual_keep)
 
-        adapter = self._get_adapter(model, drop_params=actual_drop_params)
+        # 批量任务整体 fallback：主模型失败时整个 batch 走 fallback 模型
+        model = model or getattr(self.parent, 'model', None)
+        models_to_try = [(model, actual_drop_params, None)]
+        fb_config = getattr(self.parent, 'fallback_models', {})
+        for fb_model, fb_config_entry in fb_config.items():
+            fb_api_key = fb_config_entry["api_key"]
+            models_to_try.append((fb_model, actual_drop_params, fb_api_key))
+
+        adapter = None
+        last_error = None
+        for try_model, try_drop, try_key in models_to_try:
+            if try_model is None:
+                continue
+            try:
+                adapter = self._get_adapter(try_model, drop_params=try_drop, api_key=try_key)
+                break
+            except Exception as e:
+                last_error = e
+                continue
+
+        if adapter is None:
+            if last_error:
+                if len(models_to_try) <= 1:
+                    raise last_error
+                from ..utils.exceptions import FallbackError
+                msg = "embedding batch all models failed"
+                raise FallbackError(msg) from last_error
+            raise ValueError("embeddings.batch() 需要有效的 model 参数")
+
         scheduler = AsyncEmbeddingBatchScheduler(
             adapter=adapter,
             max_concurrent=actual_max_concurrent,
@@ -999,9 +1069,16 @@ class AsyncEmbeddingsNamespace:
             stop_on_error=actual_stop_on_error,
             callbacks=actual_callbacks,
         )
-        scheduler._execute_batch_response = response
+        result = await scheduler.execute(input, response=response, **per_request_kwargs)
 
-        async for _ in scheduler.execute(input, **per_request_kwargs):
-            pass
+        response._clear_non_kept_fields()
+        response.mark_done()
+        return response
+class EmbeddingAccumulator:
+    """Embedding 响应字段累积器（单条调用用）"""
+    pass
 
-   
+
+class AsyncEmbeddingAccumulator:
+    """异步 Embedding 响应字段累积器"""
+    pass

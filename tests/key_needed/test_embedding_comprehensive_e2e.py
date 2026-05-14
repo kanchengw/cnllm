@@ -83,7 +83,7 @@ def test_2_single_create_async():
 
     async def run():
         client = make_async_client()
-        resp = client.embeddings.create(input="Async hello")
+        resp = await client.embeddings.create(input="Async hello")
         print(f"  object: {resp.get('object')}")
         assert resp.get("object") == "list"
         assert len(resp["data"]) == 1
@@ -123,7 +123,7 @@ def test_4_batch_async():
 
     async def run():
         client = make_async_client()
-        resp = client.embeddings.batch(input=["异步1", "异步2"], keep=["*"])
+        resp = await client.embeddings.batch(input=["异步1", "异步2"], keep=["*"])
         print(f"  total: {resp.status['total']}")
         print(f"  success_count: {resp.status['success_count']}")
         assert resp.status["total"] == 2
@@ -261,7 +261,7 @@ def test_10_custom_ids_async():
 
     async def run():
         client = make_async_client()
-        resp = client.embeddings.batch(
+        resp = await client.embeddings.batch(
             input=["text1", "text2"],
             custom_ids=["my_1", "my_2"],
         keep=["*"],

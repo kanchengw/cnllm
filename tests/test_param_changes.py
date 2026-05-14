@@ -62,12 +62,17 @@ _httpx_stub.InvalidURL = type("I", (Exception,), {})
 _httpx_stub.HTTPError = type("H", (Exception,), {})
 _httpx_stub.Limits = lambda **kw: None
 _httpx_stub.Response = _MockResp
+_SAVED_HTTPX = sys.modules.get("httpx")
 sys.modules["httpx"] = _httpx_stub
+import atexit
+atexit.register(lambda: sys.modules.__setitem__("httpx", _SAVED_HTTPX) if _SAVED_HTTPX else None)
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+# 此测试文件使用 mock model "test-model"，需要跳过模型校验。
+# httpx 已在 http.py 和 embedding.py 模块级导入，不会受此影响。
+# framework 测试需单独运行：python -m pytest tests/framework/
 os.environ.setdefault("CNLLM_SKIP_MODEL_VALIDATION", "true")
-os.environ.setdefault("CNLLM_DEFAULT_ADAPTER", "minimax")
 
 from cnllm.entry.client import CNLLM
 from cnllm.core.param_registry import (

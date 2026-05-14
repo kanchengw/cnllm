@@ -19,6 +19,43 @@ from ..utils.exceptions import (
 )
 
 
+
+import re
+
+_URL_VERSION_PATTERN = None
+
+
+def build_url(base_url: str, path: str, yaml_default: str = None) -> str:
+    """根据 4 条 URL 规则构造完整请求 URL。
+
+    规则1: base_url 已包含完整 path → 原样返回
+    规则2: base_url 以 /v{digit} 结尾 → 去掉 path 重复版本前缀后拼接
+    规则3: base_url 是 yaml_default 的前缀 → 补齐到 yaml_default 再拼 path
+    规则4: 兜底 → base_url / path
+    """
+    base = base_url.rstrip("/")
+    clean_path = path.strip().lstrip("/")
+    if not clean_path:
+        return base
+    if base.endswith(f"/{clean_path}"):
+        return base
+    global _URL_VERSION_PATTERN
+    if _URL_VERSION_PATTERN is None:
+        _URL_VERSION_PATTERN = re.compile(r"/v\d+$")
+    m = _URL_VERSION_PATTERN.search(base)
+    if m:
+        vdir = m.group(0)
+        resource = clean_path
+        prefix = vdir.lstrip("/") + "/"
+        if resource.startswith(prefix):
+            resource = resource[len(prefix):]
+        return f"{base}/{resource}"
+    if yaml_default and yaml_default.startswith(base):
+        yaml_base = yaml_default.rstrip("/")
+        return f"{yaml_base}/{clean_path}"
+    return f"{base}/{clean_path}"
+
+
 class BaseHttpClient:
     def __init__(
         self,
@@ -43,47 +80,9 @@ class BaseHttpClient:
         self._sync_client: Optional[httpx.Client] = None
         self._async_client: Optional[httpx.AsyncClient] = None
 
-    _URL_VERSION_PATTERN = None  # compiled lazily in _build_url
-
     def _build_url(self, path: str) -> str:
-        """根据 5 条 URL 规则构造完整请求 URL。
-
-        规则1: base_url 已包含完整 path → 原样返回
-        规则2: base_url 以 /v{digit} 结尾 → 追加 path
-        规则5: base_url 是 yaml_default 的前缀 → 补齐到 yaml_default 再拼 path
-        规则3/4: 兜底 → base_url / path
-        """
-        base = self.base_url.rstrip("/")
-        clean_path = path.strip().lstrip("/")
-
-        if not clean_path:
-            return base
-
-        # 规则1: 完整路径
-        if base.endswith(f"/{clean_path}"):
-            return base
-
-        # 规则2: 到版本号为止（去掉 path 中重复的版本前缀）
-        if self._URL_VERSION_PATTERN is None:
-            import re
-            self._URL_VERSION_PATTERN = re.compile(r"/v\d+$")
-        m = self._URL_VERSION_PATTERN.search(base)
-        if m:
-            vdir = m.group(0)  # e.g. "/v1"
-            resource = clean_path
-            # 如果 path 以相同版本号开头（如 "v1/chat/completions"），去掉版本前缀
-            prefix = vdir.lstrip("/") + "/"
-            if resource.startswith(prefix):
-                resource = resource[len(prefix):]
-            return f"{base}/{resource}"
-
-        # 规则5: base_url 是 yaml_default 的前缀
-        if self.yaml_default and self.yaml_default.startswith(base):
-            yaml_base = self.yaml_default.rstrip("/")
-            return f"{yaml_base}/{clean_path}"
-
-        # 规则3/4: 兜底
-        return f"{base}/{clean_path}"
+        from cnllm.entry.http import build_url
+        return build_url(self.base_url, path, yaml_default=self.yaml_default)
 
     def _get_sync_client(self) -> httpx.Client:
         if self._sync_client is None:

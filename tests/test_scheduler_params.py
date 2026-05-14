@@ -9,7 +9,8 @@ CNLLM 调度器参数测试 - 验证 stop_on_error 和 callbacks 是调度器参
 """
 import pytest
 from unittest.mock import Mock
-from cnllm.utils.batch import BatchScheduler, EmbeddingBatchScheduler
+from cnllm.utils.scheduler.base import BatchScheduler
+from cnllm.utils.scheduler.embedding import EmbeddingBatchScheduler
 
 
 class TestSchedulerVsRequestParams:

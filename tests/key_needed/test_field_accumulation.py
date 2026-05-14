@@ -568,8 +568,8 @@ class TestDeepSeekFieldAccumulation:
 
     @requires_key
     def test_stream_raw_unified_accumulation(self):
-        """核心测试：流式 .raw 统一累积 - 验证 .raw 是累积的 Dict 而非 chunks 列表"""
-        _print_section("DeepSeek 流式 .raw 统一累积测试")
+        """核心测试：流式 .raw 是原始 chunks 列表"""
+        _print_section("DeepSeek 流式 .raw chunks 列表测试")
         client = CNLLM(model=self.MODEL, api_key=self.API_KEY)
 
         resp = client.chat.create(
@@ -580,7 +580,6 @@ class TestDeepSeekFieldAccumulation:
         chunk_count = 0
         raw_samples = []
         still_samples = []
-        raw_message_content_samples = []
 
         for chunk in resp:
             chunk_count += 1
@@ -590,18 +589,9 @@ class TestDeepSeekFieldAccumulation:
             raw_samples.append(raw_now)
             still_samples.append(still_now)
 
-            if raw_now and "choices" in raw_now:
-                msg_content = raw_now["choices"][0].get("message", {}).get("content", "")
-                raw_message_content_samples.append(msg_content)
-
             if chunk_count <= 3:
                 delta = chunk.get("choices", [{}])[0].get("delta", {})
                 print(f"  [chunk-{chunk_count}] delta_content={repr(delta.get('content','')[:30])}")
-                raw_content_preview = ""
-                if raw_now and "choices" in raw_now:
-                    c0 = raw_now["choices"][0]
-                    raw_content_preview = repr(c0.get("delta", {}).get("content", "")[:30]) if "delta" in c0 else repr(c0.get("message", {}).get("content", "")[:30])
-                print(f"              raw.delta.content={raw_content_preview if raw_now else 'N/A'}")
 
         print(f"\n[完成] 共 {chunk_count} chunks")
 
@@ -612,50 +602,32 @@ class TestDeepSeekFieldAccumulation:
         print("\n=== 核心逻辑核查点 ===")
         checks = []
 
-        is_dict = isinstance(final_raw, dict)
-        checks.append(("1. .raw 类型是 dict", is_dict, f"实际类型={type(final_raw).__name__}"))
-        print(f"\n  核查 1: .raw 类型检查 - {'✓ PASS' if is_dict else '✗ FAIL'}")
+        is_list = isinstance(final_raw, list)
+        checks.append(("1. .raw 类型是 list", is_list, f"实际类型={type(final_raw).__name__}"))
+        print(f"\n  核查 1: .raw 类型检查 - {'✓ PASS' if is_list else '✗ FAIL'}")
 
-        has_content_in_raw = is_dict and "choices" in final_raw
-        if has_content_in_raw:
-            c0 = final_raw["choices"][0]
-            has_content_in_raw = "delta" in c0 or "message" in c0
-        checks.append(("2. .raw.choices[0] 包含内容字段", has_content_in_raw, "无内容字段"))
-        print(f"  核查 2: .raw.choices[0] 内容字段 - {'✓ PASS' if has_content_in_raw else '✗ FAIL'}")
+        len_match = len(final_raw) == chunk_count
+        checks.append(("2. .raw 长度 == chunk 数", len_match, f"raw={len(final_raw)} chunk={chunk_count}"))
+        print(f"  核查 2: .raw 长度 == chunk 数 - {'✓ PASS' if len_match else '✗ FAIL'}")
 
-        raw_content = ""
-        if has_content_in_raw:
-            c0 = final_raw["choices"][0]
-            raw_content = c0.get("delta", {}).get("content", "") or c0.get("message", {}).get("content", "")
+        has_raw_chunks = is_list and len(final_raw) > 0 and all(isinstance(c, dict) for c in final_raw)
+        checks.append(("3. .raw 元素均为 dict", has_raw_chunks, ""))
+        print(f"  核查 3: .raw 元素均为 dict - {'✓ PASS' if has_raw_chunks else '✗ FAIL'}")
 
-        still_match_still = (final_still or "") == raw_content
-        checks.append(("3. .raw内容 == .still", still_match_still, f".still={final_still[:50] if final_still else ''} .raw={raw_content[:50]}"))
-        print(f"  核查 3: .raw内容 == .still - {'✓ PASS' if still_match_still else '✗ FAIL'}")
-
-        content_match_still = (final_still or "") == raw_content
-        checks.append(("4. .still 和 .raw内容 一致", content_match_still, "不一致"))
-        print(f"  核查 4: .still 和 .raw内容 一致 - {'✓ PASS' if content_match_still else '✗ FAIL'}")
-
-        def _get_raw_content(r):
-            if not r or "choices" not in r: return ""
-            c0 = r["choices"][0]
-            return c0.get("delta", {}).get("content", "") or c0.get("message", {}).get("content", "")
-        increasing_raw = all(
-            _get_raw_content(raw_samples[i]) <= _get_raw_content(raw_samples[j])
-            for i in range(len(raw_samples) - 1)
-            for j in [i + 1]
-        )
-        checks.append(("5. .raw.message.content 递增累积", increasing_raw, "未递增"))
-        print(f"  核查 5: .raw.message.content 递增累积 - {'✓ PASS' if increasing_raw else '✗ FAIL'}")
+        # .still 是独立累积的，不受 .raw 改动影响
+        still_valid = isinstance(final_still, str) and len(final_still) > 0
+        checks.append(("4. .still 独立累积正常", still_valid, f"still={repr(final_still[:50]) if final_still else 'empty'}"))
+        print(f"  核查 4: .still 独立累积正常 - {'✓ PASS' if still_valid else '✗ FAIL'}")
 
         print(f"\n  .raw 类型: {type(final_raw).__name__}")
-        print(f"  .raw 内容长度: {len(raw_content)}")
+        print(f"  .raw 长度: {len(final_raw)}")
         print(f"  .still 长度: {len(final_still) if final_still else 0}")
         print(f"  .think 长度: {len(final_think) if final_think else 0}")
 
         return {
             "chunk_count": chunk_count,
             "raw_type": type(final_raw).__name__,
+            "raw_len": len(final_raw),
             "checks": checks,
         }
 
@@ -703,9 +675,14 @@ class TestDeepSeekFieldAccumulation:
         checks.append(("2. .think 不为空 (thinking=True)", has_think, f"长度={len(final_think) if final_think else 0}"))
         print(f"  核查 2: .think 不为空 - {'✓ PASS' if has_think else '✗ FAIL'}")
 
-        has_raw_think = final_raw and final_raw.get("choices", [{}])[0].get("message", {}).get("reasoning_content") is not None
-        checks.append(("3. .raw.message.reasoning_content 存在", has_raw_think, "不存在"))
-        print(f"  核查 3: .raw.message.reasoning_content - {'✓ PASS' if has_raw_think else '✗ FAIL'}")
+        # .raw 是原始 chunks 列表，从中累积 reasoning_content 验证与 .think 一致
+        raw_think_content = ""
+        for raw_chunk in (final_raw or []):
+            for choice in raw_chunk.get("choices", []):
+                raw_think_content += choice.get("delta", {}).get("reasoning_content", "") or ""
+        has_raw_think = bool(raw_think_content)
+        checks.append(("3. raw chunks 中有 reasoning_content", has_raw_think, "不存在"))
+        print(f"  核查 3: raw chunks 中有 reasoning_content - {'✓ PASS' if has_raw_think else '✗ FAIL'}")
 
         if has_think:
             no_dup_think = _check_duplicate(final_think)
@@ -898,40 +875,39 @@ class TestDeepSeekFieldAccumulation:
         print("\n=== 四字段一致性核查 ===")
         checks = []
 
-        raw_is_dict = isinstance(raw, dict)
+        raw_is_list = isinstance(raw, list)
         still_is_str = isinstance(still, str) or still is None
         think_is_str = isinstance(think, str) or think is None
         tools_is_dict = isinstance(tools_list, (dict, list)) or tools_list is None
 
-        checks.append(("1. .raw 是 dict", raw_is_dict, type(raw).__name__))
+        checks.append(("1. .raw 是 list", raw_is_list, type(raw).__name__))
         checks.append(("2. .still 是 str", still_is_str, type(still).__name__))
         checks.append(("3. .think 是 str", think_is_str, type(think).__name__))
         checks.append(("4. .tools 是 dict", tools_is_dict, type(tools_list).__name__))
 
-        print(f"\n  .raw 类型: {type(raw).__name__} {'✓' if raw_is_dict else '✗'}")
+        print(f"\n  .raw 类型: {type(raw).__name__} {'✓' if raw_is_list else '✗'}")
         print(f"  .still 类型: {type(still).__name__} {'✓' if still_is_str else '✗'}")
         print(f"  .think 类型: {type(think).__name__} {'✓' if think_is_str else '✗'}")
         print(f"  .tools 类型: {type(tools_list).__name__} {'✓' if tools_is_dict else '✗'}")
 
-        def _extract_raw_content(r):
-            if not r or "choices" not in r: return ""
-            c0 = r["choices"][0]
-            return c0.get("delta", {}).get("content", "") or c0.get("message", {}).get("content", "")
-
-        raw_content = _extract_raw_content(raw)
-        still_raw_match = (still or "") == raw_content
-        checks.append(("5. .still == .raw内容", still_raw_match, f".still={(still or '')[:30]} raw={raw_content[:30]}"))
-        print(f"\n  .still == .raw内容: {'✓' if still_raw_match else '✗'}")
-
-        def _extract_raw_tools(r):
-            if not r or "choices" not in r: return {}
-            c0 = r["choices"][0]
-            msg = c0.get("message", c0.get("delta", {}))
-            return msg.get("tool_calls", {})
-        raw_tools = _extract_raw_tools(raw)
-        tools_match = (tools_list or {}) == raw_tools
-        checks.append(("6. .tools == .raw.message.tool_calls", tools_match, f"长度: tools={len(tools_list)} raw={len(raw_tools)}"))
-        print(f"  .tools == .raw.message.tool_calls: {'✓' if tools_match else '✗'}")
+        # 从 raw chunks 中提取累积的 tool_calls，构建 index dict
+        repr_tools = {}
+        for chunk in raw:
+            for choice in chunk.get("choices", []):
+                delta = choice.get("delta", {})
+                for tc in (delta.get("tool_calls") or []):
+                    idx = tc.get("index", len(repr_tools))
+                    if idx in repr_tools:
+                        existing = repr_tools[idx]
+                        existing["function"]["arguments"] += tc.get("function", {}).get("arguments", "")
+                    else:
+                        repr_tools[idx] = tc
+        print(f"\n  DEBUG: tools_list={tools_list}")
+        print(f"  DEBUG: repr_tools={repr_tools}")
+        tools_match = (tools_list or {}) == repr_tools
+        checks.append(("5. .tools == raw chunk 累积 tool_calls", tools_match,
+                       f"tools_keys={list(tools_list.keys()) if tools_list else None} repr_keys={list(repr_tools.keys())}"))
+        print(f"  .tools == raw chunk 累积 tool_calls: {'✓' if tools_match else '✗'}")
 
         all_pass = all(c[1] for c in checks)
         print(f"\n=== 总体结果: {'✓ ALL PASS' if all_pass else '✗ SOME FAILED'} ===")

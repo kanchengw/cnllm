@@ -693,7 +693,6 @@ class BatchStreamAccumulator:
         self._start_time: Optional[float] = None
         self._end_time: Optional[float] = None
         self._chunks: Dict[str, List[Dict]] = {}
-        self._accumulated_raw: Dict[str, Dict[str, Any]] = {}
         self._seen_tool_call_indices: Dict[str, Set[int]] = {}
         self._seen_choice_indices: Dict[str, Set[int]] = {}
         self._seen_finish_indices: Dict[str, Set[int]] = {}
@@ -743,26 +742,9 @@ class BatchStreamAccumulator:
     def to_dict(self, **kwargs) -> Dict[str, Any]:
         return self._batch_response.to_dict(**kwargs)
 
-    def _get_accumulable_paths(self):
-        if self._responder is None:
-            self._responder = self._adapter._get_responder()
-        if not self._responder:
-            return []
-        return self._responder.get_stream_accumulable_paths()
 
-    def _deep_merge(self, base: dict, overlay: dict) -> None:
-        import copy
-        for key, value in overlay.items():
-            if key not in base:
-                base[key] = copy.deepcopy(value)
-            elif isinstance(base[key], dict) and isinstance(value, dict):
-                self._deep_merge(base[key], value)
-            elif isinstance(base[key], list) and isinstance(value, list):
-                base[key] = self._accumulate_list_values(base[key], value)
-            elif isinstance(base[key], str) and isinstance(value, str):
-                base[key] = value
-            else:
-                base[key] = value
+
+
 
     def _accumulate_list_values(self, existing: list, new: list) -> list:
         result = list(existing)
@@ -800,16 +782,9 @@ class BatchStreamAccumulator:
                 result[key] = value
         return result
 
-    def _merge_chunks(self, chunks: List[Dict]) -> Dict:
-        if not chunks:
-            return {}
-        import copy
-        final = copy.deepcopy(chunks[0])
-        for chunk in chunks[1:]:
-            self._deep_merge(final, chunk)
-        return final
 
-    def _accumulate_chunk(self, chunk: Dict, request_id: str, extras: Dict = None) -> None:
+
+    def _accumulate_chunk(self, chunk: Dict, request_id: str) -> None:
         if chunk.get("status") == "error":
             self._batch_response.add_error(request_id, chunk.get("error", "Unknown error"))
             return
@@ -817,45 +792,9 @@ class BatchStreamAccumulator:
             self._chunks[request_id] = []
         self._chunks[request_id].append(chunk)
 
-        accumulable_paths = self._get_accumulable_paths()
-        old_accumulable = {}
-        if accumulable_paths and self._responder:
-            for path_info in accumulable_paths:
-                if path_info.get("accumulate"):
-                    path = path_info["path"]
-                    if path and request_id in self._accumulated_raw:
-                        old_val = self._responder._get_by_path(self._accumulated_raw[request_id], path)
-                        if old_val is not None:
-                            old_accumulable[path] = old_val
+        self._batch_response.set_raw(request_id, self._chunks[request_id])
 
-        if request_id not in self._accumulated_raw:
-            import copy
-            self._accumulated_raw[request_id] = copy.deepcopy(chunk)
-        else:
-            self._deep_merge(self._accumulated_raw[request_id], chunk)
-
-        if accumulable_paths and self._responder:
-            for path_info in accumulable_paths:
-                path = path_info["path"]
-                accumulate = path_info.get("accumulate", False)
-                if not path or not accumulate:
-                    continue
-                val = self._responder._get_by_path(chunk, path)
-                if val is None:
-                    continue
-                old_val = old_accumulable.get(path)
-                if old_val is None:
-                    continue
-                if isinstance(old_val, str) and isinstance(val, str):
-                    self._responder._set_by_path(self._accumulated_raw[request_id], path, old_val + val)
-                elif isinstance(old_val, list) and isinstance(val, list):
-                    self._responder._set_by_path(self._accumulated_raw[request_id], path, self._accumulate_list_values(old_val, val))
-                else:
-                    self._responder._set_by_path(self._accumulated_raw[request_id], path, val)
-
-        self._batch_response.set_raw(request_id, self._accumulated_raw[request_id])
-
-        # 始终通过 responder 逐 chunk 提取 thinking/still/tools（增量累积）
+        # 通过 responder 逐 chunk 提取 thinking/still/tools（增量累积）
         if self._responder:
             extra_fields = self._responder._extract_stream_extra_fields(chunk)
             if "_thinking" in extra_fields:
@@ -874,12 +813,6 @@ class BatchStreamAccumulator:
                                 existing_tools[idx] = tc
                 self._batch_response.set_tools(request_id, existing_tools)
 
-        # extras 仅用于 usage（避免 thinking/still/tools 通过 extras 传递导致重复累积）
-        if extras:
-            usage_val = extras.get("_usage", {})
-            if usage_val:
-                self._batch_response.set_usage(request_id, usage_val)
-
     def _finalize(self) -> None:
         # results 已在迭代中实时注册，_finalize 仅负责标记完成
         self._batch_response.mark_done()
@@ -889,6 +822,7 @@ class BatchStreamAccumulator:
         self._batch_response._start_time = self._start_time
         self._batch_response._in_for_loop = True
         try:
+            seen_requests = set()
             for wrapped_chunk in self._raw_iterator:
                 request_id = wrapped_chunk.get("request_id")
                 if not request_id:
@@ -897,8 +831,7 @@ class BatchStreamAccumulator:
                     logger.warning("BatchStreamAccumulator: 收到缺少 request_id 的 chunk，已跳过")
                     continue
                 chunk = wrapped_chunk.get("chunk", wrapped_chunk)
-                extras = wrapped_chunk.get("extras", {})
-                self._accumulate_chunk(chunk, request_id, extras=extras)
+                self._accumulate_chunk(chunk, request_id)
                 result = self._adapter._to_openai_stream_format(chunk)
                 if result is None:
                     continue
@@ -941,12 +874,12 @@ class AsyncBatchStreamAccumulator:
         self._start_time: Optional[float] = None
         self._end_time: Optional[float] = None
         self._chunks: Dict[str, List[Dict]] = {}
-        self._accumulated_raw: Dict[str, Dict[str, Any]] = {}
         self._seen_tool_call_indices: Dict[str, Set[int]] = {}
         self._seen_choice_indices: Dict[str, Set[int]] = {}
         self._seen_finish_indices: Dict[str, Set[int]] = {}
         self._openai_chunks: Dict[str, List[Dict]] = {}
         self._done = False
+        self._seen_requests: set = set()
         self._responder = adapter._get_responder() if adapter else None
 
     @property
@@ -992,26 +925,9 @@ class AsyncBatchStreamAccumulator:
     def to_dict(self, **kwargs) -> Dict[str, Any]:
         return self._batch_response.to_dict(**kwargs)
 
-    def _get_accumulable_paths(self):
-        if self._responder is None:
-            self._responder = self._adapter._get_responder()
-        if not self._responder:
-            return []
-        return self._responder.get_stream_accumulable_paths()
 
-    def _deep_merge(self, base: dict, overlay: dict) -> None:
-        import copy
-        for key, value in overlay.items():
-            if key not in base:
-                base[key] = copy.deepcopy(value)
-            elif isinstance(base[key], dict) and isinstance(value, dict):
-                self._deep_merge(base[key], value)
-            elif isinstance(base[key], list) and isinstance(value, list):
-                base[key] = self._accumulate_list_values(base[key], value)
-            elif isinstance(base[key], str) and isinstance(value, str):
-                base[key] = value
-            else:
-                base[key] = value
+
+
 
     def _accumulate_list_values(self, existing: list, new: list) -> list:
         result = list(existing)
@@ -1049,16 +965,9 @@ class AsyncBatchStreamAccumulator:
                 result[key] = value
         return result
 
-    def _merge_chunks(self, chunks: List[Dict]) -> Dict:
-        if not chunks:
-            return {}
-        import copy
-        final = copy.deepcopy(chunks[0])
-        for chunk in chunks[1:]:
-            self._deep_merge(final, chunk)
-        return final
 
-    def _accumulate_chunk(self, chunk: Dict, request_id: str, extras: Dict = None) -> None:
+
+    def _accumulate_chunk(self, chunk: Dict, request_id: str) -> None:
         if chunk.get("status") == "error":
             self._batch_response.add_error(request_id, chunk.get("error", "Unknown error"))
             return
@@ -1066,45 +975,9 @@ class AsyncBatchStreamAccumulator:
             self._chunks[request_id] = []
         self._chunks[request_id].append(chunk)
 
-        accumulable_paths = self._get_accumulable_paths()
-        old_accumulable = {}
-        if accumulable_paths and self._responder:
-            for path_info in accumulable_paths:
-                if path_info.get("accumulate"):
-                    path = path_info["path"]
-                    if path and request_id in self._accumulated_raw:
-                        old_val = self._responder._get_by_path(self._accumulated_raw[request_id], path)
-                        if old_val is not None:
-                            old_accumulable[path] = old_val
+        self._batch_response.set_raw(request_id, self._chunks[request_id])
 
-        if request_id not in self._accumulated_raw:
-            import copy
-            self._accumulated_raw[request_id] = copy.deepcopy(chunk)
-        else:
-            self._deep_merge(self._accumulated_raw[request_id], chunk)
-
-        if accumulable_paths and self._responder:
-            for path_info in accumulable_paths:
-                path = path_info["path"]
-                accumulate = path_info.get("accumulate", False)
-                if not path or not accumulate:
-                    continue
-                val = self._responder._get_by_path(chunk, path)
-                if val is None:
-                    continue
-                old_val = old_accumulable.get(path)
-                if old_val is None:
-                    continue
-                if isinstance(old_val, str) and isinstance(val, str):
-                    self._responder._set_by_path(self._accumulated_raw[request_id], path, old_val + val)
-                elif isinstance(old_val, list) and isinstance(val, list):
-                    self._responder._set_by_path(self._accumulated_raw[request_id], path, self._accumulate_list_values(old_val, val))
-                else:
-                    self._responder._set_by_path(self._accumulated_raw[request_id], path, val)
-
-        self._batch_response.set_raw(request_id, self._accumulated_raw[request_id])
-
-        # 始终通过 responder 逐 chunk 提取 thinking/still/tools（增量累积）
+        # 通过 responder 逐 chunk 提取 thinking/still/tools（增量累积）
         if self._responder:
             extra_fields = self._responder._extract_stream_extra_fields(chunk)
             if "_thinking" in extra_fields:
@@ -1122,12 +995,6 @@ class AsyncBatchStreamAccumulator:
                             else:
                                 existing_tools[idx] = tc
                 self._batch_response.set_tools(request_id, existing_tools)
-
-        # extras 仅用于 usage（避免 thinking/still/tools 通过 extras 传递导致重复累积）
-        if extras:
-            usage_val = extras.get("_usage", {})
-            if usage_val:
-                self._batch_response.set_usage(request_id, usage_val)
 
     async def _finalize(self) -> None:
         # results 已在迭代中实时注册，_finalize 仅处理 usage
@@ -1148,9 +1015,8 @@ class AsyncBatchStreamAccumulator:
                 wrapped_chunk = await self._raw_iterator.__anext__()
                 request_id = wrapped_chunk.get("request_id")
                 chunk = wrapped_chunk.get("chunk", wrapped_chunk)
-                extras = wrapped_chunk.get("extras", {})
                 if request_id:
-                    self._accumulate_chunk(chunk, request_id, extras=extras)
+                    self._accumulate_chunk(chunk, request_id)
                 result = self._adapter._to_openai_stream_format(chunk)
                 if result is None:
                     continue
@@ -1264,33 +1130,4 @@ class AsyncBatchNonStreamAccumulator:
 
         for item_result in self._batch_result.results:
             request_id = item_result.request_id or f"request_{item_result.index}"
-            raw_resp = item_result.response
-
-            if raw_resp and item_result.status == "success":
-                # Handle NonStreamAccumulator / accumulator-like response objects
-                if hasattr(raw_resp, '_response'):
-                    raw_dict = raw_resp._response
-                else:
-                    raw_dict = raw_resp
-
-                self._batch_response.set_raw(request_id, raw_dict)
-                if self._responder:
-                    extra_fields = self._responder._extract_extra_fields(raw_dict)
-                    if "_thinking" in extra_fields:
-                        self._batch_response.set_think(request_id, extra_fields["_thinking"])
-                    if "_still" in extra_fields:
-                        self._batch_response.set_still(request_id, extra_fields["_still"])
-                    if "_tools" in extra_fields:
-                        self._batch_response.set_tools(request_id, extra_fields["_tools"])
-                    if "_usage" in extra_fields:
-                        self._batch_response.set_usage(request_id, extra_fields["_usage"])
-                if hasattr(self._adapter, '_to_openai_format'):
-                    filtered = self._adapter._to_openai_format(raw_dict, self._adapter.model)
-                else:
-                    filtered = raw_dict
-                self._batch_response.add_result(request_id, filtered)
-            else:
-                error_data = {"error": str(item_result.error) if item_result.error else "unknown"}
-                self._batch_response.add_result(request_id, error_data)
-        self._batch_response.mark_done()
-        return se
+            raw_resp = item_result.respo

@@ -1,0 +1,111 @@
+request:
+  method: "POST"
+  headers:
+    Content-Type: "application/json"
+    Authorization: "Bearer ${api_key}"
+
+required_fields:
+  api_key:
+    skip: true
+  model: ~
+  input:
+    scope: embed
+
+one_of:
+  messages_or_prompt:
+    messages: ~
+    prompt: ~
+
+optional_fields:
+  base_url:
+    skip: true
+    chat:
+      default: "https://dashscope.aliyuncs.com/compatible-mode/v1"
+      path: "chat/completions"
+    embedding:
+      default: "https://dashscope.aliyuncs.com/compatible-mode/v1"
+      path: "embeddings"
+  fallback_models:
+    skip: true
+  timeout:
+    skip: true
+    default: 60.0
+  max_retries:
+    skip: true
+    default: 3
+  retry_delay:
+    skip: true
+    default: 1.0
+  temperature: ~
+  top_p: ~
+  max_tokens: ~
+  stream: ~
+  stop: ~
+  tools: ~
+  tool_choice: ~
+  response_format: ~
+  n: ~
+  presence_penalty: ~
+  frequency_penalty: ~
+  logit_bias: ~
+  user: ~
+  seed: ~
+  logprobs: ~
+  top_logprobs: ~
+  enable_thinking: ~
+  thinking:
+    map: "enable_thinking"
+  preserve_thinking: ~
+  thinking_budget: ~
+  top_k: ~
+  repetition_penalty: ~
+  vl_high_resolution_images: ~
+  enable_code_interpreter: ~
+  enable_search: ~
+  search_options: ~
+  parallel_tool_calls: ~
+  dimensions:
+    scope: embed
+  encoding_format:
+    scope: embed
+
+model_mapping:
+  chat:
+    qwen3.6-max-preview: "qwen3.6-max-preview"
+    qwen3.6-plus: "qwen3.6-plus"
+    qwen3.6-flash: "qwen3.6-flash"
+    qwen3.5-plus: "qwen3.5-plus"
+    qwen3.5-flash: "qwen3.5-flash"
+    qwen3.5-397b-a17b: "qwen3.5-397b-a17b"
+    qwen3.5-122b-a10b: "qwen3.5-122b-a10b"
+    qwen3.5-27b: "qwen3.5-27b"
+    qwen3.5-35b-a3b: "qwen3.5-35b-a3b"
+  embedding:
+    text-embedding-v4: "text-embedding-v4"
+    text-embedding-v3: "text-embedding-v3"
+    text-embedding-v2: "text-embedding-v2"
+    text-embedding-v1: "text-embedding-v1"
+
+error_check:
+  code_path: "error.code"
+  success_code: null
+  message_path: "error.message"
+  error_codes:
+    InvalidParameter:
+      type: "invalid_request_error"
+      suggestion: "请求包含非法参数"
+    RateLimitExceeded:
+      type: "rate_limit_error"
+      suggestion: "请求频率超限，请稍后重试"
+    Unauthorized:
+      type: "authentication_error"
+      suggestion: "请检查 API Key 是否正确"
+    Forbidden:
+      type: "authentication_error"
+      suggestion: "禁止访问，请检查权限"
+    InsufficientBalance:
+      type: "rate_limit_error"
+      suggestion: "账户余额不足，请充值"
+    InternalError:
+      type: "server_error"
+      suggestion: "服务器内部错误，请稍后重试"

@@ -7,7 +7,7 @@ import os
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from cnllm.utils.batch import _normalize_batch_requests
+from cnllm.utils.scheduler.base import _normalize_batch_requests
 
 
 class TestNormalizeBatchRequests:

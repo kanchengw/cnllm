@@ -1,0 +1,111 @@
+request:
+  method: "POST"
+  headers:
+    Content-Type: "application/json"
+    Authorization: "Bearer ${api_key}"
+
+required_fields:
+  api_key:
+    skip: true
+  model: ~
+  input:
+    scope: embed
+
+one_of:
+  messages_or_prompt:
+    messages: ~
+    prompt: ~
+
+optional_fields:
+  base_url:
+    skip: true
+    chat:
+      default: "https://qianfan.baidubce.com/v2"
+      path: "chat/completions"
+    embedding:
+      default: "https://qianfan.baidubce.com/v2"
+      path: "embeddings"
+  fallback_models:
+    skip: true
+  timeout:
+    skip: true
+    default: 60.0
+  max_retries:
+    skip: true
+    default: 3
+  retry_delay:
+    skip: true
+    default: 1.0
+  temperature: ~
+  top_p: ~
+  max_tokens: ~
+  stream: ~
+  stop: ~
+  tools: ~
+  tool_choice: ~
+  response_format: ~
+  user: ~
+  frequency_penalty: ~
+  presence_penalty: ~
+  seed: ~
+  # Baidu-specific params
+  thinking:
+    transform:
+      true: {"type": "enabled"}
+      false: {"type": "disabled"}
+  enable_thinking: ~
+  thinking_budget: ~
+  thinking_strategy: ~
+  reasoning_effort: ~
+  penalty_score: ~
+  repetition_penalty: ~
+  max_completion_tokens: ~
+  parallel_tool_calls: ~
+  web_search: ~
+  metadata: ~
+
+model_mapping:
+  chat:
+    ernie-5.1: "ernie-5.1"
+    ernie-5.0: "ernie-5.0"
+    ernie-4.5-turbo-128k: "ernie-4.5-turbo-128k"
+    ernie-4.5-turbo-32k: "ernie-4.5-turbo-32k"
+    ernie-4.5-turbo-vl:
+      model: "ernie-4.5-turbo-vl"
+      vision: true
+    ernie-4.5-turbo-vl-32k:
+      model: "ernie-4.5-turbo-vl-32k"
+      vision: true
+    ernie-4.5-0.3b: "ernie-4.5-0.3b"
+    ernie-speed-pro-128k: "ernie-speed-pro-128k"
+    ernie-lite-pro-128k: "ernie-lite-pro-128k"
+    ernie-x1.1: "ernie-x1.1"
+    ernie-x1-turbo-32k: "ernie-x1-turbo-32k"
+  embedding:
+    embedding-v1: "embedding-v1"
+    bge-large-zh: "bge-large-zh"
+    bge-large-en: "bge-large-en"
+
+error_check:
+  code_path: "error.code"
+  success_code: null
+  message_path: "error.message"
+  error_codes:
+    AccessTokenExpired:
+      type: "authentication_error"
+      suggestion: "API Key 已过期，请重新生成"
+    AccessTokenInvalid:
+      type: "authentication_error"
+      suggestion: "API Key 无效，请检查 API Key"
+    RateLimitExceeded:
+      type: "rate_limit_error"
+      suggestion: "请求频率超限，请稍后重试"
+    InsufficientBalance:
+      type: "rate_limit_error"
+      suggestion: "账户余额不足，请充值"
+    InvalidParameter:
+      type: "invalid_request_error"
+      suggestion: "请求参数错误"
+    ModelNotFound:
+      type: "invalid_request_error"
+      suggestion: "模型不存在"

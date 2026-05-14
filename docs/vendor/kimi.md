@@ -8,11 +8,7 @@
 | `moonshot-v1-32k` | 32K 上下文版本 | ❌ |
 | `moonshot-v1-128k` | 128K 上下文版本 | ❌ |
 | `kimi-k2.5` | K2.5 模型，temperature 固定 0.95 | ✅ |
-| `kimi-k2-thinking` | K2 长思考模型，支持 256k 上下文 | ✅ |
-| `kimi-k2-thinking-turbo` | K2 长思考模型高速版本 | ✅ |
-| `kimi-k2-0905-preview` | 增强 Agentic Coding 能力，上下文 256k | ❌ |
-| `kimi-k2-0711-preview` | MoE 架构基础模型，上下文 128k | ❌ |
-| `kimi-k2-turbo-preview` | K2 高速版本，上下文 256k | ❌ |
+| `kimi-k2.6` | K2.6 模型 | ✅ |
 
 ## 接口配置
 
@@ -67,7 +63,7 @@ optional_fields:
 - CNLLM: `thinking=true` → Kimi: `{"thinking": {"type": "enabled"}}`
 - CNLLM: `thinking=false` → Kimi: `{"thinking": {"type": "disabled"}}`
 
-**注意**：`thinking` 参数仅对 kimi-k2.5 和 kimi-k2-thinking 系列模型有效，其他模型传入此参数会忽略。
+**注意**：`thinking` 参数仅对 kimi-k2.5 和 kimi-k2.6 模型有效，其他模型传入此参数会忽略。
 
 ### Kimi 特有参数
 
@@ -100,7 +96,7 @@ messages[].content:
 
 **assistant 消息特殊字段**:
 ```yaml
-messages[].reasoning_content: string  # 思维链内容（kimi-k2 系列）
+messages[].reasoning_content: string  # 思维链内容（kimi-k2.5/k2.6 系列）
 messages[].tool_calls:  # 工具调用
   - id: string
     type: "function"
@@ -126,7 +122,7 @@ messages[].tool_call_id: string  # 关联 tool_calls 的 id
 | `created` | `created` | 时间戳 |
 | `model` | `model` | 模型名称 |
 | `choices[0].message.content` | `content` | 纯净文本 |
-| `choices[0].message.reasoning_content` | `_thinking` | 推理过程（kimi-k2 系列） |
+| `choices[0].message.reasoning_content` | `_thinking` | 推理过程（kimi-k2.5/k2.6 系列） |
 | `choices[0].finish_reason` | `finish_reason` | 结束原因 |
 | `choices[0].message.tool_calls` | `tool_calls` | 函数调用 |
 | `usage.prompt_tokens` | `prompt_tokens` | 输入 token 数 |
@@ -158,13 +154,13 @@ messages[].tool_call_id: string  # 关联 tool_calls 的 id
 }
 ```
 
-**带 thinking 的非流式响应（kimi-k2 系列）：**
+**带 thinking 的非流式响应（kimi-k2.5/k2.6 系列）：**
 ```json
 {
   "id": "chatcmpl-xxx",
   "object": "chat.completion",
   "created": 1677652288,
-  "model": "kimi-k2-thinking-turbo",
+  "model": "kimi-k2.5",
   "choices": [{
     "index": 0,
     "message": {
@@ -195,15 +191,15 @@ data: {"id":"chatcmpl-xxx","object":"chat.completion.chunk","created":1677652288
 data: {"id":"chatcmpl-xxx","object":"chat.completion.chunk","created":1677652288,"model":"moonshot-v1-8k","choices":[{"index":0,"finish_reason":"stop","delta":{"role":"assistant","content":""}}],"usage":{"prompt_tokens":8,"completion_tokens":10,"total_tokens":18}}
 ```
 
-**带 thinking 的流式响应（kimi-k2 系列）：**
+**带 thinking 的流式响应（kimi-k2.5/k2.6 系列）：**
 ```
-data: {"id":"chatcmpl-xxx","object":"chat.completion.chunk","created":1677652288,"model":"kimi-k2-thinking-turbo","choices":[{"index":0,"delta":{"reasoning_content":"用户"},"finish_reason":null}]}
+data: {"id":"chatcmpl-xxx","object":"chat.completion.chunk","created":1677652288,"model":"kimi-k2.5","choices":[{"index":0,"delta":{"reasoning_content":"用户"},"finish_reason":null}]}
 
-data: {"id":"chatcmpl-xxx","object":"chat.completion.chunk","created":1677652288,"model":"kimi-k2-thinking-turbo","choices":[{"index":0,"delta":{"reasoning_content":"问为什么"},"finish_reason":null}]}
+data: {"id":"chatcmpl-xxx","object":"chat.completion.chunk","created":1677652288,"model":"kimi-k2.5","choices":[{"index":0,"delta":{"reasoning_content":"问为什么"},"finish_reason":null}]}
 
 ...
 
-data: {"id":"chatcmpl-xxx","object":"chat.completion.chunk","created":1677652288,"model":"kimi-k2-thinking-turbo","choices":[{"index":0,"delta":{"content":"天是蓝色的..."},"finish_reason":null}]}
+data: {"id":"chatcmpl-xxx","object":"chat.completion.chunk","created":1677652288,"model":"kimi-k2.5","choices":[{"index":0,"delta":{"content":"天是蓝色的..."},"finish_reason":null}]}
 
 ...
 
@@ -224,7 +220,7 @@ data: [DONE]
 流式响应中，内容会被自动累积到对应属性：
 
 ```python
-client = CNLLM(model="kimi-k2-thinking-turbo", api_key="...")
+client = CNLLM(model="kimi-k2.5", api_key="...")
 
 # 流式调用
 for chunk in client.chat.create(messages=[...], stream=True, thinking=True):
@@ -362,10 +358,10 @@ response = client.chat.create(
 print(response["choices"][0]["message"]["content"])
 ```
 
-### 启用思考过程（kimi-k2 系列）
+### 启用思考过程（kimi-k2.5/k2.6 系列）
 
 ```python
-client = CNLLM(model="kimi-k2-thinking-turbo", api_key="your-api-key")
+client = CNLLM(model="kimi-k2.5", api_key="your-api-key")
 
 response = client.chat.create(
     messages=[{"role": "user", "content": "解释为什么天是蓝色的"}],

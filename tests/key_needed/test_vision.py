@@ -22,9 +22,9 @@ from cnllm import CNLLM
 # ==============================
 # 厂商配置（按需修改）
 # ==============================
-VISION_MODEL = "glm-4.6v-flash"
-TEXT_MODEL = "glm-4.6"
-API_KEY_ENV = "GLM_API_KEY"
+VISION_MODEL = "kimi-k2.6"
+TEXT_MODEL = "moonshot-v1-8k"
+API_KEY_ENV = "KIMI_API_KEY"
 
 API_KEY = os.getenv(API_KEY_ENV)
 
