@@ -48,7 +48,7 @@ class CNLLM:
                 "客户端初始化不支持同时设置 prompt 和 messages，请选择其一"
             )
         self.model = model.lower() if model else None
-        self.api_key = api_key if api_key is not None else os.getenv("MINIMAX_API_KEY")
+        self.api_key = api_key
         self.base_url = base_url
         self.timeout = timeout
         self.max_retries = max_retries
@@ -147,13 +147,27 @@ class CNLLM:
             max_retries: int = None,
             retry_delay: float = None,
             base_url: str = None,
-            drop_params: str = None
+            drop_params: str = None,
+            protocol: str = None,
         ):
             from ..core.adapter import BaseAdapter
+            from cnllm.utils.validator import detect_protocol, has_protocol_config
+
+            if not protocol and model:
+                from ..core.adapter import BaseAdapter
+                _aname = BaseAdapter.get_adapter_name_for_model(model)
+                _cdir = _aname.replace("-native", "") if _aname else ""
+                if _cdir and has_protocol_config(_cdir):
+                    actual_protocol = detect_protocol(base_url or self.base_url, _cdir)
+                else:
+                    actual_protocol = None
+            else:
+                actual_protocol = protocol
+            use_native = actual_protocol == "native"
 
             if os.getenv("CNLLM_SKIP_MODEL_VALIDATION") == "true":
                 logger.warning(f"[测试模式] 跳过模型验证: {model}")
-                adapter_name = os.getenv("CNLLM_DEFAULT_ADAPTER", "minimax")
+                adapter_name = os.getenv("CNLLM_DEFAULT_ADAPTER", "minimax-native" if use_native else "minimax")
                 adapter_class = BaseAdapter.get_adapter_class(adapter_name)
                 if not adapter_class:
                     adapter_name = BaseAdapter.get_all_adapter_names()[0]
@@ -165,10 +179,14 @@ class CNLLM:
                     max_retries=max_retries,
                     retry_delay=retry_delay,
                     base_url=base_url,
-                    drop_params=drop_params or self.drop_params
+                    drop_params=drop_params or self.drop_params,
+                    protocol=actual_protocol,
                 )
 
-            adapter_name = BaseAdapter.get_adapter_name_for_model(model)
+            if use_native:
+                adapter_name = "minimax-native"
+            else:
+                adapter_name = BaseAdapter.get_adapter_name_for_model(model)
             if not adapter_name:
                 available = BaseAdapter.get_all_adapter_names()
                 raise ModelNotSupportedError(
@@ -190,7 +208,8 @@ class CNLLM:
                 max_retries=max_retries,
                 retry_delay=retry_delay,
                 base_url=base_url,
-                drop_params=drop_params or self.drop_params
+                drop_params=drop_params or self.drop_params,
+                protocol=actual_protocol,
             )
             adapter._validator.validate_model(model)
             return adapter
@@ -348,29 +367,6 @@ class CNLLM:
                 drop_params=actual_drop_params or self.parent.drop_params,
             )
 
-            if explicit_model is not None:
-                adapter = self.parent._get_adapter(model, actual_api_key, actual_timeout, actual_max_retries, actual_retry_delay, actual_base_url, drop_params=actual_drop_params)
-                self.parent._last_adapter = adapter
-                resp = adapter.create_completion(
-                    messages=messages,
-                    temperature=actual_temperature,
-                    max_tokens=actual_max_tokens,
-                    stream=actual_stream,
-                    model=model,
-                    **clean_kwargs
-                )
-                self._last_response = resp
-                if actual_stream:
-                    # 避免重复包装：resp 可能已是 StreamAccumulator（来自 _handle_stream）
-                    if isinstance(resp, StreamAccumulator):
-                        return resp
-                    return StreamAccumulator(resp, adapter)
-                if hasattr(resp, 'raw') and hasattr(resp, 'still'):
-                    return resp
-                responder = adapter._get_responder()
-                accumulator = NonStreamAccumulator(resp, adapter, responder)
-                return accumulator.process()
-
             fb_manager = FallbackManager(
                 fallback_config=self.parent.fallback_models,
                 primary_api_key=actual_api_key,
@@ -383,7 +379,7 @@ class CNLLM:
                 drop_params=actual_drop_params
             )
             resp = fb_manager.execute_with_fallback(
-                primary_model=self.parent.model,
+                primary_model=model,
                 primary_api_key=actual_api_key,
                 messages=messages,
                 temperature=actual_temperature,
@@ -443,7 +439,8 @@ class CNLLM:
             Returns:
                 BatchResponse: 批量响应对象（非流式/流式都返回）
             """
-            from cnllm.utils.batch import BatchScheduler, StreamBatchScheduler, MixedBatchScheduler, _normalize_batch_requests
+            from cnllm.utils.scheduler.base import BatchScheduler, _normalize_batch_requests
+            from cnllm.utils.scheduler.chat import StreamBatchScheduler, MixedBatchScheduler
             from cnllm.core.accumulators.batch_accumulator import (
                 BatchResponse,
                 BatchStreamAccumulator,
@@ -606,8 +603,6 @@ class CNLLM:
 
             else:
                 # === 混合模式 ===
-                from cnllm.utils.batch import MixedBatchScheduler
-                # 按原始顺序恢复 stream 标记
                 for idx, req in enumerate(batch_requests):
                     if stream_flags.get(idx):
                         req["stream"] = True
@@ -624,3 +619,4 @@ class CNLLM:
                     batch_response._keep = actual_keep
                 self._batch_response = batch_response
                 return batch_response
+

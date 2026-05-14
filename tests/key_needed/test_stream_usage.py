@@ -79,6 +79,6 @@ class TestStreamUsage:
             print(f"  last chunk usage: {last_chunk['usage']}")
         print(f"  c.chat.usage: {c2.chat.usage}")
 
-        # 属性至少应存在（即使厂商没发流式 usage）
+        # 属性至少应存在（即使厂商没发流式 usage，字段名因厂商而异）
         if c2.chat.usage is not None:
-            assert "prompt_tokens" in c2.chat.usage
+            assert any(k in c2.chat.usage for k in ("prompt_tokens", "total_tokens", "total_characters")), f"usage 无已知字段: {c2.chat.usage}"

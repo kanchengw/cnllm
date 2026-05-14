@@ -52,18 +52,21 @@ _httpx_stub.InvalidURL = type("InvalidURL", (Exception,), {})
 _httpx_stub.HTTPError = type("HTTPError", (Exception,), {})
 _httpx_stub.Limits = lambda **kw: None
 _httpx_stub.Response = _MockResp
+_SAVED_HTTPX = sys.modules.get("httpx")
 sys.modules["httpx"] = _httpx_stub
+import atexit
+atexit.register(lambda: sys.modules.__setitem__("httpx", _SAVED_HTTPX) if _SAVED_HTTPX else None)
 
 # ==============================
 # SUT imports
 # ==============================
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from cnllm.utils.batch import (
+from cnllm.utils.scheduler.chat import (
     MixedBatchScheduler,
     AsyncMixedBatchScheduler,
-    BatchItemResult,
 )
+from cnllm.utils.scheduler.base import BatchItemResult
 
 
 # ==============================

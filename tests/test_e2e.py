@@ -16,6 +16,8 @@ import os
 import threading
 import unittest
 
+# 此文件使用 mock model 测试 adapter URL 路径，需要跳过模型校验。
+# httpx 已在 http.py 和 embedding.py 模块级导入，不会受此影响。
 os.environ.setdefault("CNLLM_SKIP_MODEL_VALIDATION", "true")
 os.environ.setdefault("CNLLM_DEFAULT_ADAPTER", "xiaomi")
 
@@ -127,10 +129,26 @@ class _E2ETestBase(unittest.TestCase):
         cls._server.shutdown()
 
     def setUp(self):
+        # 测试需要跳过模型校验 + 使用 xiaomi adapter
+        self._old_skip = os.environ.get("CNLLM_SKIP_MODEL_VALIDATION")
+        self._old_adapter = os.environ.get("CNLLM_DEFAULT_ADAPTER")
+        os.environ["CNLLM_SKIP_MODEL_VALIDATION"] = "true"
+        os.environ["CNLLM_DEFAULT_ADAPTER"] = "xiaomi"
         self.cap = _Capture()
         _Handler.capture = self.cap
         _Handler.response_status = 200
         _Handler.response_body = None
+
+    def tearDown(self):
+        # 恢复环境变量，不污染其他测试
+        if self._old_skip:
+            os.environ["CNLLM_SKIP_MODEL_VALIDATION"] = self._old_skip
+        else:
+            os.environ.pop("CNLLM_SKIP_MODEL_VALIDATION", None)
+        if self._old_adapter:
+            os.environ["CNLLM_DEFAULT_ADAPTER"] = self._old_adapter
+        else:
+            os.environ.pop("CNLLM_DEFAULT_ADAPTER", None)
 
     @property
     def base_url(self) -> str:
@@ -264,7 +282,7 @@ class TestParamViaServer(_E2ETestBase):
     def test_skip_fields_excluded(self):
         """skip=true 字段（base_url、fallback_models）不在 payload"""
         client = CNLLM(model="mimo-v2-pro", api_key="test-key",
-                       base_url=self.base_url, fallback_models={"x": None})
+                       base_url=self.base_url, fallback_models={"x": {"api_key": "test-key"}})
         client.chat.create(messages=[{"role": "user", "content": "hi"}])
         self.assert_captured()
         self.assertNotIn("base_url", self.cap.body)
@@ -294,20 +312,21 @@ class TestEmbeddingViaServer(_E2ETestBase):
 
     def test_embedding_default_url(self):
         """embedding 默认 URL → YAML default + path"""
-        adapter_cls = BaseEmbeddingAdapter.get_adapter_for_model("embo-01")
+        adapter_cls = BaseEmbeddingAdapter.get_adapter_for_model("embedding-2")
         self.assertIsNotNone(adapter_cls)
-        inst = adapter_cls(api_key="test-key", model="embo-01", base_url=self.base_url)
+        inst = adapter_cls(api_key="test-key", model="embedding-2", base_url=self.base_url)
         resp = inst.create(input="测试文本")
-        self.assertIsInstance(resp, dict)
+        self.assertTrue(hasattr(resp, "vectors") or isinstance(resp, dict),
+                        f"期望有 vectors 属性或 dict, 实际 {type(resp)}")
         self.assertIn("data", resp)
 
     def test_embedding_url_path_correct(self):
         """embedding 请求路径含 /v1/embeddings"""
-        adapter_cls = BaseEmbeddingAdapter.get_adapter_for_model("embo-01")
-        inst = adapter_cls(api_key="test-key", model="embo-01", base_url=self.base_url)
+        adapter_cls = BaseEmbeddingAdapter.get_adapter_for_model("embedding-2")
+        inst = adapter_cls(api_key="test-key", model="embedding-2", base_url=self.base_url)
         inst.create(input="测试文本")
         self.assert_captured()
-        self.assertEqual(self.cap.path, "/v1/embeddings")
+        self.assertEqual(self.cap.path, "/v4/embeddings")
 
 
 # ══════════════════════════════════════════════════════════════════════

@@ -354,18 +354,48 @@ class EmbeddingResponse:
 
 
 class EmbeddingAccumulator:
-    """单个 Embedding 请求的累积器"""
+    """单个 Embedding 请求的累积器，支持 dict 访问 + .vectors 属性"""
     def __init__(self, response: Dict[str, Any], adapter):
         self._response = response
         self._adapter = adapter
+        self._data: Dict[str, Any] = {}
 
-    def process(self) -> Dict[str, Any]:
+    def process(self) -> "EmbeddingAccumulator":
         if self._adapter:
             self._adapter._raw_response = self._response
-            result = self._adapter._to_openai_format(self._response, self._adapter.model)
+            self._data = self._adapter._to_openai_format(self._response, self._adapter.model)
         else:
-            result = self._response
-        return result
+            self._data = self._response
+        return self
+
+    @property
+    def vectors(self) -> List[float]:
+        """返回单个文本的嵌入向量"""
+        data = self._data.get("data", [])
+        if data:
+            return data[0].get("embedding", [])
+        return []
+
+    def __getitem__(self, key):
+        return self._data[key]
+
+    def __contains__(self, key):
+        return key in self._data
+
+    def get(self, key, default=None):
+        return self._data.get(key, default)
+
+    def __iter__(self):
+        return iter(self._data)
+
+    def keys(self):
+        return self._data.keys()
+
+    def values(self):
+        return self._data.values()
+
+    def items(self):
+        return self._data.items()
 
 
 class AsyncEmbeddingAccumulator:

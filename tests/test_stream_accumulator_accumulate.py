@@ -15,7 +15,10 @@ _s.InvalidURL = type("IU", (Exception,), {})
 _s.HTTPError = type("HE", (Exception,), {})
 _s.Limits = lambda **kw: None
 _s.Response = _R
+_SAVED_HTTPX = sys.modules.get("httpx")
 sys.modules["httpx"] = _s
+import atexit
+atexit.register(lambda: sys.modules.__setitem__("httpx", _SAVED_HTTPX) if _SAVED_HTTPX else None)
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from cnllm.core.accumulators.single_accumulator import StreamAccumulator

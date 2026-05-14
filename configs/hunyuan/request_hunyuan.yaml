@@ -1,0 +1,78 @@
+request:
+  method: "POST"
+  headers:
+    Content-Type: "application/json"
+    Authorization: "Bearer ${api_key}"
+
+required_fields:
+  api_key:
+    skip: true
+  model: ~
+
+one_of:
+  messages_or_prompt:
+    messages: ~
+    prompt: ~
+
+optional_fields:
+  base_url:
+    skip: true
+    chat:
+      default: "https://tokenhub.tencentmaas.com/v1"
+      path: "chat/completions"
+  fallback_models:
+    skip: true
+  timeout:
+    skip: true
+    default: 60.0
+  max_retries:
+    skip: true
+    default: 3
+  retry_delay:
+    skip: true
+    default: 1.0
+  temperature: ~
+  top_p: ~
+  max_tokens: ~
+  stream: ~
+  stop: ~
+  tools: ~
+  tool_choice: ~
+  user: ~
+  seed: ~
+  # Hunyuan-specific params
+  thinking:
+    transform:
+      true: {"type": "enabled"}
+      false: {"type": "disabled"}
+  reasoning_effort: ~
+
+model_mapping:
+  chat:
+    hy3-preview: "hy3-preview"
+    hunyuan-2.0-thinking-20251109: "hunyuan-2.0-thinking-20251109"
+    hunyuan-2.0-instruct-20251111: "hunyuan-2.0-instruct-20251111"
+
+error_check:
+  code_path: "error.code"
+  success_code: null
+  message_path: "error.message"
+  error_codes:
+    AccessDenied:
+      type: "authentication_error"
+      suggestion: "请检查 API Key 是否正确"
+    RateLimitExceeded:
+      type: "rate_limit_error"
+      suggestion: "请求频率超限，请稍后重试"
+    InvalidParameter:
+      type: "invalid_request_error"
+      suggestion: "请求参数错误"
+    ModelNotFound:
+      type: "invalid_request_error"
+      suggestion: "模型不存在"
+    InsufficientBalance:
+      type: "rate_limit_error"
+      suggestion: "账户余额不足，请充值"
+    InternalError:
+      type: "server_error"
+      suggestion: "服务器内部错误，请稍后重试"

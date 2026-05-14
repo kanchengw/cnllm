@@ -1,6 +1,6 @@
 """
 框架适配器
 """
-from .langchain import LangChainRunnable
+from .langchain import LangChainRunnable, LangChainEmbeddings
 
-__all__ = ["LangChainRunnable"]
+__all__ = ["LangChainRunnable", "LangChainEmbeddings"]

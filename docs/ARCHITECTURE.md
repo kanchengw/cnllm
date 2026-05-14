@@ -11,15 +11,17 @@ cnllm/
 │   └── http.py               # HTTP 请求客户端（httpx 统一方案）
 ├── core/                     # 核心层 - 适配器抽象和厂商实现
 │   ├── __init__.py
-│   ├── adapter.py            # BaseAdapter 基础适配器（Chat）
-│   ├── embedding.py          # BaseEmbeddingAdapter Embedding适配器
+│   ├── adapter.py            # BaseAdapter 基础适配器（Chat、protocol 路由）
+│   ├── embedding.py           # BaseEmbeddingAdapter + EmbeddingResponder 统一入口
 │   ├── responder.py          # Responder 响应格式转换框架
 │   ├── accumulators/         # 字段累积器
 │   │   ├── __init__.py
-│   │   ├── base.py           # 累积器基类
-│   │   ├── single_accumulator.py    # 单条请求累积器
-│   │   ├── batch_accumulator.py     # Chat批量累积器
-│   │   └── embedding_accumulator.py # Embedding批量累积器
+│   │   ├── base.py           # 累积器基类（BaseAccumulator / StreamBaseAccumulator）
+│   │   ├── single_accumulator.py    # 单条流式/非流式累积器
+│   │   ├── batch_response.py        # 批量响应数据类（BatchResponse / BatchResults）
+│   │   ├── batch_stream.py          # 批量流式累积器（BatchStreamAccumulator）
+│   │   ├── batch_nonstream.py       # 批量非流式累积器
+│   │   └── embedding_accumulator.py # Embedding 累积器
 │   ├── framework/
 │   │   ├── __init__.py
 │   │   └── langchain.py      # LangChain Runnable集成
@@ -33,9 +35,13 @@ cnllm/
 │       └── xiaomi.py         # Xiaomi 厂商适配器
 └── utils/                    # 工具层 - 通用工具
     ├── __init__.py
+    ├── scheduler/            # 批量调度器
+    │   ├── __init__.py
+    │   ├── base.py           # BatchScheduler / 数据类 / 公共函数
+    │   ├── chat.py           # 流式/混合 Chat 调度器
+    │   └── embedding.py      # Embedding 调度器
     ├── exceptions.py         # 异常定义（含 BatchStopOnError）
     ├── fallback.py           # Fallback 管理器
-    ├── batch.py              # 批量调度器（BatchScheduler, EmbeddingBatchScheduler）
     ├── stream.py             # 流式处理工具（SSEDecoder, AsyncSSEDecoder）
     ├── validator.py          # 参数验证器
     └── vendor_error.py       # 厂商错误处理
@@ -133,7 +139,7 @@ flowchart TD
 | ---------------- | ------------------------------------------ | -------------------- | -------------------------------------- |
 | **前端入口**         | `CNLLM` (entry/client.py)                  | 客户端初始化、调用入口          | `CNLLM(model='glm-4')`                 |
 | **异步前端入口**       | `AsyncCNLLM` (entry/async\_client.py)      | 异步客户端初始化、调用入口        | `AsyncCNLLM(model='kimi-k2.6')`        |
-| **Chat适配器**      | `BaseAdapter` (core/adapter.py)            | Chat请求字段映射、Payload构建 | `_build_payload()`, `validate_model()` |
+| **Chat适配器**      | `BaseAdapter` (core/adapter.py)            | Chat请求字段映射、Payload构建、protocol 路由 | `_build_payload()`, `_get_optional_fields()`, `_get_protocol_excluded_params()` |
 | **Embedding适配器** | `BaseEmbeddingAdapter` (core/embedding.py) | Embedding请求处理        | `create_batch()`                       |
 | **HTTP执行**       | `BaseHttpClient` (entry/http.py)           | 通用HTTP请求、重试机制（httpx） | `post_stream()`, `apost_stream()`      |
 | **响应后处理**        | `Responder` (core/responder.py)            | 响应字段映射，OpenAI 标准格式构建 | `to_openai_stream_format()`            |
@@ -143,7 +149,7 @@ flowchart TD
 
 | 厂商层组件              | 文件                        | 职责                      | 示例                                   |
 | ------------------ | ------------------------- | ----------------------- | ------------------------------------ |
-| **厂商Chat适配器**      | `core/vendor/{vendor}.py` | 厂商特有Chat请求处理、Payload 构建 | `GLMAdapter.create_completion()`     |
+| **厂商Chat适配器**      | `core/vendor/{vendor}.py` | 厂商特有Chat请求处理、Payload 构建 | `GLMAdapter.create_completion()`, `MiniMaxAdapter` / `MiniMaxNativeAdapter` 双协议 |
 | **厂商Embedding适配器** | `core/vendor/{vendor}.py` | 厂商Embedding请求处理         | `GLMEmbeddingAdapter.create_batch()` |
 | **厂商响应转换器**        | `core/vendor/{vendor}.py` | 厂商特有响应转换逻辑              | `GLMResponder.to_openai_format()`    |
 | **厂商错误解析器**        | `core/vendor/{vendor}.py` | 厂商特有错误解析                | `GLMVendorError.parse()`             |
@@ -155,16 +161,51 @@ flowchart TD
 | 工具类         | 文件                      | 职责                   | 示例                                          |
 | ----------- | ----------------------- | -------------------- | ------------------------------------------- |
 | **异常系统**    | `utils/exceptions.py`   | CNLLM 异常基类，统一异常体系    | `raise CNLLMError(msg)`                     |
-| **批量调度器**   | `utils/batch.py`        | Chat/Embedding批量调度   | `BatchScheduler`, `EmbeddingBatchScheduler` |
+| **批量调度器**   | `utils/scheduler/`      | Chat/Embedding批量调度   | `BatchScheduler`, `EmbeddingBatchScheduler` |
 | **批量停止异常**  | `utils/exceptions.py`   | stop\_on\_error抛出的异常 | `BatchStopOnError`                          |
 | **厂商错误翻译器** | `utils/vendor_error.py` | 厂商错误翻译器，翻译为 CNLLM 异常 | `translator.to_cnllm_error()`               |
-| **回退管理器**   | `utils/fallback.py`     | 回退管理器，处理模型不可用时的回退逻辑  | `execute_with_fallback()`                   |
+| **回退管理器**   | `utils/fallback.py`     | 回退管理器，处理模型不可用时的回退逻辑  | `execute_with_fallback()`, `fallback_models={"fb_model": "fb_key"}` |
 | **流式处理工具**  | `utils/stream.py`       | SSE 解码、HTTP 流处理      | `SSEDecoder`, `AsyncSSEDecoder`             |
 | **参数验证器**   | `utils/validator.py`    | 参数验证器，验证模型、字段、参数范围   | `validate_model()`, `validate_required()`   |
 
 ***
 
-### 1.5 调用入口层级
+### 1.5 Protocol 路由层级
+
+部分厂商（如 MiniMax）同时提供 **OpenAI 兼容接口** 和 **原生接口**，两种接口的参数和响应格式不同。CNLLM 通过以下机制实现多协议路由：
+
+```mermaid
+flowchart LR
+    A["客户端传入模型名<br/>+ base_url"] --> B["_get_adapter()"]
+    B --> C{protocol 已指定?}
+    C -->|是| D["使用用户指定的 protocol"]
+    C -->|否| E["detect_protocol(base_url, config_dir)<br/>检查 base_url 是否包含非 openai 的 path"]
+    E --> F{匹配到非 openai protocol?}
+    F -->|是| G["protocol = native"]
+    F -->|否| H["protocol = openai"]
+    D --> I["MiniMaxAdapter<br/>(OpenAI 兼容)"]
+    G --> J["MiniMaxNativeAdapter<br/>(原生)"]
+    H --> I
+
+    style A fill:#e1f5fe
+    style B fill:#fff3e0
+    style C fill:#fff9c4
+    style E fill:#f3e5f5
+    style I fill:#e8f5e9
+    style J fill:#e8f5e9
+```
+
+**protocol 对参数系统的影响**：
+
+| 机制 | 无 protocol（其他厂商） | protocol="openai"（MiniMax） | protocol="native"（MiniMax） |
+|------|------------------------|-----------------------------|-----------------------------|
+| `_get_optional_fields()` | 返回全部 optional_fields | 仅返回 openai 兼容参数 | 仅返回 native 参数 |
+| `_get_protocol_excluded_params()` | `set()` 无排除 | `{thinking, top_k, mask, ...}` | `{reasoning_split}` |
+| `validate_for_scope` A.6 | 不触发 | 排除 native-only 参数 | 排除 openai-only 参数 |
+
+**向后兼容**：其他厂商的 `protocol=None`，`_get_optional_fields()` 返回全量字段，`_get_protocol_excluded_params()` 返回空集合，不产生任何过滤效果。
+
+### 1.6 调用入口层级
 
 ```mermaid
 flowchart TB
@@ -240,14 +281,16 @@ BaseAdapter.create_completion(messages, temperature, stream, **kwargs)
     ↓
 ① 收集参数：{model, messages, temperature, stream, **kwargs}
     ↓
-② validate_for_scope(params, scope="chat", vendor_yaml=..., drop_params="warn")
+② validate_for_scope(params, scope="chat", vendor_yaml=protocol_vendor_yaml, drop_params="warn", protocol_excluded_params=...)
   ├─ A: PARAM_REGISTRY 校验（是否注册 / scope 匹配 / batch_level 误传 / 类型提示）
+  ├─ A.5: YAML skip 标记的参数移除
+  ├─ A.6: protocol 排他性过滤 — 由 adapter._get_protocol_excluded_params() 提供的被协议排除的参数集合
   ├─ B: YAML field_mappings 校验（厂商特有参数白名单）
-  └─ C: 未匹配参数 → 按 drop_params 策略处理（warn / strict / ignore）
+  ├─ C: 未匹配参数 → 按 drop_params 策略处理（warn / strict / ignore）
     ↓
 ③ _validate_one_of(params)  →  互斥参数校验（prompt / messages 二选一）
     ↓
-④ _check_image_support(params)  →  图片输入兼容性检查
+④ _check_image_support(params)  →  多模态输入兼容性检查
     ↓
 ⑤ _build_payload(params)  →  按 YAML 字段映射（map / transform / skip）构建请求体
    └─ 内部调用 get_vendor_model(model)  →  短名 → 厂商模型名
@@ -309,26 +352,32 @@ Namespace.batch() 入口
 | -- | -------------------- | ------------------------------- | --------------------------------------------------------- | ----------------------------------- |
 | 1  | 获取 scope 感知默认值（初始化时） | `resolve_default`               | **PARAM\_REGISTRY.default**（scope 差异化：如 chat=3, embed=12） | timeout, max\_retries, retry\_delay |
 | 2  | 通用参数校验 + 过滤          | `validate_for_scope` 步骤 A       | **PARAM\_REGISTRY**（scope 匹配 + batch\_level 校验 + 类型提示）    | -                                   |
-| 3  | 厂商特有参数校验             | `validate_for_scope` 步骤 B       | **YAML optional\_fields**（含可选 scope 限制）                   | -                                   |
-| 4  | 未知参数策略               | `validate_for_scope` 步骤 C       | **drop\_params**（warn / strict / ignore）                  | -                                   |
-| 5  | 互斥参数校验               | `_validate_one_of`¹             | one\_of（prompt ↔ messages）                                | -                                   |
-| 6  | 图片支持校验               | `_check_image_support`          | 模型 vision 支持列表                                            | -                                   |
-| 7  | 构建请求体 + 模型名映射        | `_build_payload`                | YAML 字段映射（map / transform / skip）+ model\_mapping         | -                                   |
-| 8  | 组装请求 URL             | `get_base_url` + `get_api_path` | base\_url + api\_path（按 adapter\_type 分层）                 | -                                   |
-| 9  | 请求头映射                | `get_header_mappings`           | YAML 中 skip:true 且 head 的字段                               | -                                   |
+| 3  | YAML skip 参数过滤        | `validate_for_scope` 步骤 A.5     | **vendor\_yaml** `skip: true` 标记                           | api\_key, base\_url 等 SDK 内部字段    |
+| 4  | protocol 排他性过滤        | `validate_for_scope` 步骤 A.6     | **protocol\_excluded\_params**（adapter 通过 `_get_protocol_excluded_params` 提供） | 仅 MiniMax 有实际排除：thinking, top\_k (native)；reasoning\_split (openai) |
+| 5  | 厂商特有参数校验             | `validate_for_scope` 步骤 B       | **YAML optional\_fields**（含可选 scope 限制）                   | -                                   |
+| 6  | 未知参数策略               | `validate_for_scope` 步骤 C       | **drop\_params**（warn / strict / ignore）                  | -                                   |
+| 7  | 互斥参数校验               | `_validate_one_of`¹             | one\_of（prompt ↔ messages）                                | -                                   |
+| 8  | 图片支持校验               | `_check_image_support`          | 模型 vision 支持列表                                            | -                                   |
+| 9  | 构建请求体 + 模型名映射        | `_build_payload`                | YAML 字段映射（map / transform / skip）+ model\_mapping + `_get_optional_fields()` protocol 过滤 | -                                   |
+| 10 | 组装请求 URL             | `get_base_url` + `get_api_path` | base\_url + api\_path（按 protocol 或 adapter\_type 分层）      | -                                   |
+| 11 | 请求头映射                | `get_header_mappings`           | YAML 中 skip:true 且 head 的字段                               | -                                   |
 
 ¹ `_validate_one_of` 仅在 Chat 调用路径中执行，Embedding 路径不调用此方法。
 
 **参数验证两阶段设计**：
 
 ```
-validate_for_scope(params, scope, vendor_yaml, drop_params)
+validate_for_scope(params, scope, vendor_yaml, drop_params, protocol_excluded_params=None)
   │
   ├─ 步骤 A ── PARAM_REGISTRY 匹配
   │   ├─ scope 匹配 → 加入 clean
   │   ├─ scope 不匹配 → 按 drop_params 处理
   │   ├─ batch_level=True → 警告（误传入 create）
-  │   └─ 类型不匹配 → strict 抛 TypeError，warn 记录警告丢弃参数
+  │   ├─ 类型不匹配 → strict 抛 TypeError，warn 记录警告丢弃参数
+  │   ├─ 步骤 A.5 ── YAML skip 标记 → 跳过（如 api_key、base_url）
+  │   └─ 步骤 A.6 ── protocol 排他性过滤
+  │       └─ 参数在 protocol_excluded_params 中？→ 按 unknown 处理
+  │           （由 adapter._get_protocol_excluded_params() 提供）
   │
   ├─ 步骤 B ── YAML field_mappings 匹配（厂商特有参数）
   │   ├─ 查 optional_fields + required_fields
@@ -530,18 +579,43 @@ flowchart LR
 
 ## 4. FallbackManager 流程设计
 
-只有客户端初始化入口接受配置`fallback_models`参数，为追求程序或应用运行时的稳定性建议配置此项。
-当客户端入口处的主模型不可用时，会按顺序尝试`fallback_models`中的模型。
+只有客户端初始化入口接受配置 `fallback_models` 参数，为追求程序或应用运行时的稳定性建议配置此项。
+当客户端入口处的主模型不可用时，会按顺序尝试 `fallback_models` 中的模型。
+
+### 4.1 fallback_models 配置格式
+
+```python
+fallback_models = {
+    "deepseek-chat": {
+        "api_key": "ds-key-456",
+        "base_url": "https://api.deepseek.com/v1",
+    },
+    "qwen-plus": {
+        "api_key": "my-key",         # base_url 不传 → 使用默认 URL（同主模型）
+    },
+}
+```
+
+- **key**: 回退的模型名（必填）
+- **value**: `dict`，必填字段：
+  - `api_key`：该模型的 API Key（**必填**）
+  - `base_url`：该模型的独立 endpoint（可选，不传或 `None` 时使用适配器默认 URL）
+
 代码示例：
 
 ```python
 client = CNLLM(
     model="minimax-m2.7", api_key="minimax_key", 
-    fallback_models={"mimo-v2-flash": "xiaomi-key", "minimax-m2.5": None}  # None 表示使用主模型配置的 API_key
-    )   
-resp = client.chat.create(prompt="2+2等于几？")  # 调用入口如再次配置模型，将会覆盖客户端入口处配置的所有模型
+    fallback_models={
+        "mimo-v2-flash": {"api_key": "xiaomi-key"},
+        "deepseek-chat": {"api_key": "ds-key", "base_url": "https://api.deepseek.com/v1"},
+    },
+)   
+resp = client.chat.create(prompt="2+2等于几？")
 print(resp)
 ```
+
+调用入口处如果再次指定 `model`，会覆盖客户端入口处配置的 `model`，但 fallback 顺序**不受影响**（仍从主模型开始）。
 
 ```mermaid
 flowchart TD
@@ -557,7 +631,45 @@ flowchart TD
     G -->|任一成功| I[该模型成功]
 ```
 
-### 4.1 FallbackError 错误聚合
+### 4.2 执行流程
+
+```python
+# FallbackManager 内部
+# 主模型始终使用客户端传入的参数（api_key, base_url 等）
+models_to_try = [(primary_model, primary_api_key, self.base_url)]
+
+# 备用模型从 fallback_config 中读取 per-model 配置
+for fb_model, fb_config in self.fallback_config.items():
+    fb_api_key = fb_config["api_key"]                    # 必填
+    fb_base_url = fb_config.get("base_url")               # 可选，None → 使用管理器传入的 base_url
+    models_to_try.append((fb_model, fb_api_key, fb_base_url))
+
+# 依次尝试每个模型
+for model, api_key, base_url in models_to_try:
+    try:
+        adapter = self.get_adapter_func(
+            model, api_key,
+            base_url=base_url or self.base_url,           # fb_base_url 优先，否则用管理器传入的共享 base_url
+            ...
+        )
+        return execute_fn(adapter, model, api_key)
+    except (ModelNotSupportedError, MissingParameterError, ContentFilteredError):
+        raise  # 不可重试的错误直接抛出
+    except Exception as e:
+        # 网络/服务端错误 → 记录错误，尝试下一个
+        continue
+
+raise FallbackError(...)  # 全部失败
+```
+
+**不可重试的错误类型**（直接抛出，不触发 fallback）：
+- `ModelNotSupportedError`：模型不存在
+- `MissingParameterError`：缺少必要参数
+- `ContentFilteredError`：内容被过滤
+
+其他异常（网络错误、限流、服务端错误等）都会触发 fallback 尝试。
+
+### 4.3 FallbackError 错误聚合
 
 当配置多模型 fallback 且所有模型都失败时，`FallbackError` 会聚合所有错误信息：
 
@@ -732,10 +844,113 @@ def __iter__(self):
 
 **说明**：
 
-- `.raw` 属性现在返回完整的原始响应，不进行任何过滤
+- `.raw` 在流式中返回原始 chunks 列表（`List[Dict]`），不做任何 merge 处理
 - 字段提取仍然进行，为 `.think`、`.still` 和 `.tools` 属性服务
 
-### 5.4 Chunk 后处理规则（StreamAccumulator）
+### 5.4 流式数据三路径
+
+流式响应中，每个原始 chunk 经过三条路径处理：
+
+```
+HTTP 原始 chunk
+  │
+  ├─①─ _to_openai_stream_format(chunk) ─→ 迭代 yield 的 result（OpenAI 标准格式）
+  │     └─ 按 YAML 字段映射提取 content / reasoning_content / tool_calls
+  │      → _formatted_chunks.append(result) → __repr__ 累积合并
+  │
+  ├─②─ _accumulate_extra_fields(result) ─→ .still / .think / .tools
+  │     └─ 从 ① 产出的格式化 result 中提取字段，拼接累积到 adapter._cnllm_extra
+  │      → 用户访问 client.chat.still / think / tools
+  │
+  └─③─ _chunks.append(chunk) ─→ .raw
+        └─ 原始 chunk 原样保存，不做任何 merge
+         → 用户访问 resp.raw 得到 List[Dict]（每个元素是原始 HTTP chunk）
+```
+
+**路径① — `_to_openai_stream_format(chunk)`**
+
+负责将厂商原始 chunk 转换为 OpenAI 标准流式格式。通过 Responder 的 YAML 配置（`stream_fields`）映射字段路径：
+
+```python
+# cnllm/core/responder.py
+def to_openai_stream_format(self, raw, model):
+    content = delta.get("content", "")
+    delta_obj = {"content": content, "role": "assistant"}
+    if tool_calls: delta_obj["tool_calls"] = tool_calls
+    if reasoning_content: delta_obj["reasoning_content"] = reasoning_content
+    return {"choices": [{"index": 0, "delta": delta_obj, "finish_reason": ...}]}
+```
+
+转换后的 result 同时用于路径②和 `_formatted_chunks` 累积。
+
+**路径② — `_accumulate_extra_fields(result)`**
+
+从 ① 的格式化结果中提取关键字段，累加到 `adapter._cnllm_extra`：
+
+```python
+# cnllm/core/adapter.py
+def _accumulate_extra_fields(self, result):
+    delta = result.get("choices", [{}])[0].get("delta", {})
+    if delta.get("reasoning_content"):
+        self._cnllm_extra["_thinking"] += reasoning_content
+    if delta.get("content"):
+        self._cnllm_extra["_still"] += content
+    if delta.get("tool_calls"):
+        # 按 index merge，arguments 拼接
+    if result.get("usage"):
+        self._cnllm_extra["_usage"] = usage
+```
+
+**路径③ — `_chunks` 原始存储**
+
+`self._chunks` 仅做 `append(chunk)`，不做任何处理。`.raw` 属性直接返回 `list(self._chunks)`：
+
+```python
+# cnllm/core/accumulators/base.py
+@property
+def raw(self) -> List[Dict[str, Any]]:
+    return list(self._chunks)
+```
+
+**三路径统一数据源**：
+
+```
+原始 chunk → _to_openai_stream_format → 格式化 result
+                                            ├→ _accumulate_extra_fields → .still/.think/.tools
+                                            ├→ _formatted_chunks → __repr__
+                                            └→ _chunks（原始）→ .raw
+```
+
+所有三条路径的数据都来自同一份格式化 result，避免重复解析厂商特有字段格式。
+
+#### 批量场景的复用
+
+批量调度器（`BatchScheduler`、`MixedBatchScheduler`）对每条请求调用 `client.chat.create()`，拿到单条 `StreamAccumulator` 后：
+
+1. **迭代耗尽**：`for chunk in stream_acc: pass` → 触发路径①②③，`_cnllm_extra` 完成累积
+2. **读取累积值**：`result.still`、`result.think`、`result.tools`、`result.usage`（来自 `_cnllm_extra`）
+3. **读取原始 chunks**：`result._chunks` → 存入 `batch_response.set_raw(request_id, result._chunks)`
+4. **存入格式化结果**：`StreamAccumulator.from_chunks(chunks)` → `batch_response.add_result(request_id, ...)`
+
+```
+单条 StreamAccumulator                 批量 BatchResponse
+┌─────────────────────┐              ┌──────────────────────┐
+│ .still → 累积 content │──set_still──→ _still[request_id]     │
+│ .think → 累积 thinking│──set_think──→ _think[request_id]     │
+│ .tools → merge tcs   │──set_tools──→ _tools[request_id]     │
+│ ._chunks → 原始 chunks│──set_raw────→ _raw[request_id]       │
+│ .usage → 最后 usage   │──set_usage──→ usage（全请求合并）       │
+└─────────────────────┘              └──────────────────────┘
+```
+
+**逐 chunk vs 逐请求的区分**：
+
+| 粒度 | 发生位置 | 处理内容 |
+|------|---------|---------|
+| **逐 chunk** | `StreamAccumulator.__next__()` / `BatchStreamAccumulator._accumulate_chunk()` | 每条原始 chunk 到达时：格式转换、字段累积、chunks 追加 |
+| **逐请求** | `BatchScheduler._execute_stream_item()` / `StreamBatchScheduler` extras | 单条流式请求完成后：从 `_cnllm_extra` 一次性读取累积值，写入 `BatchResponse` |
+
+### 5.5 Chunk 后处理规则（StreamAccumulator）
 
 在迭代过程中逐个 chunk 执行后处理：
 
@@ -791,7 +1006,7 @@ def _remove_duplicate_finish_chunks(self):
 - **对外暴露时过滤**：`__next__()` 和 `get_chunks()` 会过滤掉 `[DONE]` 字符串，只返回纯 JSON chunks
 - 这样设计是为了兼容 LangChain、LiteLLM 等 OpenAI 兼容库的期望（它们期望纯 JSON chunks）
 
-### 5.5 同步数据流时序图
+### 5.6 同步数据流时序图
 
 ```mermaid
 sequenceDiagram
@@ -834,7 +1049,7 @@ sequenceDiagram
     C-->>U: adapter._raw_response（原生 chunks，保留 reasoning_content）
 ```
 
-### 5.6 异步数据流时序图
+### 5.7 异步数据流时序图
 
 ```mermaid
 sequenceDiagram

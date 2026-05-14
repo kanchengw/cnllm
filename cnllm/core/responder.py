@@ -282,6 +282,14 @@ class Responder:
         if content_path and self._path_exists(raw, content_path):
             content = self._get_by_path(raw, content_path)
             if content:
+                # 提取 <think> 标签内的推理内容
+                think_match = re.search(r'<think>(.*?)</think>', content, re.DOTALL)
+                if think_match:
+                    thinking_text = think_match.group(1).strip()
+                    if thinking_text:
+                        cnllm_extra["_thinking"] = thinking_text
+                    # 从 content 中移除 <think> 标签及其内容
+                    content = re.sub(r'<think>.*?</think>', '', content, flags=re.DOTALL).strip()
                 cnllm_extra["_still"] = self.cleaner.clean(content)
 
         tool_calls_path = self._get_config_value("fields", "tool_calls")
@@ -398,6 +406,10 @@ class Responder:
 
         if "request_id" in raw:
             result["request_id"] = raw["request_id"]
+
+        raw_usage = raw.get("usage")
+        if raw_usage:
+            result["usage"] = raw_usage
 
         return result
 

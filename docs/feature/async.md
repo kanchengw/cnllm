@@ -229,7 +229,7 @@ async with asyncCNLLM(model="deepseek-chat", api_key="xxx") as client:
 ```python
 async with asyncCNLLM(model="deepseek-chat", api_key="xxx") as client:
     async for chunk in await client.chat.create("写一首诗", stream=True):
-        print(client.batch_result.still)
+        print(client.chat.batch_result.still)
 ```
 
 ### 6.3 异步批量

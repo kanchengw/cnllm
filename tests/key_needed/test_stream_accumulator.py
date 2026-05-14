@@ -28,7 +28,7 @@ API_KEY_MINIMAX = os.getenv("MINIMAX_API_KEY")
 MODEL_GLM = "glm-4.7-flash"
 API_KEY_GLM = os.getenv("GLM_API_KEY")
 
-MODEL_KIMI = "kimi-k2-thinking-turbo"
+MODEL_KIMI = "kimi-k2.6"
 API_KEY_KIMI = os.getenv("KIMI_API_KEY")
 
 MODEL_DOUBAO = "doubao-seed-2-0-pro"

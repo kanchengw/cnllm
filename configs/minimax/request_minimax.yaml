@@ -8,9 +8,6 @@ required_fields:
   api_key:
     skip: true
   model: ~
-  input:
-    scope: embed
-    map: "texts"
 
 one_of:
   messages_or_prompt:
@@ -20,15 +17,13 @@ one_of:
 optional_fields:
   base_url:
     skip: true
-    chat:
+    openai:
+      default: "https://api.minimaxi.com"
+      path: "v1/chat/completions"
+    native:
       default: "https://api.minimaxi.com"
       path: "v1/text/chatcompletion_v2"
-    embedding:
-      default: "https://api.minimax.chat"
-      path: "v1/embeddings"
   fallback_models:
-    skip: true
-  group_id:
     skip: true
   timeout:
     skip: true
@@ -41,20 +36,17 @@ optional_fields:
     default: 1.0
   temperature: ~
   max_completion_tokens: ~
+  max_tokens: 
+    protocol: native
+  stream_options: 
+    protocol: native
   stream: ~
   top_p: ~
-  top_k: ~
   tools: ~
   tool_choice: ~
-  thinking: ~
-  presence_penalty: ~
-  frequency_penalty: ~
-  stop: ~
-  mask:
-    scope: chat
-  type:
-    scope: embed
-    default: "db"
+  group_id:
+    skip: true
+    protocol: native
 
 model_mapping:
   chat:
@@ -64,39 +56,9 @@ model_mapping:
     minimax-m2.7: "MiniMax-M2.7"
     minimax-m2.5-highspeed: "MiniMax-M2.5-highspeed"
     minimax-m2.7-highspeed: "MiniMax-M2.7-highspeed"
-  embedding:
-    embo-01: "embo-01"
 
 error_check:
   code_path: "base_resp.status_code"
   success_code: 0
   message_path: "base_resp.status_msg"
   auth_code: 1004
-  error_codes:
-    1000:
-      type: "server_error"
-      suggestion: "请稍后再试"
-    1001:
-      type: "timeout"
-      suggestion: "请求超时，请稍后再试"
-    1002:
-      type: "rate_limit"
-      suggestion: "请求频率超限，请稍后重试"
-    1004:
-      type: "authentication_error"
-      suggestion: "请检查 API Key 是否正确"
-    1008:
-      type: "token_limit"
-      suggestion: "余额不足，请检查账户余额"
-    1013:
-      type: "invalid_request_error"
-      message: "非法字符超过10%"
-    1024:
-      type: "server_error"
-      suggestion: "服务器内部错误，请稍后再试"
-    1026:
-      type: "content_filtered"
-      suggestion: "输入内容涉敏，请调整输入内容"
-    2013:
-      type: "invalid_request_error"
-      message: "输入格式信息不正常"

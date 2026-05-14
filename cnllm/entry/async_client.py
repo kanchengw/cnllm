@@ -56,7 +56,7 @@ class asyncCNLLM:
                 "客户端初始化不支持同时设置 prompt 和 messages，请选择其一"
             )
         self.model = model.lower() if model else None
-        self.api_key = api_key if api_key is not None else os.getenv("MINIMAX_API_KEY")
+        self.api_key = api_key
         self.base_url = base_url
         self.timeout = timeout
         self.max_retries = max_retries
@@ -111,11 +111,27 @@ class asyncCNLLM:
             max_retries: int = None,
             retry_delay: float = None,
             base_url: str = None,
-            drop_params: str = None
+            drop_params: str = None,
+            protocol: str = None,
     ):
         from ..core.adapter import BaseAdapter
+        from cnllm.utils.validator import detect_protocol, has_protocol_config
 
-        adapter_name = BaseAdapter.get_adapter_name_for_model(model)
+        if not protocol and model:
+            _aname = BaseAdapter.get_adapter_name_for_model(model)
+            _cdir = _aname.replace("-native", "") if _aname else ""
+            if _cdir and has_protocol_config(_cdir):
+                actual_protocol = detect_protocol(base_url or self.base_url, _cdir)
+            else:
+                actual_protocol = None
+        else:
+            actual_protocol = protocol
+        use_native = actual_protocol == "native"
+
+        if use_native:
+            adapter_name = "minimax-native"
+        else:
+            adapter_name = BaseAdapter.get_adapter_name_for_model(model)
         if not adapter_name:
             available = BaseAdapter.get_all_adapter_names()
             raise ModelNotSupportedError(
@@ -131,7 +147,7 @@ class asyncCNLLM:
             )
 
         actual_drop_params = drop_params or self.drop_params
-        adapter_key = f"{model}:{api_key}:{base_url}:{actual_drop_params}"
+        adapter_key = f"{model}:{api_key}:{base_url}:{actual_drop_params}:{actual_protocol}"
         if adapter_key not in self._adapters:
             self._adapters[adapter_key] = adapter_class(
                 api_key=api_key,
@@ -140,7 +156,8 @@ class asyncCNLLM:
                 max_retries=max_retries or self.max_retries,
                 retry_delay=retry_delay or self.retry_delay,
                 base_url=base_url or self.base_url,
-                drop_params=actual_drop_params
+                drop_params=actual_drop_params,
+                protocol=actual_protocol,
             )
             self._adapters[adapter_key]._validator.validate_model(model)
 
@@ -323,25 +340,6 @@ class asyncCNLLM:
                 drop_params=actual_drop_params or self.parent.drop_params,
             )
 
-            if explicit_model is not None:
-                adapter = self.parent._get_adapter(model, actual_api_key, actual_timeout, actual_max_retries, actual_retry_delay, actual_base_url, drop_params=actual_drop_params)
-                self.parent._last_adapter = adapter
-                raw_resp = await adapter.acreate_completion(
-                    messages=messages,
-                    temperature=actual_temperature,
-                    max_tokens=actual_max_tokens,
-                    stream=actual_stream,
-                    model=model,
-                    **clean_kwargs
-                )
-                if actual_stream:
-                    adapter._raw_response = {}
-                    adapter._cnllm_extra = {}
-                    return AsyncStreamAccumulator(raw_resp, adapter)
-                responder = adapter._get_responder()
-                accumulator = AsyncNonStreamAccumulator(raw_resp, adapter, responder)
-                return await accumulator.process()
-
             fb_manager = FallbackManager(
                 fallback_config=self.parent.fallback_models,
                 primary_api_key=actual_api_key,
@@ -354,7 +352,7 @@ class asyncCNLLM:
                 drop_params=actual_drop_params
             )
             resp = await fb_manager.aexecute_with_fallback(
-                primary_model=self.parent.model,
+                primary_model=model,
                 primary_api_key=actual_api_key,
                 messages=messages,
                 temperature=actual_temperature,
@@ -409,7 +407,8 @@ class asyncCNLLM:
                 流式: AsyncIterator[Dict] - 流式 chunks
                 非流式: BatchResponse - 批量响应对象
             """
-            from cnllm.utils.batch import AsyncBatchScheduler, AsyncStreamBatchScheduler, _normalize_batch_requests
+            from cnllm.utils.scheduler.base import _normalize_batch_requests
+            from cnllm.utils.scheduler.chat import AsyncBatchScheduler, AsyncStreamBatchScheduler
             from cnllm.core.accumulators.batch_accumulator import (
                 BatchResponse,
                 AsyncBatchStreamAccumulator,
@@ -545,7 +544,7 @@ class asyncCNLLM:
 
             else:
                 # === 混合模式 ===
-                from cnllm.utils.batch import AsyncMixedBatchScheduler
+                from cnllm.utils.scheduler.chat import AsyncMixedBatchScheduler
                 for idx, req in enumerate(batch_requests):
                     if stream_flags.get(idx):
                         req["stream"] = True

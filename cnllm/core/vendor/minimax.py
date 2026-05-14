@@ -47,13 +47,15 @@ class MiniMaxVendorError(VendorError):
 
 
 VendorErrorRegistry.register(MiniMaxVendorError.VENDOR_NAME, MiniMaxVendorError)
+VendorErrorRegistry.register("minimax-native", MiniMaxVendorError)
 
 
-class MiniMaxResponder(Responder):
+class MiniMaxNativeResponder(Responder):
     CONFIG_DIR = "minimax"
 
     def __init__(self):
         super().__init__("minimax")
+        self._config = self._config.get("native", {})
         self._stream_prev_had_finish = False
 
     def _reset_stream_state(self):
@@ -98,9 +100,36 @@ class MiniMaxResponder(Responder):
         return True
 
 
-class MiniMaxAdapter(BaseAdapter):
-    ADAPTER_NAME = "minimax"
+class MiniMaxNativeAdapter(BaseAdapter):
+    ADAPTER_NAME = "minimax-native"
     CONFIG_DIR = "minimax"
+
+    @classmethod
+    def _load_class_config(cls) -> Dict[str, Any]:
+        if cls._class_config is not None:
+            return cls._class_config
+        config_path = os.path.join(
+            os.path.dirname(__file__),
+            "..", "..", "..", "configs", cls.CONFIG_DIR, "request_minimax.yaml"
+        )
+        try:
+            import yaml
+            with open(config_path, 'r', encoding='utf-8') as f:
+                cls._class_config = yaml.safe_load(f) or {}
+                mapping = cls._class_config.get("model_mapping", {})
+                if isinstance(mapping, dict) and "chat" in mapping:
+                    mapping = mapping["chat"]
+                cls._supported_models = list(mapping.keys()) if mapping else []
+                return cls._class_config
+        except FileNotFoundError:
+            cls._class_config = {}
+            cls._supported_models = []
+            return {}
+        except Exception as e:
+            logger.error(f"Failed to load config: {e}")
+            cls._class_config = {}
+            cls._supported_models = []
+            return {}
 
     def __init__(
         self,
@@ -123,7 +152,7 @@ class MiniMaxAdapter(BaseAdapter):
             fallback_models=fallback_models,
             **kwargs
         )
-        self.responder = MiniMaxResponder()
+        self.responder = MiniMaxNativeResponder()
         self._stream_prev_had_finish = False
         self._last_content = ""
 
@@ -164,141 +193,98 @@ class MiniMaxAdapter(BaseAdapter):
         return result
 
 
-MiniMaxAdapter._register()
-
-
-from typing import Dict, Any, List, Union, Optional
-from ..embedding import BaseEmbeddingAdapter, EmbeddingResponder
-
-
-class MiniMaxEmbeddingResponder(EmbeddingResponder):
+class MiniMaxResponder(Responder):
+    """MiniMax OpenAI 兼容接口 Responder"""
     CONFIG_DIR = "minimax"
+    def __init__(self):
+        super().__init__("minimax")
+        self._config = self._config.get("openai", {})
+        self._think_buffer = ""
+        self._in_think = False
 
-    def _load_config(self) -> Dict[str, Any]:
-        import yaml
-        config_path = os.path.join(
-            os.path.dirname(__file__),
-            "..", "..", "..", "configs", self.config_dir,
-            f"response_{self.config_dir}.yaml"
-        )
-        try:
-            with open(config_path, 'r', encoding='utf-8') as f:
-                return yaml.safe_load(f) or {}
-        except FileNotFoundError:
-            logger.warning(f"Embedding response config not found: {config_path}")
-            return {}
-        except Exception as e:
-            logger.error(f"Failed to load embedding response config: {e}")
-            return {}
+    def _reset_think_state(self):
+        self._think_buffer = ""
+        self._in_think = False
 
-    def to_openai_format(self, raw: Dict[str, Any], model: str) -> Dict[str, Any]:
-        vectors = raw.get("vectors", [])
-        total_tokens = raw.get("total_tokens", 0)
+    def _process_think_content(self, content: str) -> str:
+        """处理流式 <think> 标签，返回清理后的 content，将 thinking 部分添加到 _think_buffer"""
+        if not content:
+            return ""
 
-        embedding = []
-        index = 0
-
-        if vectors and len(vectors) > 0:
-            if isinstance(vectors[0], list):
-                embedding = vectors[0]
+        if self._in_think:
+            # 已在 <think> 块内
+            close_idx = content.find("</think>")
+            if close_idx >= 0:
+                self._think_buffer += content[:close_idx]
+                self._in_think = False
+                return content[close_idx + len("</think>"):].strip()
             else:
-                embedding = vectors
+                self._think_buffer += content
+                return ""
+        else:
+            # 不在 <think> 块内，检查是否有新的 <think>
+            open_idx = content.find("<think>")
+            if open_idx >= 0:
+                # 提取打开标签前的内容（非 thinking 部分）
+                before = content[:open_idx]
+                after_open = content[open_idx + len("<think>"):]
+                close_idx = after_open.find("</think>")
+                if close_idx >= 0:
+                    # 同一 chunk 内闭合
+                    self._think_buffer = after_open[:close_idx]
+                    return (before + after_open[close_idx + len("</think>"):]).strip()
+                else:
+                    # 跨 chunk
+                    self._in_think = True
+                    self._think_buffer = after_open
+                    return before.strip()
+            else:
+                return content
 
-        return {
-            "object": "list",
-            "data": [{
-                "object": "embedding",
-                "embedding": embedding,
-                "index": index
-            }],
-            "model": model,
-            "usage": {
-                "prompt_tokens": total_tokens,
-                "total_tokens": total_tokens
-            }
-        }
+    def to_openai_stream_format(self, raw, model):
+        result = super().to_openai_stream_format(raw, model)
+        if result is None:
+            return None
+        for choice in result.get("choices", []):
+            delta = choice.get("delta", {})
+            # 处理 reason_details → reasoning_content
+            rds = delta.get("reasoning_details")
+            if rds and isinstance(rds, list) and len(rds) > 0:
+                texts = []
+                for rd in rds:
+                    if isinstance(rd, dict) and rd.get("text"):
+                        texts.append(rd["text"])
+                if texts:
+                    delta["reasoning_content"] = "".join(texts)
 
+            # 处理 <think> 标签流式分块
+            content = delta.get("content", "") or ""
+            if content:
+                cleaned = self._process_think_content(content)
+                delta["content"] = cleaned
+                if self._think_buffer:
+                    delta["reasoning_content"] = delta.get("reasoning_content", "") + self._think_buffer
+                    self._think_buffer = ""
 
-class MiniMaxEmbeddingAdapter(BaseEmbeddingAdapter):
+            # finish_reason 出现时重置 think 状态（新请求）
+            if choice.get("finish_reason"):
+                self._reset_think_state()
+
+        return result
+
+class MiniMaxAdapter(BaseAdapter):
+    """MiniMax OpenAI 兼容接口 Adapter"""
     ADAPTER_NAME = "minimax"
     CONFIG_DIR = "minimax"
+    def __init__(self, api_key, model, timeout=None, max_retries=None, retry_delay=None, base_url=None, fallback_models=None, protocol=None, **kwargs):
+        super().__init__(api_key=api_key, model=model, timeout=timeout, max_retries=max_retries, retry_delay=retry_delay, base_url=base_url, fallback_models=fallback_models, protocol=protocol, **kwargs)
+        self.responder = MiniMaxResponder()
+    def _get_responder(self):
+        return self.responder
+    def _to_openai_format(self, raw, model):
+        return self.responder.to_openai_format(raw, model)
+    def _do_to_openai_stream_format(self, raw, model):
+        return self.responder.to_openai_stream_format(raw, model)
 
-    def _get_responder(self) -> MiniMaxEmbeddingResponder:
-        return MiniMaxEmbeddingResponder(self.CONFIG_DIR)
-
-    def create_batch(
-        self,
-        input,
-        custom_ids=None,
-        model=None,
-        timeout=None,
-        max_retries=None,
-        retry_delay=None,
-        **kwargs
-    ):
-        from cnllm.core.accumulators.embedding_accumulator import EmbeddingResponse
-        if isinstance(input, str):
-            inputs = [input]
-        else:
-            inputs = input
-        custom_ids = custom_ids or [f"request_{i}" for i in range(len(inputs))]
-
-        params = self._prepare_params(inputs, model, **kwargs)
-        payload = self._build_payload(params)
-        url = self._get_request_url(**params)
-        start_time = time.time()
-
-        response = EmbeddingResponse(_request_counts={"total": len(inputs), "dimension": 0})
-        response._start_time = start_time
-        try:
-            raw_response = self._post(url, payload, **params)
-        except Exception as e:
-            response._elapsed = time.time() - start_time
-            for rid in custom_ids:
-                response.add_error(rid, str(e))
-            return response
-
-        base_resp = raw_response.get("base_resp", {})
-        status_code = base_resp.get("status_code")
-        if status_code and status_code != 0:
-            error_msg = base_resp.get("status_msg", f"API error: {status_code}")
-            response._elapsed = time.time() - start_time
-            for rid in custom_ids:
-                response.add_error(rid, error_msg)
-            return response
-
-        vectors = raw_response.get("vectors", [])
-        total_tokens = raw_response.get("total_tokens", 0)
-        dimension = 0
-
-        for i, (rid, vector) in enumerate(zip(custom_ids, vectors)):
-            if not isinstance(vector, list):
-                vector = []
-            result_data = self._to_openai_format({"vectors": [vector], "total_tokens": total_tokens}, self.model)
-            response.add_result(rid, result_data)
-            if vector and dimension == 0:
-                dimension = len(vector)
-
-        if dimension > 0:
-            response._request_counts["dimension"] = dimension
-
-        response._elapsed = time.time() - start_time
-        return response
-
-    def _prepare_params(self, input_data: Union[str, List[str]], model: str = None, **kwargs) -> Dict[str, Any]:
-        from ..param_registry import validate_for_scope
-        params = {
-            "model": model or self.model,
-            "input": input_data,
-            **kwargs
-        }
-        params = validate_for_scope(
-            params=params,
-            scope="embed",
-            vendor_yaml=self._config or {},
-            drop_params=self.drop_params,
-        )
-        return params
-
-
-MiniMaxEmbeddingAdapter._register("minimax")
+MiniMaxAdapter._register()
+MiniMaxNativeAdapter._register()

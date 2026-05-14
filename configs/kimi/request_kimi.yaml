@@ -60,11 +60,6 @@ model_mapping:
     kimi-k2.5:
       model: "kimi-k2.5"
       vision: true
-    kimi-k2-thinking: "kimi-k2-thinking"
-    kimi-k2-thinking-turbo: "kimi-k2-thinking-turbo"
-    kimi-k2-0905-preview: "kimi-k2-0905-preview"
-    kimi-k2-0711-preview: "kimi-k2-0711-preview"
-    kimi-k2-turbo-preview: "kimi-k2-turbo-preview"
     kimi-k2.6:
       model: "kimi-k2.6"
       vision: true

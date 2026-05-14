@@ -287,7 +287,7 @@ def test_11_batch_async():
 
     async def run():
         client = asyncCNLLM(model=MODEL, api_key=API_KEY)
-        resp = client.embeddings.batch(
+        resp = await client.embeddings.batch(
             input=["异步1", "异步2", "异步3"],
             keep=["*"],
         )
@@ -345,7 +345,7 @@ def test_13_batch_async_custom_ids():
 
     async def run():
         client = asyncCNLLM(model=MODEL, api_key=API_KEY)
-        resp = client.embeddings.batch(
+        resp = await client.embeddings.batch(
             input=["text1", "text2"],
             custom_ids=["my_1", "my_2"],
             keep=["*"],

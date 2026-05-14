@@ -1,6 +1,6 @@
 ---
 name: cnllm-chinese-llm-adapter
-version: 1.0.3
+version: 1.0.4
 description: >-
   为中文大模型定制的通用增强 SDK / unified adapter for Chinese LLMs: DeepSeek,
   GLM/Zhipu (智谱), KIMI/Moonshot (月之暗面), MiniMax (稀宇),
@@ -132,8 +132,8 @@ client = CNLLM(
     model="deepseek-chat",
     api_key="primary_key",
     fallback_models={
-        "glm-4.7-flash": "glm_key",   # fallback with different key
-        "kimi-k2": None                 # None = reuse primary key
+        "glm-4.7-flash": {"api_key": "glm_key"},                            # with different key
+        "deepseek-reasoner": {"api_key": "ds_key", "base_url": "https://api.deepseek.com/v1"},  # with key + endpoint
     }
 )
 # No model argument → triggers FallbackManager
@@ -330,7 +330,7 @@ resp.raw     # dict — accumulated raw vendor response
 
 ```python
 resp = client.chat.batch(prompt=[...])
-# Also accessible via client.batch_result.* in either sync/async
+# Also accessible via client.chat.batch_result.* in either sync/async
 
 # Top-level fields:
 resp.status           # dict — {success_count, fail_count, total, elapsed}
@@ -369,7 +369,7 @@ except FallbackError:
 | Vendor      | Chat Models                                                                 | Embeddings Models                  |
 |-------------|-----------------------------------------------------------------------------|------------------------------------|
 | **DeepSeek**  | deepseek-chat, deepseek-reasoner, deepseek-v4-pro, deepseek-v4-flash      | —                                  |
-| **KIMI**      | kimi-k2.6, kimi-k2.5, kimi-k2-thinking, moonshot-v1-8k/32k/128k, moonshot-v1-vision-preview | — |
+| **KIMI**      | kimi-k2.6, kimi-k2.5, moonshot-v1-8k/32k/128k, moonshot-v1-vision-preview | — |
 | **GLM**       | glm-4.6, glm-4.7, glm-4.7-flash, glm-4.7-flashx, glm-5, glm-5.1, glm-4.5 series, glm-5v-turbo, glm-4.5v, glm-4.6v, glm-4.6v-flash | embedding-2, embedding-3, embedding-3-pro |
 | **MiniMax**   | MiniMax-M2, MiniMax-M2.1, MiniMax-M2.5, MiniMax-M2.5-highspeed, MiniMax-M2.7, MiniMax-M2.7-highspeed | embo-01 |
 | **Doubao**    | doubao-seed-2-0-pro/mini/lite/code, doubao-seed-1-8, doubao-seed-1-6, doubao-seed-1-6-flash, doubao-seed-1-6-vision, doubao-1-5-vision-pro, doubao-seed-1-5-lite/pro/pro-256k | — |
@@ -377,11 +377,11 @@ except FallbackError:
 
 ## Key Parameters
 
-All **OpenAI-standard parameters** are supported: `temperature`, `max_tokens`, `top_p`, `tools`, `tool_choice`, `thinking`, `response_format`, `stop`, `presence_penalty`, `frequency_penalty`, `user`, `timeout`, `max_retries`.
+All **OpenAI-standard parameters** are supported: `temperature`, `max_tokens`, `max_completion_tokens`, `top_p`, `tools`, `tool_choice`, `thinking`, `response_format`, `stop`, `presence_penalty`, `frequency_penalty`, `user`, `timeout`, `max_retries`.
 
 Two notable CNLLM extensions:
 - **`thinking`**: `True`/`False`/`"auto"` — controls reasoning/thinking. Maps to each vendor's native thinking param
-- **`fallback_models`**: dict of `{model_name: api_key_or_None}` — only active when `chat.create()` is called without a `model` argument
+- **`fallback_models`**: dict of `{model_name: {"api_key": ..., "base_url": ...}}` — each fallback model has its own api_key (required) and optional base_url. Only active when `chat.create()` is called without a `model` argument
 
 **Batch-specific parameters** (set at the batch level, not per-request):
 - **`max_concurrent`**: `int` — max concurrent requests (default: 3 for chat, 12 for embeddings)

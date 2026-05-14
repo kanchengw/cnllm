@@ -70,7 +70,7 @@ class StreamAccumulator(StreamBaseAccumulator):
         instance._done = True
         instance._raw_iterator = None
         instance._chunks = []
-        instance._accumulated_raw = {}
+
         instance._buffered_stop = None
         instance._pending_chunk = None
         instance._pending_raw_chunk = None
@@ -91,7 +91,8 @@ class StreamAccumulator(StreamBaseAccumulator):
             self._pending_chunk = None
             self._pending_raw_chunk = None
             if raw is not None:
-                self.accumulate_chunk(raw)
+                self._chunks.append(raw)
+                self._adapter._accumulate_extra_fields(r)
             return r
 
         while True:
@@ -101,14 +102,14 @@ class StreamAccumulator(StreamBaseAccumulator):
                     self._done = True
                     raise StopIteration
 
-                self.accumulate_chunk(chunk)
                 result = self._adapter._to_openai_stream_format(chunk)
+                self._chunks.append(chunk)
                 if result is None:
-                    # 过滤的 chunk 可能已通过 _accumulate_extra_fields 更新了 usage
                     usage = self._adapter._cnllm_extra.get("_usage")
                     if usage is not None:
                         self._usage = usage
                     continue
+                self._adapter._accumulate_extra_fields(result)
 
                 # 在 filter 前保存 finish_reason
                 finish_before_filter = [
@@ -177,9 +178,7 @@ class StreamAccumulator(StreamBaseAccumulator):
                     return c
                 self.finalize()
                 raise
-    @property
-    def chunks(self) -> List[Dict[str, Any]]:
-        return self._chunks
+
 
     def _accumulate(self):
         if not hasattr(self, '_cached_count'):
@@ -223,7 +222,8 @@ class AsyncStreamAccumulator(StreamBaseAccumulator):
             self._pending_chunk = None
             self._pending_raw_chunk = None
             if raw is not None:
-                self.accumulate_chunk(raw)
+                self._chunks.append(raw)
+                self._adapter._accumulate_extra_fields(r)
             return r
 
         while True:
@@ -233,10 +233,11 @@ class AsyncStreamAccumulator(StreamBaseAccumulator):
                     self._done = True
                     raise StopAsyncIteration
 
-                self.accumulate_chunk(chunk)
                 result = self._adapter._to_openai_stream_format(chunk)
+                self._chunks.append(chunk)
                 if result is None:
                     continue
+                self._adapter._accumulate_extra_fields(result)
 
                 finish_before_filter = [
                     c.get("finish_reason") for c in result.get("choices", [])
@@ -299,9 +300,7 @@ class AsyncStreamAccumulator(StreamBaseAccumulator):
                     return c
                 self.finalize()
                 raise
-    @property
-    def chunks(self) -> List[Dict[str, Any]]:
-        return self._chunks
+
 
     def _accumulate(self):
         if not hasattr(self, '_cached_count'):

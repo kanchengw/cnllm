@@ -1,7 +1,7 @@
 import os
 import asyncio
 import logging
-from typing import Dict, Any, Optional, Iterator, AsyncIterator, List, Type
+from typing import Dict, Any, Optional, Iterator, AsyncIterator, List, Type, Set
 from ..entry.http import BaseHttpClient
 from ..utils.exceptions import (
     ModelNotSupportedError,
@@ -33,6 +33,7 @@ class BaseAdapter:
 
     _class_config: Dict[str, Any] = None
     _supported_models: list = []
+    _model_params: Dict[str, set] = {}
 
     @classmethod
     def _register(cls):
@@ -51,8 +52,9 @@ class BaseAdapter:
         for adapter_name, adapter_class in _ADAPTER_REGISTRY.items():
             config = adapter_class._load_class_config()
             mapping = config.get("model_mapping", {})
-            if isinstance(mapping, dict) and "chat" in mapping:
-                mapping = mapping["chat"]
+            if isinstance(mapping, dict):
+                if "chat" in mapping:
+                    mapping = mapping["chat"]
             if isinstance(mapping, dict):
                 for short_name, vendor_name in mapping.items():
                     actual_name = vendor_name if isinstance(vendor_name, str) else vendor_name.get("model") if isinstance(vendor_name, dict) else None
@@ -78,6 +80,7 @@ class BaseAdapter:
         base_url: str = None,
         fallback_models: Optional[Dict[str, Optional[str]]] = None,
         drop_params: str = "warn",
+        protocol: str = None,
         **kwargs
     ):
         self.api_key = api_key
@@ -87,12 +90,13 @@ class BaseAdapter:
         self.retry_delay = retry_delay
         self.fallback_models = fallback_models or {}
         self.drop_params = drop_params
+        self.protocol = protocol
         self._raw_response = None
         self._cnllm_extra = {}
         self._last_adapter = None
         self._config = self._load_config()
         self._validator = ParamValidator(self.CONFIG_DIR, adapter_type="chat")
-        self.base_url = self._validator.validate_base_url(base_url)
+        self.base_url = self._validator.validate_base_url(base_url, protocol=self.protocol)
         if self.timeout is None:
             self.timeout = resolve_default("chat", "timeout") or 30
         if self.max_retries is None:
@@ -114,8 +118,9 @@ class BaseAdapter:
             with open(config_path, 'r', encoding='utf-8') as f:
                 cls._class_config = yaml.safe_load(f) or {}
                 mapping = cls._class_config.get("model_mapping", {})
-                if isinstance(mapping, dict) and "chat" in mapping:
-                    mapping = mapping["chat"]
+                if isinstance(mapping, dict):
+                    if "chat" in mapping:
+                        mapping = mapping["chat"]
                 cls._supported_models = list(mapping.keys()) if mapping else []
                 return cls._class_config
         except FileNotFoundError:
@@ -131,6 +136,38 @@ class BaseAdapter:
 
     def _load_config(self) -> Dict[str, Any]:
         return self._load_class_config()
+
+    def _get_optional_fields(self) -> Dict[str, Any]:
+        fields = self._config.get("optional_fields", {})
+        if not isinstance(fields, dict):
+            return {}
+        protocol = getattr(self, 'protocol', None)
+        if not protocol:
+            return fields
+        result = {}
+        for key, config in fields.items():
+            if isinstance(config, dict):
+                fp = config.get("protocol")
+                if fp and fp != protocol:
+                    continue
+            result[key] = config
+        return result
+
+    def _get_protocol_excluded_params(self) -> Set[str]:
+        """返回因 protocol 不匹配而被排除的可选参数集合，用于 validate_for_scope 的 A.6 过滤"""
+        fields = self._config.get("optional_fields", {})
+        if not isinstance(fields, dict):
+            return set()
+        protocol = getattr(self, 'protocol', None)
+        if not protocol:
+            return set()
+        excluded = set()
+        for key, config in fields.items():
+            if isinstance(config, dict):
+                fp = config.get("protocol")
+                if fp and fp != protocol:
+                    excluded.add(key)
+        return excluded
 
     def _get_config_value(self, *keys, default=None):
         value = self._config
@@ -148,8 +185,9 @@ class BaseAdapter:
 
     def get_vendor_model(self, model: str) -> str:
         mapping = self._get_config_value("model_mapping", default={})
-        if isinstance(mapping, dict) and "chat" in mapping:
-            mapping = mapping.get("chat", {})
+        if isinstance(mapping, dict):
+            if "chat" in mapping:
+                mapping = mapping["chat"]
         entry = mapping.get(model, model)
         if isinstance(entry, dict):
             return entry.get("model", model)
@@ -170,8 +208,9 @@ class BaseAdapter:
     def _get_vision_models(self) -> list:
         """获取当前 adapter 下支持多模态的模型列表"""
         mapping = self._get_config_value("model_mapping", default={})
-        if isinstance(mapping, dict) and "chat" in mapping:
-            mapping = mapping.get("chat", {})
+        if isinstance(mapping, dict):
+            if "chat" in mapping:
+                mapping = mapping["chat"]
         return [
             name for name, config in mapping.items()
             if isinstance(config, dict) and config.get("vision")
@@ -192,12 +231,25 @@ class BaseAdapter:
                 )
 
     def get_api_path(self) -> str:
-        """获取 API 路径，根据 adapter_type 选择 chat 或 embedding 层级的 path"""
-        return self._validator.get_api_path()
+        """获取 API 路径，根据 protocol 或 adapter_type 选择层级的 path"""
+        return self._validator.get_api_path(protocol=self.protocol)
 
     def get_base_url(self) -> str:
         if self.base_url:
             return self.base_url
+        # 优先从 protocol 对应的 optional_fields.base_url 读取
+        base_url_config = self._get_config_value("optional_fields", "base_url", default={})
+        if isinstance(base_url_config, dict):
+            protocol = getattr(self, 'protocol', None)
+            if protocol and protocol in base_url_config:
+                pcfg = base_url_config[protocol]
+                if isinstance(pcfg, dict):
+                    return pcfg.get("default", "")
+            at = self._validator.adapter_type
+            if at in base_url_config:
+                acfg = base_url_config[at]
+                if isinstance(acfg, dict):
+                    return acfg.get("default", "")
         return self._get_config_value("request", "base_url", default="")
 
     def get_yaml_base_url_default(self) -> str:
@@ -208,6 +260,11 @@ class BaseAdapter:
         base_url_config = self._get_config_value("optional_fields", "base_url", default={})
         if not isinstance(base_url_config, dict):
             return ""
+        protocol = getattr(self, 'protocol', None)
+        if protocol and protocol in base_url_config:
+            pcfg = base_url_config[protocol]
+            if isinstance(pcfg, dict):
+                return pcfg.get("default", "")
         type_config = base_url_config.get(self._validator.adapter_type, {})
         if isinstance(type_config, dict):
             return type_config.get("default", "")
@@ -242,12 +299,17 @@ class BaseAdapter:
     def _get_skip_fields(self) -> set:
         """获取所有声明了 skip: true 的字段名（来自 required_fields / optional_fields / one_of）"""
         skip_fields = set()
-        for section in ["required_fields", "optional_fields"]:
+        for section in ["required_fields"]:
             fields = self._get_config_value(section, default={})
             if isinstance(fields, dict):
                 for field_name, field_config in fields.items():
                     if isinstance(field_config, dict) and field_config.get("skip"):
                         skip_fields.add(field_name)
+        fields = self._get_optional_fields()
+        if isinstance(fields, dict):
+            for field_name, field_config in fields.items():
+                if isinstance(field_config, dict) and field_config.get("skip"):
+                    skip_fields.add(field_name)
         one_of = self._get_config_value("one_of", default={})
         if isinstance(one_of, dict):
             for group in one_of.values():
@@ -257,8 +319,29 @@ class BaseAdapter:
                             skip_fields.add(field_name)
         return skip_fields
 
+    def _filter_model_params(self, params: Dict[str, Any], model: str) -> Dict[str, Any]:
+        """从 params 中移除当前模型不支持的参数（黑名单语义）"""
+        if not self._model_params or model not in self._model_params:
+            return params
+        unsupported = self._model_params[model]
+        filtered = dict(params)
+        for key in unsupported:
+            if key in filtered:
+                msg = f"参数 {key!r} 不被模型 {model!r} 支持，已忽略"
+                if self.drop_params == "strict":
+                    from ..utils.exceptions import InvalidRequestError
+                    raise InvalidRequestError(
+                        message=f"{msg}。可设置 drop_params='warn' 警告并忽略，或 drop_params='ignore' 静默忽略",
+                        provider=self.ADAPTER_NAME
+                    )
+                elif self.drop_params == "warn":
+                    logger.warning(msg)
+                del filtered[key]
+        return filtered
+
     def _build_payload(self, params: Dict[str, Any]) -> Dict[str, Any]:
         model = params.get("model") or self.model
+        params = self._filter_model_params(params, model)
         vendor_model = self.get_vendor_model(model)
 
         payload = {
@@ -266,7 +349,7 @@ class BaseAdapter:
         }
 
         skip_fields = self._get_skip_fields()
-        optional_fields = self._get_config_value("optional_fields", default={})
+        optional_fields = self._get_optional_fields()
 
         for key, value in params.items():
             if key == "model":
@@ -318,11 +401,17 @@ class BaseAdapter:
             **kwargs
         }
 
+        protocol_vendor_yaml = dict(self._config or {})
+        proto_fields = self._get_optional_fields()
+        if proto_fields:
+            protocol_vendor_yaml["optional_fields"] = proto_fields
+        protocol_excluded = self._get_protocol_excluded_params()
         params = validate_for_scope(
             params=params,
             scope="chat",
-            vendor_yaml=self._config or {},
+            vendor_yaml=protocol_vendor_yaml,
             drop_params=self.drop_params,
+            protocol_excluded_params=protocol_excluded,
         )
         self._validate_one_of(params)
 
@@ -460,11 +549,17 @@ class BaseAdapter:
             **kwargs
         }
 
+        protocol_vendor_yaml = dict(self._config or {})
+        proto_fields = self._get_optional_fields()
+        if proto_fields:
+            protocol_vendor_yaml["optional_fields"] = proto_fields
+        protocol_excluded = self._get_protocol_excluded_params()
         params = validate_for_scope(
             params=params,
             scope="chat",
-            vendor_yaml=self._config or {},
+            vendor_yaml=protocol_vendor_yaml,
             drop_params=self.drop_params,
+            protocol_excluded_params=protocol_excluded,
         )
         self._validate_one_of(params)
 

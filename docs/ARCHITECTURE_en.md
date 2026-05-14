@@ -11,15 +11,17 @@ cnllm/
 │   └── http.py               # HTTP request client (httpx unified)
 ├── core/                     # Core Layer - Adapter abstraction and vendor implementation
 │   ├── __init__.py
-│   ├── adapter.py            # BaseAdapter base adapter (Chat)
-│   ├── embedding.py          # BaseEmbeddingAdapter Embedding adapter
+│   ├── adapter.py            # BaseAdapter base adapter (Chat, protocol routing)
+│   ├── embedding.py           # BaseEmbeddingAdapter + EmbeddingResponder unified entry
 │   ├── responder.py          # Responder response transformation framework
 │   ├── accumulators/         # Field accumulators
 │   │   ├── __init__.py
 │   │   ├── base.py           # Accumulator base class
-│   │   ├── single_accumulator.py    # Single request accumulator
-│   │   ├── batch_accumulator.py     # Chat batch accumulator
-│   │   └── embedding_accumulator.py # Embedding batch accumulator
+│   │   ├── single_accumulator.py    # Single stream/non-stream accumulator
+│   │   ├── batch_response.py        # Batch response data classes
+│   │   ├── batch_stream.py          # Batch stream accumulator
+│   │   ├── batch_nonstream.py       # Batch non-stream accumulator
+│   │   └── embedding_accumulator.py # Embedding accumulator
 │   ├── framework/
 │   │   ├── __init__.py
 │   │   └── langchain.py      # LangChain Runnable integration
@@ -33,9 +35,13 @@ cnllm/
 │       └── xiaomi.py         # Xiaomi vendor adapter
 └── utils/                    # Utility Layer - Common utilities
     ├── __init__.py
+    ├── scheduler/            # Batch schedulers
+    │   ├── __init__.py
+    │   ├── base.py           # BatchScheduler / data classes / common functions
+    │   ├── chat.py           # Stream/mixed chat schedulers
+    │   └── embedding.py      # Embedding schedulers
     ├── exceptions.py         # Exception definitions (includes BatchStopOnError)
     ├── fallback.py           # Fallback manager
-    ├── batch.py              # Batch scheduler (BatchScheduler, EmbeddingBatchScheduler)
     ├── stream.py             # Streaming utility (SSEDecoder, AsyncSSEDecoder)
     ├── validator.py          # Parameter validator
     └── vendor_error.py       # Vendor error handling
@@ -133,7 +139,7 @@ flowchart TD
 | ------------ | -------------------------------- | -------------------- | -------------------------------------- |
 | **Frontend Entry**     | `CNLLM` (entry/client.py)        | Client initialization, call entry          | `CNLLM(model='glm-4')`                 |
 | **Async Frontend Entry**   | `AsyncCNLLM` (entry/async_client.py) | Async client initialization, call entry | `AsyncCNLLM(model='kimi-k2.6')`         |
-| **Chat Adapter**   | `BaseAdapter` (core/adapter.py)  | Chat request field mapping, Payload construction     | `_build_payload()`, `validate_model()` |
+| **Chat Adapter**   | `BaseAdapter` (core/adapter.py)  | Chat request field mapping, Payload construction, protocol routing     | `_build_payload()`, `_get_optional_fields()`, `_get_protocol_excluded_params()` |
 | **Embedding Adapter** | `BaseEmbeddingAdapter` (core/embedding.py) | Embedding request handling | `create_batch()`                       |
 | **HTTP Execution**   | `BaseHttpClient` (entry/http.py) | Generic HTTP request, retry mechanism (httpx)   | `post_stream()`, `apost_stream()`      |
 | **Response Postprocessing**    | `Responder` (core/responder.py)  | Response field mapping, OpenAI standard format construction | `to_openai_stream_format()`             |
@@ -143,7 +149,7 @@ flowchart TD
 
 | Vendor Layer Component        | File                        | Responsibility                  | Example                                    |
 | ------------ | ------------------------- | ------------------- | ------------------------------------- |
-| **Vendor Chat Adapter** | `core/vendor/{vendor}.py` | Vendor-specific Chat request handling, Payload construction | `GLMAdapter.create_completion()`      |
+| **Vendor Chat Adapter** | `core/vendor/{vendor}.py` | Vendor-specific Chat request handling, Payload construction | `GLMAdapter.create_completion()`, `MiniMaxAdapter` / `MiniMaxNativeAdapter` dual protocol |
 | **Vendor Embedding Adapter** | `core/vendor/{vendor}.py` | Vendor-specific Embedding request handling | `GLMEmbeddingAdapter.create_batch()`   |
 | **Vendor Response Converter**  | `core/vendor/{vendor}.py` | Vendor-specific response conversion logic          | `GLMResponder.to_openai_format()`       |
 | **Vendor Error Parser**  | `core/vendor/{vendor}.py` | Vendor-specific error parsing            | `GLMVendorError.parse()`               |
@@ -155,16 +161,51 @@ flowchart TD
 | Utility Class          | File                      | Responsibility                   | Example                                        |
 | ------------ | ----------------------- | -------------------- | ----------------------------------------- |
 | **Exception System**     | `utils/exceptions.py`   | CNLLM exception base class, unified exception system    | `raise CNLLMError(msg)`                   |
-| **Batch Scheduler**    | `utils/batch.py`        | Chat/Embedding batch scheduling    | `BatchScheduler`, `EmbeddingBatchScheduler` |
+| **Batch Scheduler**    | `utils/scheduler/`        | Chat/Embedding batch scheduling    | `BatchScheduler`, `EmbeddingBatchScheduler` |
 | **Batch Stop Exception**   | `utils/exceptions.py`    | Exception thrown when stop_on_error    | `BatchStopOnError`                        |
 | **Vendor Error Translator**  | `utils/vendor_error.py` | Vendor error translator, translate to CNLLM exception | `translator.to_cnllm_error()`             |
-| **Fallback Manager**    | `utils/fallback.py`     | Fallback manager, handle model unavailability fallback logic  | `execute_with_fallback()`                 |
+| **Fallback Manager**    | `utils/fallback.py`     | Fallback manager, handle model unavailability fallback logic  | `execute_with_fallback()`, `fallback_models={"fb_model": "fb_key"}` |
 | **Streaming Utility**   | `utils/stream.py`       | SSE decoding, HTTP streaming       | `SSEDecoder`, `AsyncSSEDecoder`           |
 | **Parameter Validator**    | `utils/validator.py`    | Parameter validator, validate model, field, param range   | `validate_model()`, `validate_required()` |
 
 ***
 
-### 1.5 Call Entry Layer
+### 1.5 Protocol Routing Layer
+
+Some vendors (e.g., MiniMax) provide both **OpenAI-compatible interfaces** and **Native interfaces**, with different parameter sets and response formats. CNLLM implements multi-protocol routing through the following mechanism:
+
+```mermaid
+flowchart LR
+    A["Client passes model name<br/>+ base_url"] --> B["_get_adapter()"]
+    B --> C{protocol specified?}
+    C -->|Yes| D["Use user-specified protocol"]
+    C -->|No| E["detect_protocol(base_url, config_dir)<br/>Check if base_url contains non-openai path"]
+    E --> F{Matches non-openai protocol?}
+    F -->|Yes| G["protocol = native"]
+    F -->|No| H["protocol = openai"]
+    D --> I["MiniMaxAdapter<br/>(OpenAI-compatible)"]
+    G --> J["MiniMaxNativeAdapter<br/>(Native)"]
+    H --> I
+
+    style A fill:#e1f5fe
+    style B fill:#fff3e0
+    style C fill:#fff9c4
+    style E fill:#f3e5f5
+    style I fill:#e8f5e9
+    style J fill:#e8f5e9
+```
+
+**Protocol impact on the parameter system**:
+
+| Mechanism | No protocol (other vendors) | protocol="openai" (MiniMax) | protocol="native" (MiniMax) |
+|-----------|----------------------------|-----------------------------|-----------------------------|
+| `_get_optional_fields()` | Returns all optional_fields | Returns only openai-compatible params | Returns only native params |
+| `_get_protocol_excluded_params()` | `set()` no exclusions | `{thinking, top_k, mask, ...}` | `{reasoning_split}` |
+| `validate_for_scope` A.6 | Not triggered | Excludes native-only params | Excludes openai-only params |
+
+**Backward compatibility**: For other vendors, `protocol=None`, so `_get_optional_fields()` returns all fields, `_get_protocol_excluded_params()` returns an empty set, producing no filtering effect.
+
+### 1.7 Call Entry Layer
 
 ```mermaid
 flowchart TB
@@ -240,16 +281,23 @@ BaseAdapter.create_completion(messages, temperature, stream, **kwargs)
     ↓
 ① Collect parameters: {model, messages, temperature, stream, **kwargs}
     ↓
-② validate_for_scope(params, scope="chat", vendor_yaml=..., drop_params="warn")
+② validate_for_scope(params, scope="chat", vendor_yaml=protocol_vendor_yaml, drop_params="warn", protocol_excluded_params=...)
   ├─ A: PARAM_REGISTRY validation (registered / scope match / batch_level misuse / type hints)
+  ├─ A.5: YAML skip markers → skip (e.g., api_key, base_url)
+  ├─ A.6: Protocol exclusion filtering — params excluded by adapter._get_protocol_excluded_params()
   ├─ B: YAML field_mappings validation (vendor-specific parameter whitelist)
-  └─ C: Unmatched parameters → handled by drop_params strategy (warn / strict / ignore)
+  ├─ C: Unmatched parameters → handled by drop_params strategy (warn / strict / ignore)
     ↓
 ③ _validate_one_of(params)  →  Mutually exclusive parameter validation (prompt / messages pick one)
     ↓
-④ _check_image_support(params)  →  Image input compatibility check
+④ _check_image_support(params)  →  Multi-modality input compatibility check
     ↓
-⑤ _build_payload(params)  →  Build request body via YAML field mappings (map / transform / skip)
+⑤ _build_payload(params)  →  First passes `_model_params` blacklist filter at entry (Embedding only)
+   │
+   ├─ Filter: _filter_model_params(params, model)  →  Remove unsupported params for current model
+   │   (handled by drop_params strategy: warn / strict / ignore)
+   │
+   ├─ Build: via YAML field mappings (map / transform / skip)
    └─ Internally calls get_vendor_model(model)  →  Short name → vendor model name
     ↓
 ⑥ get_base_url() + get_api_path()  →  Assemble complete request URL
@@ -309,26 +357,47 @@ Key changes:
 | -- | --- | --- | --- | --- |
 | 1 | Get scope-aware default value (at init) | `resolve_default` | **PARAM\_REGISTRY.default** (scope-differentiated: e.g., chat=3, embed=12) | timeout, max\_retries, retry\_delay |
 | 2 | General parameter validation + filtering | `validate_for_scope` step A | **PARAM\_REGISTRY** (scope match + batch\_level validation + type hints) | - |
-| 3 | Vendor-specific parameter validation | `validate_for_scope` step B | **YAML optional\_fields** (with optional scope restrictions) | - |
-| 4 | Unknown parameter strategy | `validate_for_scope` step C | **drop\_params** (warn / strict / ignore) | - |
-| 5 | Mutually exclusive parameter validation | `_validate_one_of`¹ | one\_of (prompt ↔ messages) | - |
-| 6 | Image support validation | `_check_image_support` | Model vision support list | - |
-| 7 | Build request body + model name mapping | `_build_payload` | YAML field mappings (map / transform / skip) + model\_mapping | - |
-| 8 | Assemble request URL | `get_base_url` + `get_api_path` | base\_url + api\_path (layered by adapter\_type) | - |
-| 9 | Request header mapping | `get_header_mappings` | YAML fields with skip:true and head | - |
+| 3 | YAML skip parameter filtering | `validate_for_scope` step A.5 | **vendor\_yaml** `skip: true` markers | api\_key, base\_url, etc. |
+| 4 | Protocol exclusion filtering | `validate_for_scope` step A.6 | **protocol\_excluded\_params** (via `_get_protocol_excluded_params()`) | MiniMax only: thinking, top\_k (native); reasoning\_split (openai) |
+| 5 | Vendor-specific parameter validation | `validate_for_scope` step B | **YAML optional\_fields** (with optional scope restrictions) | - |
+| 6 | Unknown parameter strategy | `validate_for_scope` step C | **drop\_params** (warn / strict / ignore) | - |
+| 7 | Mutually exclusive parameter validation | `_validate_one_of`¹ | one\_of (prompt ↔ messages) | - |
+| 8 | Image support validation | `_check_image_support` | Model vision support list | - |
+| 9 | Build request body + model name mapping | `_build_payload` | YAML field mappings (map / transform / skip) + model\_mapping + `_get_optional_fields()` protocol filter | - |
+| 10 | Assemble request URL | `get_base_url` + `get_api_path` | base\_url + api\_path (layered by protocol or adapter\_type) | - |
+| 11 | Request header mapping | `get_header_mappings` | YAML fields with skip:true and head | - |
 
 ¹ `_validate_one_of` only executes in Chat call path, Embedding path does not call this method.
+
+**Model-level Parameter Filtering**:
+
+Some parameters are only supported by specific models (e.g., Qwen's `dimensions` is only supported by text-embedding-v3/v4). Subclasses can declare a `_model_params` blacklist, which is checked at the `_build_payload` entry:
+
+```python
+# cnllm/core/vendor/qwen.py
+class QwenEmbeddingAdapter(BaseEmbeddingAdapter):
+    _model_params = {
+        "text-embedding-v1": {"dimensions", "encoding_format"},
+        "text-embedding-v2": {"dimensions", "encoding_format"},
+    }
+```
+
+Models not listed are unaffected. Filtering follows the `drop_params` three-tier strategy (warn / strict / ignore).
 
 **Two-Stage Parameter Validation Design**:
 
 ```
-validate_for_scope(params, scope, vendor_yaml, drop_params)
+validate_for_scope(params, scope, vendor_yaml, drop_params, protocol_excluded_params=None)
   │
   ├─ Step A ── PARAM_REGISTRY Matching
   │   ├─ scope match → add to clean
   │   ├─ scope mismatch → handle by drop_params
   │   ├─ batch_level=True → warn (misplaced in create)
-  │   └─ type mismatch → TypeError in strict mode, logger.warning + drop in warn mode
+  │   ├─ type mismatch → TypeError in strict mode, logger.warning + drop in warn mode
+  │   ├─ Step A.5 ── YAML skip marker → skip (e.g., api_key, base_url)
+  │   └─ Step A.6 ── Protocol exclusion filtering
+  │       └─ param in protocol_excluded_params? → treat as unknown
+  │           (provided by adapter._get_protocol_excluded_params())
   │
   ├─ Step B ── YAML field_mappings Matching (vendor-specific parameters)
   │   ├─ check optional_fields + required_fields
@@ -534,16 +603,41 @@ flowchart LR
 
 Only the client initialization entry accepts the `fallback_models` parameter. It is recommended to configure this option for program or application runtime stability.
 When the primary model at the client entry is unavailable, it will try models in `fallback_models` in order.
+
+### 4.1 fallback_models Configuration Format
+
+```python
+fallback_models = {
+    "deepseek-chat": {
+        "api_key": "ds-key-456",
+        "base_url": "https://api.deepseek.com/v1",
+    },
+    "qwen-plus": {
+        "api_key": "my-key",         # base_url omitted → use default URL (same as primary model)
+    },
+}
+```
+
+- **key**: Fallback model name (required)
+- **value**: `dict`, required fields:
+  - `api_key`: API Key for this model (**required**)
+  - `base_url`: Independent endpoint for this model (optional; omit or `None` to use adapter default URL)
+
 Code example:
 
 ```python
 client = CNLLM(
     model="minimax-m2.7", api_key="minimax_key",
-    fallback_models={"mimo-v2-flash": "xiaomi-key", "minimax-m2.5": None}  # None means use the API_key configured for the primary model
-    )
-resp = client.chat.create(prompt="What is 2+2?")  # If model is configured again at the call entry, it will override all models configured at the client entry
+    fallback_models={
+        "mimo-v2-flash": {"api_key": "xiaomi-key"},
+        "deepseek-chat": {"api_key": "ds-key", "base_url": "https://api.deepseek.com/v1"},
+    },
+)   
+resp = client.chat.create(prompt="What is 2+2?")
 print(resp)
 ```
+
+If `model` is specified again at the call entry, it overrides the client's `model`, but the fallback order **is unaffected** (still starts from the primary model).
 
 ```mermaid
 flowchart TD
@@ -559,7 +653,45 @@ flowchart TD
     G -->|Any succeeds| I[That model succeeds]
 ```
 
-### 4.1 FallbackError Error Aggregation
+### 4.2 Execution Flow
+
+```python
+# FallbackManager internal
+# Primary model always uses client-provided parameters (api_key, base_url, etc.)
+models_to_try = [(primary_model, primary_api_key, self.base_url)]
+
+# Fallback models read per-model config from fallback_config
+for fb_model, fb_config in self.fallback_config.items():
+    fb_api_key = fb_config["api_key"]                    # required
+    fb_base_url = fb_config.get("base_url")               # optional, None → use manager's base_url
+    models_to_try.append((fb_model, fb_api_key, fb_base_url))
+
+# Try each model in order
+for model, api_key, base_url in models_to_try:
+    try:
+        adapter = self.get_adapter_func(
+            model, api_key,
+            base_url=base_url or self.base_url,           # fb_base_url first, else manager's shared base_url
+            ...
+        )
+        return execute_fn(adapter, model, api_key)
+    except (ModelNotSupportedError, MissingParameterError, ContentFilteredError):
+        raise  # Non-retryable errors are raised directly
+    except Exception as e:
+        # Network/server errors → log error, try next
+        continue
+
+raise FallbackError(...)  # All models failed
+```
+
+**Non-retryable error types** (raised directly, no fallback):
+- `ModelNotSupportedError`: Model does not exist
+- `MissingParameterError`: Missing required parameters
+- `ContentFilteredError`: Content was filtered
+
+All other exceptions (network errors, rate limits, server errors, etc.) trigger fallback attempts.
+
+### 4.3 FallbackError Error Aggregation
 
 When multi-model fallback is configured and all models fail, `FallbackError` aggregates all error information:
 
@@ -749,10 +881,37 @@ print(response)  # OpenAI standard format streaming chunks
 print(client.chat.think)  # Thinking content
 print(client.chat.still)  # Response content
 print(client.chat.tools)  # Tool calls
-print(client.chat.raw)  # Raw response chunks (keeps reasoning_content as-is)
+print(client.chat.raw)  # List of raw response chunks (unprocessed)
 ```
 
-### 5.4 Data Flow Sequence Diagram
+### 5.4 Streaming Data Three-Path Flow
+
+Each raw chunk passes through three processing paths:
+
+```
+HTTP Raw Chunk
+  │
+  ├─①─ _to_openai_stream_format(chunk) ─→ Yielded result (OpenAI format)
+  │     └─ Field extraction via YAML path mappings
+  │      → _formatted_chunks.append(result) → __repr__ merged dict
+  │
+  ├─②─ _accumulate_extra_fields(result) ─→ .still / .think / .tools
+  │     └─ Extract fields from ①'s formatted result, accumulate into adapter._cnllm_extra
+  │
+  └─③─ _chunks.append(chunk) ─→ .raw
+        └─ Raw chunk stored as-is, no merging
+         → resp.raw returns List[Dict]
+```
+
+**Path ① — `_to_openai_stream_format(chunk)`**: Converts vendor raw chunk to OpenAI standard stream format using Responder YAML config. The converted result feeds both Path ② and `_formatted_chunks` accumulation.
+
+**Path ② — `_accumulate_extra_fields(result)`**: Extracts `content`, `reasoning_content`, `tool_calls` from the formatted result and accumulates them into `adapter._cnllm_extra`, which backs the `.still`, `.think`, `.tools` properties.
+
+**Path ③ — `_chunks` raw storage**: `self._chunks.append(chunk)` — no processing. `.raw` returns `list(self._chunks)`.
+
+**Batch reuse**: The batch schedulers iterate the single-stream accumulator, then read accumulated values via `.still`, `.think`, `.tools`, `._chunks`, bypassing per-chunk re-parsing.
+
+### 5.5 Data Flow Sequence Diagram
 
 ```mermaid
 sequenceDiagram
