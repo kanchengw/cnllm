@@ -22,9 +22,9 @@ description: >-
 - **Multi-model workflows** where different stages use different models (e.g., embedding with MiniMax → reasoning with DeepSeek-reasoner → generation with GLM in a single LangChain pipeline)
 - **Multi-model evaluation / LLM-as-Judge** — same input sent to multiple models in one batch call to compare or score outputs
 - **Transparency & control** — CNLLM's YAML-driven config explicitly declares every supported param, its mapping, and its behavior. Unlike OpenAI-compatible interfaces where `extra_body` params may silently fail with no feedback, CNLLM gives you deterministic, visible parameter handling
-- **Streaming** with real-time access to reasoning/thinking content (`.think`, `.still`, `.tools` properties)
+- **Streaming lifecycle inspection** with real-time access to automated content accumulation (`.think`, `.still`, `.tools` properties).
 - **Multi-model fallback** for production resilience — auto-retry with different providers on failure
-- **Batch data processing** — high-throughput labeling, classification, translation, or synthetic data generation. CNLLM supports **real-time progress monitoring** (request_counts updated per-request), **per-request independent configuration** (different model/params/thinking for each item), **progress callbacks**, **custom IDs**, **stop-on-error** — features the OpenAI batch API does not offer
+- **Batch data processing** — high-throughput labeling, classification, translation, or synthetic data generation. CNLLM supports **real-time progress monitoring** (request_counts updated per-request), **per-request independent configuration** (different model/params/thinking for each item), **real-time progress statitic**, **configurable failure policy** and **memory mannagement**, **callbacks**, **custom IDs** — features the OpenAI batch API does not offer
 - Project uses **LangChain**, **LlamaIndex**, or **LiteLLM** and needs Chinese LLM integration
 - Codebase already has `cnllm` in dependencies (check `requirements.txt`, `pyproject.toml`, or existing imports)
 
