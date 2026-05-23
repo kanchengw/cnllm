@@ -56,7 +56,7 @@ model_mapping:
   chat:
     moonshot-v1-8k: "moonshot-v1-8k"
     moonshot-v1-32k: "moonshot-v1-32k"
-    moonshot-v1-128k: "moonshot-v1-128k"
+    moonshot-v1: "moonshot-v1-128k"
     kimi-k2.5:
       model: "kimi-k2.5"
       vision: true

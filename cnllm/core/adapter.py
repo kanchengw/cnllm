@@ -234,24 +234,6 @@ class BaseAdapter:
         """获取 API 路径，根据 protocol 或 adapter_type 选择层级的 path"""
         return self._validator.get_api_path(protocol=self.protocol)
 
-    def get_base_url(self) -> str:
-        if self.base_url:
-            return self.base_url
-        # 优先从 protocol 对应的 optional_fields.base_url 读取
-        base_url_config = self._get_config_value("optional_fields", "base_url", default={})
-        if isinstance(base_url_config, dict):
-            protocol = getattr(self, 'protocol', None)
-            if protocol and protocol in base_url_config:
-                pcfg = base_url_config[protocol]
-                if isinstance(pcfg, dict):
-                    return pcfg.get("default", "")
-            at = self._validator.adapter_type
-            if at in base_url_config:
-                acfg = base_url_config[at]
-                if isinstance(acfg, dict):
-                    return acfg.get("default", "")
-        return self._get_config_value("request", "base_url", default="")
-
     def get_yaml_base_url_default(self) -> str:
         """读取 YAML 中 base_url 的 default 值（未经 validate_base_url 处理）。
 
@@ -419,11 +401,10 @@ class BaseAdapter:
 
         payload = self._build_payload(params)
 
-        base_url = self.get_base_url()
         api_path = self.get_api_path()
         client = BaseHttpClient(
             api_key=self.api_key,
-            base_url=base_url,
+            base_url=self.base_url,
             timeout=self.timeout,
             max_retries=self.max_retries,
             retry_delay=self.retry_delay,
@@ -462,6 +443,9 @@ class BaseAdapter:
         self._raw_response = {}
         self._cnllm_extra = {}
         chunks_iterator = StreamHandler.handle_stream(client, api_path, payload, extra_headers)
+        first = next(chunks_iterator)
+        from itertools import chain
+        chunks_iterator = chain([first], chunks_iterator)
         accumulator = StreamAccumulator(chunks_iterator, self)
         return iter(accumulator)
 
@@ -567,11 +551,10 @@ class BaseAdapter:
 
         payload = self._build_payload(params)
 
-        base_url = self.get_base_url()
         api_path = self.get_api_path()
         client = BaseHttpClient(
             api_key=self.api_key,
-            base_url=base_url,
+            base_url=self.base_url,
             timeout=self.timeout,
             max_retries=self.max_retries,
             retry_delay=self.retry_delay,
@@ -605,5 +588,8 @@ class BaseAdapter:
     async def _ahandle_stream(self, client: BaseHttpClient, api_path: str, payload: Dict[str, Any], extra_headers: Dict[str, str] = None) -> AsyncIterator[Dict[str, Any]]:
         if not self._cnllm_extra:
             self._cnllm_extra = {}
-        async for raw_chunk in AsyncStreamHandler.ahandle_stream(client, api_path, payload, extra_headers):
+        ait = AsyncStreamHandler.ahandle_stream(client, api_path, payload, extra_headers)
+        first = await ait.__anext__()
+        yield first
+        async for raw_chunk in ait:
             yield raw_chunk

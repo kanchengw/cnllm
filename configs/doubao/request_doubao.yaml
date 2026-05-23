@@ -70,15 +70,15 @@ model_mapping:
     doubao-seed-1-8: "doubao-seed-1-8-251228"
     doubao-seed-1-6: "doubao-seed-1-6-251015"
     doubao-seed-1-6-flash: "doubao-seed-1-6-flash-250828"
-    doubao-seed-1-6-vision-250815:
+    doubao-seed-1-6-vision:
       model: "doubao-seed-1-6-vision-250815"
       vision: true
-    doubao-1-5-vision-pro-32k-250115:
+    doubao-1-5-vision-pro:
       model: "doubao-1-5-vision-pro-32k-250115"
       vision: true
-    doubao-seed-1-5-lite-32k-250115: "doubao-seed-1-5-lite-32k-250115"
-    doubao-seed-1-5-pro-32k-250115: "doubao-seed-1-5-pro-32k-250115"
-    doubao-seed-1-5-pro-256k-250115: "doubao-seed-1-5-pro-256k-250115"
+    doubao-seed-1-5-lite: "doubao-seed-1-5-lite-32k-250115"
+    doubao-seed-1-5-pro-32k: "doubao-seed-1-5-pro-32k-250115"
+    doubao-seed-1-5-pro: "doubao-seed-1-5-pro-256k-250115"
 
 error_check:
   code_path: "error.code"

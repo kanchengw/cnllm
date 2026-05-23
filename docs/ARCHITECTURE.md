@@ -396,41 +396,57 @@ validate_for_scope(params, scope, vendor_yaml, drop_params, protocol_excluded_pa
 
 ### 2.4 Batch 参数验证链条
 
-Batch 调用支持三种输入模式，其参数验证分为三层职责：入口层（参数分离 + 请求规范化）→ Scheduler 层（填充运行时默认值）→ Create 层（单条验证链）。
+Batch 调用支持三种输入模式，参数验证分为三层：入口层（参数分离 + 请求规范化）→ 调度层（懒调度执行）→ 创建层（单条验证链）。
 
 #### 2.4.1 三层职责划分
 
+Batch 调用流经三个架构层，每层职责不同。**入口层**拆分参数为 batch 级和 per-request 级。**调度层**以懒调度模式编排并发执行。**创建层**执行单请求参数校验和厂商 API 调度。
+
 ```mermaid
 flowchart TB
-    subgraph entry["入口层 chat.batch()"]
-        K[batch kwargs] --> S{split_batch_params}
-        S --> B[batch_level params]
-        S --> P[per_request_defaults]
-        P --> N{_normalize_batch_requests}
-        N --> O[requests list]
+    subgraph entry["入口层: chat.batch()"]
+        K["batch(kwargs)"] --> S["split_batch_params"]
+        S -->|"batch_level 参数"| B["max_concurrent, stop_on_error, keep, ..."]
+        S -->|"per_request 默认值"| P[per_request_defaults]
+        P --> N["_normalize_batch_requests"]
+        N --> O["归一化 requests[]"]
     end
 
-    subgraph sched["Scheduler 层 BatchScheduler"]
-        I[__init__] --> E[execute]
-        E --> M[merge defaults]
-        M --> C[clean metadata]
+    subgraph sched["调度层: 懒调度"]
+        I["BatchScheduler (max_concurrent, stop_on_error, keep)"] --> L["懒调度"]
+        L --> C["收集结果"]
+        C --> D{"stop_on_error?"}
+        D -->|"是"| X["丢弃排队中"]
+        D -->|"否"| L
+        X --> M["标记完成"]
+        C --> M
     end
 
-    subgraph create["Create 层 create_completion"]
-        CR[create_completion] --> V[validate_for_scope]
-        V --> O1[_validate_one_of]
-        O1 --> BP[_build_payload]
-        BP --> H[HTTP request]
+    subgraph create["创建层: 验证 + 调度"]
+        CR["create()"] --> V1["Step A: PARAM_REGISTRY (scope + 类型)"]
+        V1 --> V2["Step B: YAML field_mappings (厂商参数)"]
+        V2 --> V3["Step C: drop_params (strict / warn / ignore)"]
+        V3 --> FB{"fallback_manager"}
+        FB -->|"主模型"| BP["_build_payload"]
+        BP --> H["HTTP 请求"]
+        FB -->|"失败"| F1["尝试备用模型"]
+        F1 --> V1
     end
 
-    O --> E
+    O --> L
     B --> I
-    C --> CR
+    L -.-> CR
 
     style entry fill:#ffe4b5,stroke:#333,stroke-width:1px
     style sched fill:#bde0fe,stroke:#333,stroke-width:1px
     style create fill:#d4f1be,stroke:#333,stroke-width:1px
 ```
+
+**入口层**（`chat.batch()`）：根据 `PARAM_REGISTRY` 中的 `batch_level` 标志拆分为 batch 级参数（并发控制、错误处理、内存控制）和 per-request 参数（模型、温度、tools 等）。关键函数：`split_batch_params()` — 参数分类；`_normalize_batch_requests()` — 请求归一化；`resolve_batch_init_defaults()` — 默认值解析。
+
+**调度层**（`BatchScheduler`）：采用懒调度——初始提交 `max_concurrent` 个请求，有空闲槽位时通过 `wait(FIRST_COMPLETED)` 逐个提交下一个。结果存入 `BatchResponse.results`（成功）或 `.errors`（失败）。`stop_on_error=True` 且请求失败时，取消排队中的 future；已在执行的请求正常完成。关键函数：`execute()` — 调度循环；`_execute_single()` — 单请求执行；`_submit_one()` — 提交门控；`add_result()` / `add_error()` — 结果收集。
+
+**创建层**（`create_completion`）：每个请求经 `validate_for_scope()` 三步验证（PARAM_REGISTRY 匹配 → YAML 厂商字段匹配 → `drop_params` 策略），然后 `_build_payload()` 构建请求体，`FallbackManager` 包装 HTTP 调度：主模型失败时顺序遍历 `fallback_models`。流式请求通过预取首个 chunk 立即暴露认证错误。关键函数：`validate_for_scope()` — 参数验证；`create_completion()` — 请求调度；`_build_payload()` — 请求体构建；`_handle_stream()` — 流式含预检；`FallbackManager._try_models()` — 顺序 fallback。
 
 #### 2.4.2 Batch 参数分类（由 PARAM\_REGISTRY 定义）
 
@@ -1328,10 +1344,4 @@ batch_resp.raw     # {"request_0": {...}, "request_1": {...}}
 
 见 [批量调用系统架构](/feature/batch.md)
 
-## 8. 异步实现说明
-
-见 [异步实现说明](/feature/async.md)
-
-## 9. Embedding实现说明
-
-见 [Embedding实现说明](/feature/embedding.md)
+## 8. 

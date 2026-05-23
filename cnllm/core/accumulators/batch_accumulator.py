@@ -450,13 +450,25 @@ class BatchResponse:
 
     def set_usage(self, request_id: str, value: Dict[str, Any]) -> None:
         if not self._usage:
-            self._usage = dict(value)
+            self._usage = self._deep_add_usage({}, value)
         else:
-            for k, v in value.items():
-                if isinstance(v, (int, float)) and isinstance(self._usage.get(k), (int, float)):
-                    self._usage[k] = self._usage.get(k, 0) + v
-                else:
-                    self._usage[k] = v
+            self._deep_add_usage(self._usage, value)
+
+    @staticmethod
+    def _deep_add_usage(target: Dict, source: Dict) -> Dict:
+        """递归合并 usage dict，int/float 累加，dict 递归"""
+        for k, v in source.items():
+            if k not in target:
+                target[k] = v
+            elif isinstance(v, dict):
+                if not isinstance(target.get(k), dict):
+                    target[k] = {}
+                BatchResponse._deep_add_usage(target[k], v)
+            elif isinstance(v, (int, float)) and isinstance(target.get(k), (int, float)):
+                target[k] = target[k] + v
+            else:
+                target[k] = v
+        return target
 
     def update_usage(self, request_id: str, value: Dict[str, Any]) -> None:
         if request_id not in self._usage:
@@ -832,9 +844,18 @@ class BatchStreamAccumulator:
                     continue
                 chunk = wrapped_chunk.get("chunk", wrapped_chunk)
                 self._accumulate_chunk(chunk, request_id)
+                if isinstance(chunk, dict) and chunk.get("status") == "error":
+                    continue
+                # __usage__ 标记 chunk → 直接设 usage，跳过格式转换
+                if isinstance(chunk, dict) and chunk.get("__usage__"):
+                    self._batch_response.set_usage(request_id, chunk["__usage__"])
+                    continue
                 result = self._adapter._to_openai_stream_format(chunk)
                 if result is None:
                     continue
+                # 从原始 chunk 提取 usage（批量流式不依赖 extras）
+                if isinstance(chunk, dict) and chunk.get("usage"):
+                    self._batch_response.set_usage(request_id, chunk["usage"])
                 filter_stream_chunk(
                     result,
                     self._seen_choice_indices.setdefault(request_id, set()),
@@ -1017,9 +1038,14 @@ class AsyncBatchStreamAccumulator:
                 chunk = wrapped_chunk.get("chunk", wrapped_chunk)
                 if request_id:
                     self._accumulate_chunk(chunk, request_id)
+                    if isinstance(chunk, dict) and chunk.get("status") == "error":
+                        continue
                 result = self._adapter._to_openai_stream_format(chunk)
                 if result is None:
                     continue
+                # 从原始 chunk 提取 usage（批量流式不依赖 extras）
+                if isinstance(chunk, dict) and chunk.get("usage"):
+                    self._batch_response.set_usage(request_id, chunk["usage"])
                 filter_stream_chunk(
                     result,
                     self._seen_choice_indices.setdefault(request_id, set()),

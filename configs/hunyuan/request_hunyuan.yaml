@@ -45,13 +45,12 @@ optional_fields:
     transform:
       true: {"type": "enabled"}
       false: {"type": "disabled"}
-  reasoning_effort: ~
 
 model_mapping:
   chat:
     hy3-preview: "hy3-preview"
-    hunyuan-2.0-thinking-20251109: "hunyuan-2.0-thinking-20251109"
-    hunyuan-2.0-instruct-20251111: "hunyuan-2.0-instruct-20251111"
+    hunyuan-2.0-thinking: "hunyuan-2.0-thinking-20251109"
+    hunyuan-2.0-instruct: "hunyuan-2.0-instruct-20251111"
 
 error_check:
   code_path: "error.code"
