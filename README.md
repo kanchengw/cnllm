@@ -10,149 +10,149 @@
 
 ## Why CNLLM?
 
-Chinese LLMs have reached the top tier in capabilities, yet in real production environments they face a lack of infrastructure. An unavoidable **dilemma** is:
+中文大模型的能力已跻身第一梯队，但在实际的生产环境中却缺面临基础设施的匮乏。一个无法忽视的、**两难的痛点**在于：
 
-When using OpenAI SDK/LiteLLM with vendor-provided compatible interfaces, **unsupported native parameters are silently ignored**, leading to **uncontrollable results and missing features**; using vendor proprietary SDKs requires **extra field parsing and structure transformation**. When workflows involve multiple models from different vendors, different code adaptations are needed for each model, resulting in **increased engineering workload and maintenance costs**.
+通过 OpenAI SDK/LiteLLM 来使用厂商提供的兼容接口时，**不支持的原生参数被静默忽略**，导致**结果不可控以及功能缺失**；而使用厂商自研 SDK 则需要进行**额外的字段解析、结构转换**，当工作流涉及使用不同厂商的多个模型，更要为不同模型做不同的代码适配，导致**工程量和维护成本上升**。
 
-CNLLM provides a **unified OpenAI-compatible interface layer** and a set of **standardized parameter rules and response format specifications**. CNLLM achieves **bidirectional mapping** of requests and responses through standardized YAML configuration files tailored for each vendor, mapping CNLLM standard parameters to vendor-accepted parameter names, passing through other native parameters, and finally automatically encapsulating heterogeneous model responses into OpenAI standard responses.
+CNLLM 提供了一个**统一的 OpenAI 兼容接口层**与一套**标准化的参数规则和响应格式规范**。CNLLM 通过为各厂商量身定制的标准化 YAML 配置文件，实现请求和响应的**双端映射**，将 CNLLM 标准参数映射为厂商接受的参数名，并透传其他原生参数，最终再将异构的模型响应自动封装为 OpenAI 标准响应。
 
-This implementation path uniformly defines CNLLM standard parameters, aligns with OpenAI standard response structures, preserves the complete capabilities of Chinese LLMs, and ensures scalability for integrating more vendors. Compared to OpenAI SDK and vendor proprietary SDKs, CNLLM also implements **systematic enhancements** for key field parsing, frontend streaming rendering, and engineering batch processing scenarios.
+此实现路径统一定义了 CNLLM 标准参数，对齐了 OpenAI 标准响应结构，又保留了中文大模型的完整能力，并且保证了接入更多厂商的可扩展性。相较于 OpenAI SDK 和厂商自研 SDK，CNLLM 还实现了对于**关键字段的解析、前端流式渲染、工程化批量处理**等场景的系统性增强。
 
-Through CNLLM, developers can seamlessly use Chinese LLMs in the OpenAI ecosystem — LangChain, LlamaIndex, AutoGen, Haystack, DeepEval and other mainstream large language model application frameworks. Especially in development and application scenarios requiring multi-model collaboration, using CNLLM can **significantly reduce adaptation, parsing, feature implementation, and maintenance workload, and effectively lower token consumption in AI agent development**.
+通过 CNLLM，开发者可以无障碍地在 OpenAI 生态内的 langchain、LlamaIndex、AutoGen、Haystack、DeepEval 等主流大模型应用框架中使用中文大模型；尤其在需要多模型协作的开发和应用场景中，使用 CNLLM 可**显著减少适配解析、功能实现及维护工程量，并有效降低 AI agent 开发中的 Token 消耗**。
 
-- **Unified Interface** - One set of interfaces and parameters to call different Chinese LLMs, returns OpenAI API standard format
-- **Mainstream Framework Integration** - Built-in integration with LangChain Runnable, and adaptable with other OpenAI-compatible frameworks. 
-- **Parameter Observability** - Validation and explicit feedback for all parameters, especially vendor-specific ones.
-- **Streaming Enrichment** - Streaming lifecycle inspection via repr, and properties for automated accumulation.
-- **Batch Capability Enhancement** - Independent configuration for single requests in batch tasks, real-time statistics, and cofigurable failure policy and memory management.
+- **统一接口** - 一套接口和参数调用不同中文大模型，返回 OpenAI API 标准格式
+- **主流框架集成** - 内置集成 LangChain Runnable，并可适配其他 OpenAI 兼容框架
+- **参数可观测性** - 对所有参数进行验证和明确反馈，尤其是厂商特定参数
+- **流式增强** - 通过 repr 进行流式生命周期检查，以及自动累积属性
+- **批量能力增强** - 批量任务中单个请求的独立配置、实时批量进度统计，以及可配置的失败策略和内存管理
 
-### Collaboration Opportunities
+### 开发者招募
 
-Welcome developers to participate in CNLLM's development. Please submit an Issue to discuss your solution before creating a Pull Request.
+欢迎开发者共同参与 CNLLM 的发展，创建 Pull Request 前请先提交 Issue 说明问题并讨论您的解决方案。
 
-Or contact us at: <wangkancheng1122@163.com>
+或在以下邮箱联系我们：<wangkancheng1122@163.com>
 
-| Direction | Description |
-| -------- | ----------- |
-| 🌐 **New Vendor Adapters** | Integrate more Chinese LLMs (Alibaba Qwen, Baidu Wenxin, Tencent Hunyuan, etc.) |
-| 🔗 **Framework Integration** | Deepen integration with LlamaIndex, LiteLLM, and other frameworks |
-| 🐛 **Capability Expansion** | Adapter framework development for multimodal capabilities |
-| 📖 **Documentation** | Add use cases and improve development guides |
-| 💡 **Feature Suggestions** | Share your ideas and requirements |
+| 方向           | 说明                            |
+| ------------ | ----------------------------- |
+| 🌐 **新厂商适配** | 接入更多中文大模型（如阿里千问、百度文心一言、腾讯混元等） |
+| 🔗 **框架适配**  | 深化与 LlamaIndex、LiteLLM 等框架的集成 |
+| 🐛 **能力扩展**  | 多模态功能的适配框架开发                  |
+| 📖 **文档完善**  | 补充使用案例、优化开发指南                 |
+| 💡 **功能建议**  | 提出您的想法与需求                     |
 
-Project Documentation:
+项目开发文档：
 
-- [System Architecture](docs/ARCHITECTURE.md)
-- [Vendor Development Guide](docs/CONTRIBUTOR.md)
-- [Feature Documentation](docs/feature/)
+- [系统架构](docs/ARCHITECTURE.md)
+- [厂商适配](docs/CONTRIBUTOR.md)
+- [功能性文档](docs/feature/)
 
 ***
 
-## Changelog
+## 更新日志
 
 ### v0.9.3 (2026-05-14)
 
-- ✨ **New Vendors**
-  - Qwen: qwen3.6/qwen3.5/qwen-plus/qwen-turbo/qwen-max and 13 models total + Embedding models
-  - Baidu: ernie-5.1/ernie-4.5/ernie-speed/ernie-lite/ernie-x1 and 11 models total + Embeddings models
-  - Hunyuan: hy3-preview/hunyuan-2.0-thinking/hunyuan-2.0-instruct
-- ✨ **LangChain Integration**
-  - `LangChainRunnable(BaseChatModel)` adds support for `bind_tools()` / `with_structured_output()` methods
-  - New `LangChainEmbeddings`: adapts `langchain_core.embeddings.Embeddings`, supports `embed_documents()` / `embed_query()`
-- ✨ **MiniMax Dual Interface Adaptation**
-  - Added `MiniMaxNativeAdapter`: CNLLM now adapts MiniMax models with both native and OpenAI-compatible dual interfaces
-  - Native interface supports `stream_options`, `group_id` vendor-specific pass-through parameters, and CNLLM returns OpenAI standard responses
-  - In OpenAI-compatible interface, the `.think` property extracts and accumulates model's thinking content in real-time
+- ✨ **新厂商接入**
+  - 通义千问 Qwen：qwen3.6/qwen3.5/qwen-plus/qwen-turbo/qwen-max 等 13 个模型 + Embedding 模型
+  - 百度千帆 Baidu：ernie-5.1/ernie-4.5/ernie-speed/ernie-lite/ernie-x1 等 11 个模型 + Embeddings 模型
+  - 腾讯混元 Hunyuan：hy3-preview/hunyuan-2.0-thinking/hunyuan-2.0-instruct
+- ✨ **LangChain 集成**
+  - `LangChainRunnable(BaseChatModel)` 中新增支持 `bind_tools()` / `with_structured_output()` 方法
+  - 新增 `LangChainEmbeddings`：适配 `langchain_core.embeddings.Embeddings`，支持 `embed_documents()` / `embed_query()`
+- ✨ **MiniMax 双接口适配**
+  - 新增 `MiniMaxNativeAdapter`：CNLLM 现在适配 MiniMax 模型原生和 OpenAI 兼容双接口
+  - 原生接口支持 `stream_options`,`group_id` 厂商特有参数透传，并且 CNLLM 会返回 OpenAI 标准响应
+  - OpenAI 兼容接口中， `.think` 属性实时提取并累积模型思考内容
 
 ### v0.9.2 (2026-05-10)
 
-- 🔧 **Framework Use Case Tests**
-  - Added `tests/key_needed/framework` directory, containing test cases for CNLLM integration with langchain, llamaindex, autogen, haystack, deepeval frameworks in production scenarios
-- 🔧 **Refactoring**
-  - Removed `StreamChunks`, merged into `StreamAccumulator`
-  - Removed seamless async support (`_SyncProxy` and 5 other classes), now async clients must use async syntax
-  - `StreamAccumulator._accumulate()` caching, `from_chunks()` class method etc.
+- 🔧 **框架用例测试**
+  - 新增 `tests/key_needed/framework` 目录，含生产场景中 CNLLM 与 langchain、llamaindex、autogen、haystack、deepeval 框架协作的用例测试
+- 🔧 **修改**
+  - 移除 `StreamChunks`，合并为 `StreamAccumulator`
+  - 移除无感异步支持（`_SyncProxy` 等 5 个类），现在异步客户端必须使用异步语法
+  - `StreamAccumulator._accumulate()` 缓存、`from_chunks()` 类方法等
 
 ### v0.9.1 (2026-05-09)
 
-- ✨ **`keep`** **parameter — Storage Control**
-  - `batch()` adds `keep` parameter to control persistent storage of batch response fields
-  - All fields in batch responses can be accessed in real-time during iteration, with results updated and accumulated in real-time; after iteration, accessing fields not specified in `keep` returns empty container + warning
-  - Default strategy (when `keep` is not configured):
-    - `chat.batch()` responses default to keeping key fields `still`/`think`/`tools` and batch metadata, releasing other redundant fields
-    - `embeddings.batch()` responses default to keeping key field `vectors` and batch metadata, releasing other redundant fields
-- ✨ **`drop_params`** **parameter — Unknown Parameter Handling Strategy**
-  - `create()` and `batch()` add `drop_params` parameter, supporting three-tier parameter handling strategies:
-    - `drop_params="warn"`: warns that parameters are not taking effect, ignores and continues, default strategy
-    - `drop_params="ignore"`: silently ignores unknown parameters and continues execution
-    - `drop_params="strict"`: throws exception, terminates request execution
-- ✨ **`usage`** **field — Usage Statistics**
-  - `batch()` response now includes `usage` field, storing full Token consumption statistics for batch processing, accessed via `.usage`
-- ✨ **batch embeddings response format**
-  - `embeddings.batch()` response now includes `vectors` field, storing embedding vectors returned from batch requests, accessed via `.vectors`
-  - `embeddings.batch()` response now includes `batch_info` field, storing batch metadata like `batch_size`, accessed via `.batch_info`
+- ✨ **`keep`** **参数 — 存储控制**
+  - `batch()` 新增 `keep` 参数，控制批量响应字段的持久化存储
+  - 批量响应的所有字段在迭代期间可实时访问，结果实时更新和累积；迭代后，访问未在 `keep` 中指定的字段则返回空容器 + 警告
+  - 默认策略（不配置`keep`时）：
+    chat.batch() 响应中默认保留关键字段 `still`/`think`/`tools` 以及批量处理元数据，释放其他冗余字段
+    embeddings.batch() 响应中默认保留关键字段 `vectors` 以及批量处理元数据，释放其他冗余字段
+- ✨ **`drop_params`** **参数 — 未知参数处理策略**
+  - `create()` 和 `batch()` 新增 `drop_params` 参数，支持三档位置参数处理策略：
+    `drop_params="warn"`：警告参数未生效，忽略后继续执行，默认策略
+    `drop_params="ignore"`：静默忽略未知参数并继续执行
+    `drop_params="strict"`：抛出异常，终止请求执行
+- ✨ **`usage`** **字段 — 用量统计**
+  - `batch()` 响应现在包含 `usage` 字段，存储批量处理的全量 Token 消耗统计，通过 `.usage` 访问
+- ✨ **batch embeddings 响应格式**
+  - `embeddings.batch()` 响应现在包含 `vectors` 字段，存储批量请求返回的嵌入向量，通过 `.vectors` 访问
+  - `embeddings.batch()` 响应现在包含 `batch_info` 字段，存储 `batch_size` 等元数据，通过 `.batch_info` 访问
 
-## Supported Models
+## 支持的模型
 
-### Chat Completions:
+### Chat Completions 支持：
 
 - **DeepSeek**
-  - `deepseek-chat`, `deepseek-reasoner`, `deepseek-v4-pro`, `deepseek-v4-flash`
+  - `deepseek-chat`、`deepseek-reasoner`、`deepseek-v4-pro`、`deepseek-v4-flash`
 - **KIMI (Moonshot AI)**
-  - `kimi-k2.6`, `kimi-k2.5`, `moonshot-v1-128k` (`moonshot-v1`), `moonshot-v1-8k`, `moonshot-v1-32k`, `moonshot-v1-vision-preview`
-- **Doubao**
-  - `doubao-seed-2-0-pro-260215` (`doubao-seed-2-0-pro`), `doubao-seed-2-0-mini-260215` (`doubao-seed-2-0-mini`), `doubao-seed-2-0-lite-260215` (`doubao-seed-2-0-lite`), `doubao-seed-2-0-code-preview-260215` (`doubao-seed-2-0-code`), `doubao-seed-1-8-251228` (`doubao-seed-1-8`), `doubao-seed-1-6-251015` (`doubao-seed-1-6`), `doubao-seed-1-6-flash-250828` (`doubao-seed-1-6-flash`), `doubao-seed-1-6-vision-250815` (`doubao-seed-1-6-vision`), `doubao-1-5-vision-pro-32k-250115` (`doubao-1-5-vision-pro`), `doubao-seed-1-5-lite-32k-250115` (`doubao-seed-1-5-lite`), `doubao-seed-1-5-pro-32k-250115` (`doubao-seed-1-5-pro-32k`), `doubao-seed-1-5-pro-256k-250115` (`doubao-seed-1-5-pro`)
-- **GLM**
-  - `glm-4.6`, `glm-4.7`, `glm-4.7-flash`, `glm-4.7-flashx`, `glm-5`, `glm-5-turbo`, `glm-5.1`, `glm-4.5`, `glm-4.5-x`, `glm-4.5-air`, `glm-4.5-airx`, `glm-4.5-flash`, `glm-5v-turbo`, `glm-4.5v`, `glm-4.6v`, `glm-4.6v-flash`
-- **Xiaomi mimo**
-  - `mimo-v2-pro`, `mimo-v2-omni`, `mimo-v2-flash`, `mimo-v2.5-pro`, `mimo-v2.5`
+  - `kimi-k2.6`、`kimi-k2.5`、`moonshot-v1-128k`（`moonshot-v1`）、`moonshot-v1-8k`、`moonshot-v1-32k`、`moonshot-v1-vision-preview`
+- **豆包 Doubao**
+  - `doubao-seed-2-0-pro-260215`（`doubao-seed-2-0-pro`）、`doubao-seed-2-0-mini-260215`（`doubao-seed-2-0-mini`）、`doubao-seed-2-0-lite-260215`（`doubao-seed-2-0-lite`）、`doubao-seed-2-0-code-preview-260215`（`doubao-seed-2-0-code`）、`doubao-seed-1-8-251228`（`doubao-seed-1-8`）、`doubao-seed-1-6-251015`（`doubao-seed-1-6`）、`doubao-seed-1-6-flash-250828`（`doubao-seed-1-6-flash`）、`doubao-seed-1-6-vision-250815`（`doubao-seed-1-6-vision`）、`doubao-1-5-vision-pro-32k-250115`（`doubao-1-5-vision-pro`）、`doubao-seed-1-5-lite-32k-250115`（`doubao-seed-1-5-lite`）、`doubao-seed-1-5-pro-32k-250115`（`doubao-seed-1-5-pro-32k`）、`doubao-seed-1-5-pro-256k-250115`（`doubao-seed-1-5-pro`）
+- **智谱 GLM**
+  - `glm-4.6`、`glm-4.7`、`glm-4.7-flash`、`glm-4.7-flashx`、`glm-5`、`glm-5-turbo`、`glm-5.1`、`glm-4.5`、`glm-4.5-x`、`glm-4.5-air`、`glm-4.5-airx`、`glm-4.5-flash`、`glm-5v-turbo`、`glm-4.5v`、`glm-4.6v`、`glm-4.6v-flash`
+- **小米 mimo**
+  - `mimo-v2-pro`、`mimo-v2-omni`、`mimo-v2-flash`、`mimo-v2.5-pro`、`mimo-v2.5`
 - **MiniMax**
-  - `MiniMax-M2`, `MiniMax-M2.1`, `MiniMax-M2.5`, `MiniMax-M2.5-highspeed`, `MiniMax-M2.7`, `MiniMax-M2.7-highspeed`
-- **Qwen**
-  - `qwen3.6-max-preview`, `qwen3.6-plus`, `qwen3.6-flash`, `qwen3.5-plus`, `qwen3.5-flash`, `qwen3.5-397b-a17b`, `qwen3.5-122b-a10b`, `qwen3.5-27b`, `qwen3.5-35b-a3b`
-- **Baidu**
-  - `ernie-5.1`, `ernie-5.0`, `ernie-5.0-thinking-perview`, `ernie-4.5-8k-preview`, `ernie-4.5-turbo-128k` (`ernie-4.5-turbo`), `ernie-4.5-turbo-32k`, `ernie-4.5-turbo-vl`, `ernie-4.5-turbo-vl-32k`, `ernie-4.5-0.3b`, `ernie-speed-pro-128k` (`ernie-speed-pro`), `ernie-lite-pro-128k` (`ernie-lite-pro`), `ernie-x1.1`, `ernie-x1-turbo-32k` (`ernie-x1-turbo`)
-- **Hunyuan**
-  - `hy3-preview`, `hunyuan-2.0-thinking-20251109` (`hunyuan-2.0-thinking`), `hunyuan-2.0-instruct-20251111` (`hunyuan-2.0-instruct`)
+  - `MiniMax-M2`、`MiniMax-M2.1`、`MiniMax-M2.5`、`MiniMax-M2.5-highspeed`、`MiniMax-M2.7`、`MiniMax-M2.7-highspeed`
+- **千问 Qwen**
+  - `qwen3.6-max-preview`、`qwen3.6-plus`、`qwen3.6-flash`、`qwen3.5-plus`、`qwen3.5-flash`、`qwen3.5-397b-a17b`、`qwen3.5-122b-a10b`、`qwen3.5-27b`、`qwen3.5-35b-a3b`
+- **百度千帆 Baidu**
+  - `ernie-5.1`、`ernie-5.0`、`ernie-5.0-thinking-perview`、`ernie-4.5-8k-preview`、`ernie-4.5-turbo-128k`（`ernie-4.5-turbo`）、`ernie-4.5-turbo-32k`、`ernie-4.5-turbo-vl`、`ernie-4.5-turbo-vl-32k`、`ernie-4.5-0.3b`、`ernie-speed-pro-128k`（`ernie-speed-pro`）、`ernie-lite-pro-128k`（`ernie-lite-pro`）、`ernie-x1.1`、`ernie-x1-turbo-32k`（`ernie-x1-turbo`）
+- **腾讯混元 Hunyuan**
+  - `hy3-preview`、`hunyuan-2.0-thinking-20251109`（`hunyuan-2.0-thinking`）、`hunyuan-2.0-instruct-20251111`（`hunyuan-2.0-instruct`）
 
-### Embeddings:
+### Embeddings 支持：
 
-- **GLM**: `embedding-2`, `embedding-3`, `embedding-3-pro`
-- **Qwen**: `text-embedding-v4`, `text-embedding-v3`, `text-embedding-v2`, `text-embedding-v1`
-- **Baidu**: `embedding-v1`, `bge-large-zh`, `bge-large-en`
+- **GLM**：`embedding-2`、`embedding-3`、`embedding-3-pro`
+- **千问 Qwen**：`text-embedding-v4`、`text-embedding-v3`、`text-embedding-v2`、`text-embedding-v1`
+- **百度千帆 Baidu**：`embedding-v1`、`bge-large-zh`、`bge-large-en`
 
-## 1. Quick Start
+## 1. 快速开始
 
-### 1.1 Installation
+### 1.1 安装
 
-#### 1.1.1 SDK Installation
+#### 1.1.1 SDK 安装
 ```bash
 pip install cnllm
 ```
 
-#### 1.1.2 Install as Agent Skill
+#### 1.1.2 作为 Agent Skill 安装
 
-**One-Click Install**:
+**一键安装**：
 ```bash
 npx skills add https://github.com/kanchengw/cnllm
 ```
 
-Or manually copy the `SKILL.md` file from the project root to your agent's skill directory. When **calling Chinese LLMs, CNLLM will be used as the preferred option**.
+或手动将项目根目录的 `SKILL.md` 文件复制到 Agent 的技能目录下，在**调用中文大模型时， 会优先使用 CNLLM**。
 
-### 1.2 Client Initialization
+### 1.2 客户端初始化
 
-#### 1.2.1 Sync Client
+#### 1.2.1 同步客户端
 
 ```python
 from cnllm import CNLLM
 
 client = CNLLM(model="minimax-m2.7", api_key="your_api_key")
-resp = client.chat.create(...)
+resp = client.chat.create(...)  
 ```
 
-#### 1.2.2 Async Client
+#### 1.2.2 异步客户端
 
-Async clients need to be called via `await`, and streaming responses are iterated via `async for`:
+异步客户端需要通过 `await` 调用，流式响应通过 `async for` 迭代：
 
 ```python
 from cnllm import asyncCNLLM
@@ -167,171 +167,171 @@ async def main():
 asyncio.run(main())
 ```
 
-### 1.3 Context Management
+### 1.3 上下文管理
 
-Two context management modes are supported:
+支持两种上下文管理方式：
 
-- **Persistent Session** maintains session state across multiple calls, suitable for applications that need to maintain context
-- **Temporary Session** is single-use, does not maintain session state, auto-closes
+- **持久化会话** 会在多个调用之间保持会话状态，适合需要维护上下文的应用场景
+- **临时会话** 单次会话，不保持会话状态，自动关闭会话。
 
-**Persistent Session**:
+**持久化会话**：
 
 ```Python
 client = CNLLM(
     model="minimax-m2.7", api_key="your_api_key")
 resp = client.chat.create(...)
-client.close()                         # Manual close; async client uses client.aclose()
+client.close()                         # 手动关闭，异步客户端使用client.aclose()
 ```
 
-**Temporary Session**:
+**临时会话**：
 
 ```Python
 with CNLLM(
     model="deepseek-chat", api_key="your_api_key") as client:
-    resp = client.chat.create(...)     # Auto-closes session
+    resp = client.chat.create(...)     # 自动关闭会话
 ```
 
-## 2. Call Scenarios
+## 2. 调用场景
 
-All methods support both sync and async clients:
+所有方式支持同步客户端以及异步客户端下的调用：
 
-| Type | Scenario | Method | Return Type |
+| 类型  | 场景 | 方法          | 返回类型                  | 
 | -- | -- | --------------- | --------------------- |
-| **chat completions** | Non-streaming single | `chat.create()`        | `Dict`                |
-|   | Streaming single | `chat.create(stream=True)`          | `Iterator[Dict]`      |
-|   | Non-streaming batch | `chat.batch()`         | `BatchResponse`       |
-|   | Streaming batch | `chat.batch(stream=True)`          | `Iterator[Dict]`      |
-|   | Mixed streaming batch | `chat.batch(requests=[{"stream": True}, {"stream": False}])` | `BatchResponse`       |
-| **embeddings** | Embeddings single | `embeddings.create()` | `Dict`                |
-|   | Embeddings batch | `embeddings.batch()` | `EmbeddingResponse`   |
+| **chat completions** | 非流式单条 | `chat.create()`        | `Dict`                | 
+|   | 流式单条 | `chat.create(stream=True)`          | `Iterator[Dict]`      | 
+|   | 非流式批量 | `chat.batch()`         | `BatchResponse`       | 
+|   | 流式批量 | `chat.batch(stream=True)`          | `Iterator[Dict]`      | 
+|   | 混合流式批量 | `chat.batch(requests=[{"stream": True}, {"stream": False}])` | `BatchResponse`       | 
+| **embeddings** | Embeddings 单条 | `embeddings.create()` | `Dict`                | 
+|   | Embeddings 批量 | `embeddings.batch()` | `EmbeddingResponse`   | 
 
-### 2.1 Chat Completions Single Call
+### 2.1 chat completions 单条调用
 
-Three calling methods are supported, with the simplest being one line of code, one parameter:
+支持三种输入方式，最简一行代码，一个参数：
 
-**Simplified Call:**
-Does not support any parameters other than strings (streaming can be configured at client level with `stream=True` parameter).
-
-```python
-resp = client("Introduce yourself in one sentence")
-```
-
-**Standard Call:**
+**极简调用：**
+不支持除字符串外的其他参数(流式调用可在客户端配置 `stream=True` 参数)。
 
 ```python
-resp = client.chat.create(prompt="Introduce yourself in one sentence", stream=True)
+resp = client("用一句话介绍自己")
 ```
 
-**Full Call:**
+**标准调用：**
+
+```python
+resp = client.chat.create(prompt="用一句话介绍自己", stream=True)
+```
+
+**完整调用：**
 
 ```python
 resp = client.chat.create(
     messages=[
-        {"role": "user", "content": "Introduce yourself in one sentence"},
-        {"role": "assistant", "content": "I am an intelligent assistant"},
-        {"role": "user", "content": "Hello"},
-    ]
+        {"role": "user", "content": "用一句话介绍自己"},
+        {"role": "assistant", "content": "我是一个智能助手"},
+        {"role": "user", "content": "你好"},
+        ]
 )
 ```
 
-#### 2.1.1 Non-Streaming Call
+#### 2.1.1 非流式调用
 
 ```python
 resp = client.chat.create(
-    messages=[{"role": "user", "content": "Introduce yourself in one sentence"}],
+    messages=[{"role": "user", "content": "用一句话介绍自己"}],
 )
 ```
 
-#### 2.1.2 Streaming Call
+#### 2.1.2 流式调用
 
 ```python
 resp = client.chat.create(
-    prompt="Introduce yourself in one sentence",
+    prompt="用一句话介绍自己", 
     stream=True
 )
 for chunk in resp:
-    print(resp.still)  # Real-time accumulated model response text
-print(resp.raw)  # Complete accumulated model native response
+    print(resp.still)  # 实时累积的模型回复文本
+print(resp.raw)  # 完整累积后的模型原生响应
 ```
 
-#### 2.1.3 Response Access
+#### 2.1.3 响应访问
 
-In streaming calls, access via `for` loop with **real-time accumulation** for responses or the following key fields; non-streaming calls do not support `for` iteration, and access returns complete field content:
+流式调用中，通过 `for` 迭代**实时访问**响应或以下关键字段，返回内容**实时累积**；非流式调用不支持 `for` 迭代，访问结果为完整字段内容：
 
-| Response Field | Access Method | Return Format | Example |
+| 响应字段                           | 访问方式         | 返回格式              | 返回示例                                             |
 | ------------------------------ | ------------ | ----------------- | ------------------------------------------------ |
-| **resp**: standard response | `resp`        | `Dict`/`List[Dict]` | `{non-streaming standard response}`/`[streaming chunks list]` |
-| **think**: `reasoning_content` | `resp.think` | `str`             | `"reasoning content..."`                                      |
-| **still**: `content`           | `resp.still` | `str`             | `"response content..."`                                      |
+| **resp**：标准响应              | `resp`        | `Dict`/`List[Dict]` | `{非流式的标准响应}`/`[标准流式 chunks 列表]` |
+| **think**: `reasoning_content` | `resp.think` | `str`             | `"推理内容..."`                                      |
+| **still**: `content`           | `resp.still` | `str`             | `"回复内容..."`                                      |
 | **tools**: `tool_calls`        | `resp.tools` | `Dict[int, Dict]` | `{0: {"id": "...", "function": {...}}, 1: {...}` |
-| **raw**: model native response | `resp.raw`   | `Dict`            | `{"id": "...", "choices": [...], ...}`           |
+| **raw**: 模型原生响应            | `resp.raw`   | `List[Dict]`      | `[模型原生流式 chunks 列表]`           |
 
 **repr():** 
-During streaming, displays **real-time merged chunks and accumulated field results**, not the real-time streaming chunks list; does not change the streaming response object type, which is an **iterator** containing all standard streaming chunks.
+流式调用中，展示**chunks 合并和字段累积的实时结果**，而非流式 chunks 列表；不改变流式响应对象类型，即包含所有标准流式 chunks 的**迭代器**。
 ```python
 for chunk in resp:
     print(resp)
-# {'id': '...', 'object': '...', 'created': '...', 'model': '...', 'choices': [{'delta': {'content': 'real-time accumulated model response', 'reasoning_content': 'real-time accumulated reasoning process'}, 'finish_reason': 'None'}]}
+# {'id': '...', 'object': '...', 'created': '...', 'model': '...', 'choices': [{'delta': {'content': '实时累积的模型回复', 'reasoning_content': '实时累积的推理过程'}, 'finish_reason': 'None'}]}
 ```
 
 
-### 2.2 Chat Completions Batch Call
+### 2.2 chat completions 批量调用
 
-You can use `prompt` and `messages` parameters for quick global configuration, or use `requests` parameter for independent configuration of individual requests.
+可通过`prompt`和`messages`参数输入并快速配置全局参数，也可以通过`requests`参数为单个请求进行独立配置。
 
-**prompt parameter:**
+**prompt 参数：**
 
 ```python
 resp = client.chat.batch(
-    prompt=["Hello", "How's the weather today", "Who are you"],
+    prompt=["你好", "今天天气怎么样", "你是谁"],
     stream=True
 )
 ```
 
-**messages parameter:**
+**messages 参数：**
 
 ```python
 resp = client.chat.batch(
     messages=[
-        [{"role": "user", "content": "How's the weather in Beijing?"},
-         {"role": "assistant", "content": "It's sunny in Beijing"},
-         {"role": "user", "content": "What about Shanghai?"}],
-        [{"role": "user", "content": "How's the weather in Shanghai?"}],
+        [{"role": "user", "content": "北京天气怎么样"},
+         {"role": "assistant", "content": "北京天气晴朗"},
+         {"role": "user", "content": "那上海呢"}],
+        [{"role": "user", "content": "上海天气怎么样"}],
     ],
     tools=[get_weather]
 )
 ```
 
-**requests parameter:**
+**requests 参数：**
 
-Configure **independent strategy** for individual requests within batch, global parameters are inherited when not configured per-request, supports using `requests.messages` parameter to manage context.
+对批请求中的单个请求进行**独立配置**，全局参数在单个请求未配置时被继承，支持使用`requests.messages`参数管理上下文。
 
 ```python
 resp = client.chat.batch(
     requests=[
-        {"prompt": "How's the weather in Beijing?", "tools": [get_weather], "stream": True},  # Inherits thinking parameter from global config
-        {"prompt": "What is 1+1?", "tools": [calc], "thinking": False},  # Does not inherit any global parameters
-        {"prompt": "How's the weather in Guangzhou?", "model": "deepseek-chat", "api_key": "key"}  # Inherits tools and thinking parameters from global config
+        {"prompt": "北京天气怎么样", "tools": [get_weather], "stream": True},  # 继承全局参数中配置的 thinking 参数
+        {"prompt": "1+1等于多少", "tools": [calc], "thinking": False},  # 不继承任何全局参数
+        {"prompt": "广州天气怎么样", "model": "deepseek-chat", "api_key": "key"}  # 继承全局参数中配置的 tools 和 thinking 参数
     ],
-    # Global parameters (used when per-request not configured):
+    # 全局参数（per-request 未配置时继承使用）：
     tools=[default_tool],
     thinking=True,
-    max_concurrent=2  # Max concurrent: batch-level parameter, not inherited by individual requests
-)
+    max_concurrent=2  # 最大并发数：batch 层级参数，不被单个请求继承
+)  
 ```
 
-#### 2.2.1 Chat Batch Response Structure
+#### 2.2.1 chat completions 批量响应结构
 
-BatchResponse outer structure, where each response under `results[request_id]` is in **OpenAI standard streaming/non-streaming response structure**:
+BatchResponse 外层结构，其中 `results[request_id]` 字段下的每条响应为 **OpenAI 标准流式/非流式响应结构**：
 
 ```python
 {
-    "status": {"elapsed": "3.42s", "success_count": 2, "fail_count": 1, "total": 3},  # Statistics
-    "usage": {"prompt_tokens": 5, "total_tokens": 5},  # Batch processing total usage info
-    "errors": {"request_2": "error message"},  # Mapping of all failed requests' request_id and error messages
-    "results": {     # Mapping of all successful requests' request_id and standard responses
-        "request_0": {...},
-        "request_1": {...}
+    "status": {"elapsed": "3.42s", "success_count": 2, "fail_count": 1, "total": 3},  # 统计信息
+    "usage": {"prompt_tokens": 5, "total_tokens": 5},  # 批处理的总用量信息
+    "errors": {"request_2": "error message"},  # 所有失败请求的 request_id 和错误信息映射
+    "results": {     # 所有成功请求的 request_id 和标准响应映射
+        "request_0": {...}, 
+        "request_1": {...}  
     },
     "think": {"request_0": "...", "request_1": "..."},
     "still": {"request_0": "...", "request_1": "..."},
@@ -340,138 +340,218 @@ BatchResponse outer structure, where each response under `results[request_id]` i
 }
 ```
 
-#### 2.2.2 Chat Batch Response Access
+#### 2.2.2 chat completions 批量响应访问
 
-Supports iterative access to **response results, metadata, and key field contents** within `for` loop, with content **real-time accumulation and updates**:
+支持在 `for` 循环内对**响应结果、元数据、关键字段内容**进行迭代访问，返回内容**实时累积和更新**：
 
-- In batch streaming calls, updates build chunk by chunk; in batch non-streaming calls and **batch calls with mixed streaming strategies** (see `requests` parameter), updates build request by request.
-- In batch non-streaming calls and batch calls with mixed streaming strategies, if real-time access to batch response fields is not needed, you can access complete results directly, skipping the `for` loop.
-- Supports access by `request_id` or by integer index.
+- 流式批量调用中的更新幅度为 chunk by chunk；非流式批量调用和**混合流式策略的批量调用**（见 `requests` 参数）中的更新幅度为 request by request。
+- 在非流式批量调用和混合流式策略的批量调用中，如无需实时访问批量响应中的字段，可直接访问完整结果，省略 `for` 循环。
+- 支持按 `request_id` 或按整数索引访问。
 
-**Access methods:**
+**访问方式**：
 
 ```python
 resp = client.chat.batch(
-    prompt=["Hello", "How's the weather today", "Who are you"]
+    prompt=["你好", "今天天气怎么样", "你是谁"]
 )
 
 for r in resp:
-    print(resp.status)  # Real-time statistics, request by request real-time update
+    print(resp.status)  # 实时统计信息，request by request 实时更新
 
-print(resp.still)  # Response content for all requests in batch task
+print(resp.still)  # 批量任务中所有请求的回复内容
 
-# Or access via client.chat.batch_result:
+# 或通过client.chat.batch_result访问：
 for r in client.chat.batch(
-    prompt=["Hello", "How's the weather today", "Who are you"], stream=True
+    prompt=["你好", "今天天气怎么样", "你是谁"], stream=True
 ):
-    print(client.chat.batch_result.results)  # OpenAI standard streaming responses for all requests in batch task, chunk by chunk real-time accumulation
+    print(client.chat.batch_result.results)  # 批量任务中所有请求的 OpenAI 标准流式响应，chunk by chunk 实时累积
 
-print(client.chat.batch_result.think["request_0"])  # Reasoning content for first request in batch task, or use .think[0] integer index access
+print(client.chat.batch_result.think["request_0"])  # 批量任务中第一条请求的推理内容，或用 .think[0] 整数索引访问
 ```
 
-**Access fields:**
+**访问字段**：
 
-| Category | Field Description | Access Method | Return Format | Example |
+| 类别          | 字段说明        | 访问方式                                          | 返回格式                         | 返回示例                                                                    |
 | ----------- | ----------- | --------------------------------------------- | ---------------------------- | ----------------------------------------------------------------------- |
-| **Metadata** | Real-time statistics | `resp.status` / `batch_result.status`         | `Dict`                       | `{"success_count": 2, "fail_count": 0, "total": 2, "elapsed": "3.42s"}` |
-| <br />      | Real-time Token usage | `resp.usage` / `batch_result.usage`           | `Dict[str, int]`             | `{"prompt_tokens": 50, "completion_tokens": 100, "total_tokens": 150}`  |
-| **errors**  | Error information for failed requests | `resp.errors` / `batch_result.errors`         | `Dict[str, str]`             | `{"request_0": "error message","request_1": "error message"}`                                        |
-| <br />      | Error information for single request   | `resp.errors[0]` / `batch_result.errors[0]`   | `str`                        | `"error message"`                                                             |
-| **results** | Standard response for successful requests | `resp.results` / `batch_result.results`       | `Dict[str, Dict]`            | `{"request_0": {...}, "request_1": {...}}`                              |
-| <br />      | Standard response for each request   | `resp.results[0]` / `batch_result.results[0]` | `Dict`                       | `{"id": "...", "choices": [...], ...}`                                  |
-| **think**   | Reasoning process content      | `resp.think` / `batch_result.think`           | `Dict[str, str]`             | `{"request_0": "...", "request_1": "..."}`                              |
-| <br />      | Reasoning content for single request   | `resp.think[0]` / `batch_result.think[0]`     | `str`                        | `"reasoning content..."`                                                             |
-| **still**   | Response content        | `resp.still` / `batch_result.still`           | `Dict[str, str]`             | `{"request_0": "...", "request_1": "..."}`                              |
-| <br />      | Response content for single request   | `resp.still[0]` / `batch_result.still[0]`     | `str`                        | `"response content..."`                                                             |
-| **tools**   | Tool calls        | `resp.tools` / `batch_result.tools`           | `Dict[str, Dict[int, Dict]]` | `{"request_0": {...}, "request_1": {...}}`                              |
-| <br />      | Tool calls for single request   | `resp.tools[0]`                               | `Dict[int, Dict]`            | `{0: {"id": "...", "function": {...}}, 1: {...}`                        |
-| **raw**     | Model native response      | `resp.raw` / `batch_result.raw`               | `Dict[str, Dict]`            | `{"request_0": {...}, "request_1": {...}}`                              |
-| <br />      | Model native response for single request | `resp.raw[0]` / `batch_result.raw[0]`         | `Dict`                       | `{"id": "...", "choices": [...], ...}`                                  |
+| **元数据**     | 实时统计        | `resp.status` / `batch_result.status`         | `Dict`                       | `{"success_count": 2, "fail_count": 0, "total": 2, "elapsed": "3.42s"}` |
+| <br />      | 实时Token用量   | `resp.usage` / `batch_result.usage`           | `Dict[str, int]`             | `{"prompt_tokens": 50, "completion_tokens": 100, "total_tokens": 150}`  |
+| **errors**  | 失败请求的错误信息     | `resp.errors` / `batch_result.errors`         | `Dict[str, str]`             | `{"request_0": "error message","request_1": "error message"}`                                        |
+| <br />      | 单个请求的错误信息   | `resp.errors[0]` / `batch_result.errors[0]`   | `str`                        | `"error message"`                                                             |
+| **results** | 成功请求的标准响应   | `resp.results` / `batch_result.results`       | `Dict[str, Dict]`            | `{"request_0": {...}, "request_1": {...}}`                              |
+| <br />      | 每个请求的标准响应   | `resp.results[0]` / `batch_result.results[0]` | `Dict`                       | `{"id": "...", "choices": [...], ...}`                                  |
+| **think**   | 推理过程内容      | `resp.think` / `batch_result.think`           | `Dict[str, str]`             | `{"request_0": "...", "request_1": "..."}`                              |
+| <br />      | 单个请求的推理内容   | `resp.think[0]` / `batch_result.think[0]`     | `str`                        | `"推理内容..."`                                                             |
+| **still**   | 回复内容        | `resp.still` / `batch_result.still`           | `Dict[str, str]`             | `{"request_0": "...", "request_1": "..."}`                              |
+| <br />      | 单个请求的回复内容   | `resp.still[0]` / `batch_result.still[0]`     | `str`                        | `"回复内容..."`                                                             |
+| **tools**   | 工具调用        | `resp.tools` / `batch_result.tools`           | `Dict[str, Dict[int, Dict]]` | `{"request_0": {...}, "request_1": {...}}`                              |
+| <br />      | 单个请求的工具调用   | `resp.tools[0]`                               | `Dict[int, Dict]`            | `{0: {"id": "...", "function": {...}}, 1: {...}`                        |
+| **raw**     | 模型原生响应      | `resp.raw` / `batch_result.raw`               | `Dict[str, Dict]`            | `{"request_0": {...}, "request_1": {...}}`                              |
+| <br />      | 单个请求的模型原生响应 | `resp.raw[0]` / `batch_result.raw[0]`         | `Dict`                       | `{"id": "...", "choices": [...], ...}`                                  |
 
-**repr():** Displays batch processing metadata fields or response content:
+**repr():** 展示批量任务的元数据字段或响应结果：
 
 ```python
 print(resp)
 # BatchResponse(status={...}, usage={...})
 
 print(resp.results)
+# print(resp.results[request_id]) 当请求是流式时，会展示 chunks 合并和字段累积的实时结果，不改变迭代器类型
+# {"request_0": {"choices": [{"delta": {"content": "流式回复"}}]}, "request_1": {"choices": [{"message": {"content": "非流式回复"}}]}}
 ```
 
-### 2.3 Embeddings Batch Call
+**to\_dict():** 将响应转换为字典，保留指定字段，未在 keep 声明的字段若保留会产生警告：
 
-**prompt parameter:**
+```python
+resp.to_dict()  # 默认：保留 still/think/tools 字段 + 元数据 (status/usage) 
+resp.to_dict(errors=True, results=True)  # 保留 results/errors 字段 + 元数据 (status/usage) 
+```
+
+### 2.3 Embeddings 调用
+
+支持同步/异步 Embeddings 调用，支持**进度回调、自定义请求 ID 、遇错停止**等高级功能，支持配置**并发控制、批量大小**。
+
+#### 2.3.1 单条调用
+
+```python
+resp = client.embeddings.create(input="Hello world")
+print(resp.vectors)  # 嵌入向量结果
+```
+
+#### 2.3.2 Embeddings 批量调用
+
 ```python
 resp = client.embeddings.batch(
-    input=["Hello", "World", "你好"],
+    input=["Hello", "world", "你好"]
 )
-print(resp.vectors)   # Embedding vectors for all requests
-print(resp.status)    # Statistics
-print(resp.usage)     # Token usage statistics
 ```
 
-**custom_ids parameter:**
+#### 2.3.3 Embeddings 批量响应结构
+
+BatchEmbeddingResponse 外层结构，其中 `results[request_id]` 字段下每条响应为 **OpenAI 标准 Embeddings 响应结构**：
+
+```python
+{   
+    "status": {
+        "elapsed": "3.35s", "success_count": 1, "fail_count": 1, "total": 2
+    },
+    "batch_info": {
+        "batch_size": 2, "batch_count": 2, "dimension": 1024
+    },
+    "usage": {"prompt_tokens": 5, "total_tokens": 5},
+    "errors": {"request_1": "error message"},
+    "results": {
+        "request_0": {
+            "object": "list",
+            "data": [{"object": "embedding","embedding": [0.1, 0.2, ...], "index": 0}],
+            "model": "embedding-2"
+        }
+    }
+    "vectors": {"request_0": [...]}
+}
+```
+
+#### 2.3.4 Embeddings 批量响应访问
+
+支持在 `for` 循环内对**响应结果、元数据、关键字段内容**进行迭代访问，返回内容**实时累积和更新**：
+
+- 在 batch embeddings 调用中，累积幅度为 request by request。
+- 如无需实时访问批量响应中的字段，可直接访问完整结果，省略 `for` 循环。
+- 支持按 `request_id` 或按整数索引访问。
+
+**访问方式**：
+
 ```python
 resp = client.embeddings.batch(
-    input=["Text 1", "Text 2", "Text 3"],
-    custom_ids=["doc_001", "doc_002", "doc_003"]
+    input=["你好", "今天天气怎么样", "你是谁"]
 )
 
-resp.results["doc_001"]          # Get response for doc_001
-resp.vectors["doc_002"]          # Get embedding vector for doc_002
+for r in resp:
+    print(resp.vectors)  # 批量任务中所有请求的嵌入向量，request by request 实时累积
+
+print(resp.vectors)  # 批量任务中所有请求的嵌入向量
+
+# 或通过client.embeddings.batch_result访问：
+for r in client.embeddings.batch(
+    input=["你好", "今天天气怎么样", "你是谁"]
+):
+    print(client.embeddings.batch_result.status)  # 实时统计信息，request by request 实时累积
+
+print(client.embeddings.batch_result.vectors["request_0"])  # 批量任务中第一条请求的嵌入向量，或用 .vectors[0] 整数索引访问
 ```
 
-**to_dict():** Converts response to dictionary:
+**访问字段**：
+
+| 类别          | 字段说明          | 访问方式                                          | 返回格式                     | 返回示例                                                                    |
+| ----------- | ------------- | --------------------------------------------- | ------------------------ | ----------------------------------------------------------------------- |
+| **元数据**     | 实时统计          | `resp.status` / `batch_result.status`         | `Dict`                   | `{"total": 2, "success_count": 2, "fail_count": 0, "elapsed": "3.42s"}` |
+| <br />      | 实时 Token 用量信息 | `resp.usage` / `batch_result.usage`           | `Dict[str, int]`         | `{"prompt_tokens": 10, "total_tokens": 10}`                             |
+| <br />      | 批量信息          | `resp.batch_info` / `batch_result.batch_info` | `Dict`                   | `{"batch_size": 2, "batch_count": 3, "dimension": 1024}`                |
+| **errors**  | 失败请求的错误信息     | `resp.errors` / `batch_result.errors`         | `Dict[str, str]`             | `{"request_0": "error message","request_1": "error message"}`                                        |
+| <br />      | 单个请求的错误信息   | `resp.errors[0]` / `batch_result.errors[0]`   | `str`                        | `"error message"`                                                             |
+| **results** | 成功请求的标准响应     | `resp.results` / `batch_result.results`       | `Dict[str, Dict]`        | `{"request_0": {...}, "request_1": {...}}`                              |
+| <br />      | 单个请求的标准响应     | `resp.results[0]` / `batch_result.results[0]` | `Dict`                   | `{"object": "list", "data": [...], ...}`                                |
+| **vectors** | 嵌入向量表示        | `resp.vectors` / `batch_result.vectors`       | `Dict[str, List[float]]` | `{"request_0": [0.1, 0.2, 0.3, ...], "request_1": [0.4, 0.5, ...]}`     |
+| <br />      | 单个请求的向量表示     | `resp.vectors[0]` / `batch_result.vectors[0]` | `List[float]`            | `[0.1, 0.2, 0.3, ...]`                                                  |
+
+**repr():** 展示批量任务的元数据字段，不改变响应的类型和实际结果：
 
 ```python
-resp.to_dict()               # Default: keeps vectors field + metadata (status/usage/batch_info)
-resp.to_dict(results=True)   # Keeps results field + metadata (status/usage/batch_info)
+print(resp)
+# BatchResponse(status={...},usage={...},batch_info={...})
 ```
 
-### 2.4 Batch Call Control Parameters
+**to\_dict():** 将响应转换为字典，保留指定字段，未在 keep 声明的字段若保留会产生警告：
 
-Batch calls support **retry strategy, concurrency control** parameter configuration:
+```python
+resp.to_dict()               # 默认：保留 vectors 字段 + 元数据 (status/usage/batch_info)
+resp.to_dict(results=True)   # 保留 results 字段 + 元数据 (status/usage/batch_info)
+```
 
-| Parameter | Type | Default | Description |
+### 2.4 批量调用控制参数
+
+批量调用支持**重试策略、并发控制**参数配置：
+
+| 参数               | 类型      | 默认值      | 说明                                         |
 | ---------------- | ------- | -------- | ------------------------------------------ |
-| `batch_size`     | `int`   | Dynamic  | Batch size, only supported for Embeddings calls                  |
-| `max_concurrent` | `int`   | `12`/`3` | Max concurrent, Embeddings default 12, Chat completions default 3 |
-| `rps`            | `float` | `10`/`2` | Requests per second, Embeddings default 10, Chat completions default 2 |
-| `timeout`        | `int`   | 30       | Per-request timeout (seconds)                                   |
-| `max_retries`    | `int`   | 3        | Max retry times                                     |
-| `retry_delay`    | `float` | 1.0      | Retry delay (seconds)                                    |
+| `batch_size`     | `int`   | 动态计算     | 批处理大小，仅 Embeddings 调用支持配置                  |
+| `max_concurrent` | `int`   | `12`/`3` | 最大并发数，Embeddings 默认12，Chat completions 默认3 |
+| `rps`            | `float` | `10`/`2` | 每秒请求数，Embeddings 默认10，Chat completions 默认2 |
+| `timeout`        | `int`   | 30       | 单请求超时（秒）                                   |
+| `max_retries`    | `int`   | 3        | 最大重试次数                                     |
+| `retry_delay`    | `float` | 1.0      | 重试延迟（秒）                                    |
 
-**batch\_size**:
-Only supported for batch Embeddings calls, defaults to adaptive calculation based on request count, manual configuration not recommended.
+**batch\_size**：
+仅支持批量 Embeddings 调用时配置，默认根据请求数量自适应计算，不建议手动配置。
 
-### 2.5 Batch Call Advanced Features
+### 2.5 批量调用高级功能
 
-Both batch chat completions/Embeddings calls support **progress callbacks, custom request IDs, stop on error, field storage control, unknown parameter handling strategy**.
+批量 chat completions/Embeddings 调用都支持**进度回调、自定义请求 ID 、遇错停止、字段存储控制、未知参数处理策略**。
 
-#### 2.5.1 Custom Request ID
+#### 2.5.1 自定义请求 ID
 
-Use `custom_ids` parameter to specify custom IDs for batch requests, which will replace the original request_id in batch responses.
+通过 `custom_ids` 参数为批量请求指定自定义 ID，批量响应中会替换原 request\_id。
 
 ```python
 resp = client.embeddings.batch(
-    input=["Text 1", "Text 2", "Text 3"],
+    input=["文本1", "文本2", "文本3"],
     custom_ids=["doc_001", "doc_002", "doc_003"]
 )
 
-resp.results["doc_001"]          # Get response for doc_001
-resp.vectors["doc_002"]          # Get embedding vector for doc_002
+resp.results["doc_001"]          # 获取 doc_001 的响应
+resp.think["doc_002"]            # 获取 doc_002 的推理内容
 ```
 
-#### 2.5.2 Progress Callback
+#### 2.5.2 进度回调
 
-Callbacks are invoked **when each request completes**, which can be used for:
+回调会在**每个请求完成时被调用**，可以用于：
 
-- Real-time display of processing progress
-- Recording completed tasks
-- Dynamically adjusting subsequent tasks
+- 实时显示处理进度
+- 记录已完成的任务
+- 动态调整后续任务
 - ...
 
 ```python
-def on_complete(request_id, status):          # Callback function example, supports customization
+def on_complete(request_id, status):          # 回调函数示例，支持自定义
     print(f"[{request_id}] {status}")
 
 resp = client.chat.batch(
@@ -480,81 +560,81 @@ resp = client.chat.batch(
 )
 ```
 
-#### 2.5.3 Stop on Error
+#### 2.5.3 遇错停止
 
-When a batch request encounters the first error, it immediately throws an exception and interrupts subsequent tasks. If there are successful requests in the batch, it also returns a batch object containing already processed request results, which can be accessed normally:
+当批量请求遭遇第一个错误时，会立即抛出异常并中断后续任务，若批量请求中存在成功请求，则同时返回批量对象，其中包含已处理的请求结果，可被正常访问：
 
 ```python
 resp = client.embeddings.batch(
     input=requests,
     stop_on_error=True
 )
-# Error message: {request_id} request failed, reason: {error}
+# 错误信息： {request_id}请求失败，失败原因：{error}
 
-# If there are successful requests in the batch, you can access the batch object normally:
+# 若批量请求中存在成功请求，则可正常访问批量对象：
 resp.status
 resp.vectors
 ```
 
-#### 2.5.4 Field Storage Control
+#### 2.5.4 字段存储控制
 
-Batch calls (Chat / Embeddings) can access all fields within the `for` loop. After iteration ends, some redundant fields are automatically released to save memory.
-The `keep` parameter specifies which fields need to be retained after iteration:
+批量调用（Chat / Embeddings）在 `for` 循环中可以访问所有字段，迭代结束后，会自动释放部分冗余字段以节省内存。
+`keep` 参数用于指定哪些字段在迭代后需要保留：
 
-**Default behavior (when keep parameter is not specified):**
+**默认行为（不指定 keep 参数时）：**
 
-| Call Type                        | Default Retention                    | Auto-released after Iteration              |
+| 调用类型                        | 默认保留                    | 迭代后自动释放              |
 | --------------------------- | ----------------------- | -------------------- |
-| `client.chat.batch()`       | `still/think/tools` and metadata | `results/errors/raw` |
-| `client.embeddings.batch()` | `vectors` and metadata           | `results/errors`     |
+| `client.chat.batch()`       | `still/think/tools`和元数据 | `results/errors/raw` |
+| `client.embeddings.batch()` | `vectors`和元数据           | `results/errors`     |
 
-**Notes:**
+**说明：**
 
-- When `keep=[]`, all fields are released after iteration, only metadata is retained; when `keep=["*"]`, all fields are retained after iteration.
-- In `chat.batch()`, metadata fields include `status/usage`; in `embeddings.batch()`, metadata fields include `status/usage/batch_info`.
+- `keep=[]` 时，迭代结束后释放所有字段，仅保留元数据；`keep=["*"]` 时，迭代结束后所有字段都会被保留。
+- `chat.batch()` 中，元数据字段包括 `status/usage`；`embeddings.batch()` 中，元数据字段包括 `status/usage/batch_info`。
 
-**Usage:**
+**使用方式：**
 
 ```python
 resp = client.embeddings.batch(
-    input=["Text 1", "Text 2", "Text 3"],
-    keep=["vectors"]         # Only retain vectors field after iteration
+    input=["文本1", "文本2", "文本3"],
+    keep=["vectors"]         # 迭代结束后仅保留 vectors 字段
 )
-for _ in resp:
-    print(resp.results)      # Any field can be accessed during iteration, request by request real-time accumulation
+for _ in resp:               
+    print(resp.results)      # 迭代中可访问任意字段，request by request 实时累积
 
-resp.vectors["request_0"]    # Accessible after iteration 
-resp.results["request_0"]    # Not accessible after iteration, returns warning
+resp.vectors["request_0"]    # 迭代后可访问 
+resp.results["request_0"]    # 迭代后不可访问，返回警告
 ```
 
-Can also set global default at client initialization:
+也可在客户端初始化时设置全局默认值：
 
 ```python
 client = CNLLM(..., keep=["vectors"])
 ```
 
-#### 2.5.5 Unknown Parameter Handling Strategy
+#### 2.5.5 未知参数处理策略
 
-Use `drop_params` to control the handling behavior of **incompatible parameters and other unknown parameters** held by the client during actual calls. The default strategy is `warn` mode.
+通过 `drop_params` 控制实际调用时，客户端持有的**不适配调用方式的参数和其他未知参数**的处理行为，默认策略为 `warn` 警告模式。
 
-| Strategy | Configuration | Behavior |
+| 策略       | 配置                     | 行为                            |
 | -------- | ---------------------- | ----------------------------- |
-| Warning mode (default) | `drop_params="warn"`   | Prints warning log, parameter is discarded, request continues             |
-| Strict mode     | `drop_params="strict"` | Throws `TypeError`, request terminated |
-| Silent ignore mode   | `drop_params="ignore"` | Silently discards unknown parameters, no logs generated              |
+| 警告模式（默认） | `drop_params="warn"`   | 打印警告日志，参数被丢弃，请求继续             |
+| 严格模式     | `drop_params="strict"` | 抛出 `TypeError`，请求终止 |
+| 静默忽略模式   | `drop_params="ignore"` | 静默丢弃未知参数，不产生任何日志              |
 
-**Notes:**
-- When doing batch calls, if global parameters contain unknown parameters, `drop_params="strict"` directly throws an exception without actually starting the batch task;
-If a single request within the batch task contains unknown parameters, `drop_params="strict"` directly puts that request into the `errors` field without actually executing that request, and continues executing subsequent batch tasks.
+**说明：**
+-进行批量调用时，若全局参数中包含未知参数，`drop_params="strict"` 直接抛出异常，不实际启动批量任务；
+若批量任务中的单个请求包含未知参数，`drop_params="strict"` 直接将该请求归入 `errors` 字段，不实际执行该请求，并继续执行后续的批量任务。
 
-- Specifically, when configured with `drop_params="strict"` and `stop_on_error=True`, the first error encountered in batch requests immediately interrupts the batch task while returning already processed request results. See [Stop on Error](#253-stop-on-error).
-- The `drop_params` parameter supports client configuration and all calling methods (including `create` single-call method).
+- 特别地，当配置`drop_params="strict"` 且 `stop_on_error=True` 时，批量请求中遭遇第一个错误时会立即中断批量任务，同时返回已处理的请求结果，详见 [遇错停止](#253-遇错停止)。
+- `drop_params` 参数支持客户端配置以及所有调用方式（包括 `create` 单条调用方式）。
 
-## 3. CNLLM Standard Response Format
+## 3. CNLLM 标准响应格式
 
-CNLLM's streaming, non-streaming, and Embeddings response formats for single requests are fully aligned with OpenAI standard structure.
+CNLLM 单条请求的流式、非流式、 Embeddings 响应格式，完全对齐 OpenAI 标准结构。
 
-### 3.1 Non-Streaming Response Format
+### 3.1 非流式响应格式
 
 ```python
 {
@@ -566,12 +646,12 @@ CNLLM's streaming, non-streaming, and Embeddings response formats for single req
         "index": 0,
         "message": {
             "role": "assistant",
-            "content": "Hello, I am MiniMax-M2.7...",
-            "reasoning_content": "reasoning process content..."    # Model reasoning process, if any
-            "tool_calls": [{                        # Tool calls, if any
+            "content": "你好，我是 MiniMax-M2.7...",
+            "reasoning_content": "推理过程内容..."    # 模型推理过程，若有
+            "tool_calls": [{                        # 工具调用，若有
                 "id": "call_xxx",
                 "type": "function",
-                "function": {"name": "get_weather", "arguments": "{\"location\":\"Beijing\"}"}
+                "function": {"name": "get_weather", "arguments": "{\"location\":\"北京\"}"}
             }]
         },
         "finish_reason": "stop"
@@ -590,25 +670,25 @@ CNLLM's streaming, non-streaming, and Embeddings response formats for single req
 }
 ```
 
-### 3.2 Streaming Response Format
+### 3.2 流式响应格式
 
 ```python
 {'id': 'chatcmpl-xxx', 'object': 'chat.completion.chunk', 'created': 1234567890, 'model': 'minimax-m2.7', 'choices': [{'index': 0, 'delta': {'role': 'assistant'}, 'finish_reason': None}]}
 
-# reasoning_content chunks (model reasoning process, if any):
-{'id': 'chatcmpl-xxx', 'object': 'chat.completion.chunk', 'created': 1234567890, 'model': 'minimax-m2.7', 'choices': [{'index': 0, 'delta': {'reasoning_content': 'reasoning..'}, 'finish_reason': None}]}
+# reasoning_content chunks (模型推理过程，若有):
+{'id': 'chatcmpl-xxx', 'object': 'chat.completion.chunk', 'created': 1234567890, 'model': 'minimax-m2.7', 'choices': [{'index': 0, 'delta': {'reasoning_content': '推理..'}, 'finish_reason': None}]}
 
-# tool_calls chunks (tool calls, if any):
+# tool_calls chunks (工具调用，若有):
 {'id': 'chatcmpl-xxx', 'object': 'chat.completion.chunk', 'created': 1234567890, 'model': 'minimax-m2.7', 'choices': [{'index': 0, 'delta': {'tool_calls': [{'index': 0, 'id': 'call_xxx', 'type': 'function', 'function': {'name': 'get_weather', 'arguments': '...'}}]}, 'finish_reason': None}]}
 
-{'id': 'chatcmpl-xxx', 'object': 'chat.completion.chunk', 'created': 1234567890, 'model': 'minimax-m2.7', 'choices': [{'index': 0, 'delta': {'content': 'Hello...'}, 'finish_reason': None}]}
+{'id': 'chatcmpl-xxx', 'object': 'chat.completion.chunk', 'created': 1234567890, 'model': 'minimax-m2.7', 'choices': [{'index': 0, 'delta': {'content': '你好...'}, 'finish_reason': None}]}
 
 # ... chunks
 
 {'id': 'chatcmpl-xxx', 'object': 'chat.completion.chunk', 'created': 1234567890, 'model': 'minimax-m2.7', 'choices': [{'index': 0, 'delta': {}, 'finish_reason': 'stop'}], 'usage': {'prompt_tokens': 10, 'completion_tokens': 20, 'total_tokens': 30}}
 ```
 
-### 3.3 Embeddings Response Format
+### 3.3 Embeddings 响应格式
 
 ```python
 {
@@ -626,128 +706,128 @@ CNLLM's streaming, non-streaming, and Embeddings response formats for single req
 }
 ```
 
-## 4. CNLLM Unified Interface Parameters
+## 4. CNLLM 统一接口参数
 
-Except for parameters specially noted below, other parameters can be configured at **both client initialization and call entry**. Call entry configuration will **override** client initialization configuration.
+除下表中作特殊说明的参数，其他参数都接受在**客户端初始化和调用入口**配置，调用入口处的配置会**覆盖**客户端初始化的配置。
 
-### 4.1 CNLLM Request Parameters
+### 4.1 CNLLM 请求参数
 
-CNLLM request parameters are basically consistent with **OpenAI standard parameters**, with slight extensions based on domestic vendor situations. For uncovered parameters, vendor naming is used and **passed through**.
-Note: Not all supported models support all request parameters. Please refer to vendor official documentation for confirmation, or configure `drop_params="ignore"` to ignore unsupported parameters.
+CNLLM 请求参数与**OpenAI 标准参数**基本一致，覆盖范围基于国内厂商情况稍有扩展，未覆盖的参数则使用厂商命名并进行**透传**。
+注：并非所有支持模型都支持全部请求参数，请参考厂商官方文档确认，或配置 `drop_params="ignore"` 以忽略不支持的参数。
 
-#### 4.1.1 Basic Parameters
+#### 4.1.1 基础参数
 
-| Parameter | Type | Default | Description |
-| ------------------- | ------------------------------- | ------------------------------- | ------------------------------------------------------ |
-| `model`             | `str`                           | -                               | Model name, required at client initialization, can be overridden at call entry         |
-| `api_key`           | `str`                           | -                               | API key                                                 |
-| `base_url`          | `str`                           | Auto-adapted                            | Customizable API address                                            |
-| `messages`          | `list[dict]`/`list[list[dict]]` | -                               | `chat()` input parameter, supports context management/image recognition (call entry configuration only)                           |
-| `prompt`            | `str`/`list[str]`               | -                               | `chat()` input parameter (call entry configuration only)                            |
-| `requests`          | `list[dict]`                    | -                               | `chat.batch()` input parameter, supports per-request independent configuration (call entry configuration only) |
-| `input`             | `str`/`list[str]`               | -    | `embeddings()` input parameter (call entry configuration only) |
-| `stream`            | `bool`                          | `False`                         | Streaming response                                                   |
-| `thinking` ¹         | `bool/dict`                     | Determined by model endpoint, most default to `False`            | Thinking mode, supports `True`/`False`, some models support `"auto"`                 |
-| `tools`             | `list`                          | -                               | Tool/function definition list                                              |
+| 参数                  | 类型                              | 默认值                             | 说明                                                     | 
+| ------------------- | ------------------------------- | ------------------------------- | ------------------------------------------------------ | 
+| `model`             | `str`                           | -                               | 模型名称，客户端初始化必填，调用入口可覆盖         | 
+| `api_key`           | `str`                           | -                               | API 密钥                                                 | 
+| `base_url`          | `str`                           | 自动适配                            | 可自定义 API 地址                                            | 
+| `messages`          | `list[dict]`/`list[list[dict]]` | -                               | `chat()` 输入参数，支持上下文管理/图片识别（仅支持调用入口配置）                           | 
+| `prompt`            | `str`/`list[str]`               | -                               | `chat()` 输入参数（仅支持调用入口配置）                            | 
+| `requests`          | `list[dict]`                    | -                               | `chat.batch()` 输入参数，支持对批量请求中 per-request 独立配置（仅支持调用入口配置） |
+| `input`             | `str`/`list[str]`               | -    | `embeddings()` 输入参数（仅支持调用入口配置） | 
+| `stream`            | `bool`                          | `False`                         | 流式响应                                                   | 
+| `thinking` ¹         | `bool/dict`                     | 由模型端口决定，默认多为 `False`            | 思考模式，支持 `True`/`False`，部分模型支持 `"auto"`                 |
+| `tools`             | `list`                          | -                               | 工具/函数定义列表                                              | 
 
-¹ `thinking` mapping:
-   - GLM, DeepSeek, Baidu, Hunyuan, Xiaomi, Kimi: `True` → `{"type": "enabled"}`, `False` → `{"type": "disabled"}`
-   - Doubao: `True` → `"enabled"`, `False` → `"disabled"`, `"auto"` → `"auto"`
-   - Qwen: `True` → `enable_thinking: true`, `False` → `enable_thinking: false`
+¹ `thinking` 映射：
+   - GLM、DeepSeek、Baidu、Hunyuan、Xiaomi、Kimi：`True` → `{"type": "enabled"}`，`False` → `{"type": "disabled"}`
+   - Doubao：`True` → `"enabled"`，`False` → `"disabled"`，`"auto"` → `"auto"`
+   - Qwen：`True` → `enable_thinking: true`，`False` → `enable_thinking: false`
 
-#### 4.1.2 Advanced Parameters
+#### 4.1.2 高级参数
 
-| Parameter | Type | Default | Description |
-| ------------------- | ------------------------------- | ------------------------------- | ------------------------------------------------------ |
-| `temperature`       | `float`                         | Determined by model endpoint                         | Generation randomness                                                  |
-| `max_completion_tokens`        | `int`                           | Determined by model endpoint                         | Max generated token count (including thinking chain)                                           |
-| `max_tokens`        | `int`                           | Determined by model endpoint                         | Max generated token count (excluding thinking chain)                                           |
-| `top_p`             | `float`                         | Determined by model endpoint                         | Nucleus sampling threshold                                                  |
-| `stop`              | `str/list`                      | -                               | Stop sequence                                                   |
-| `reasoning_effort`  | `str`                           | Determined by model endpoint                         | Reasoning depth control                                                 |
-| `tool_choice`       | `str/dict`                      | -                               | Tool selection strategy                                                 |
-| `response_format`   | `dict`                          | Determined by model endpoint, most default to `{"type": "text"}` | Response format                                                   |
-| `n`                 | `int`                           | `1`                             | Number of generated candidates                                                  |
-| `presence_penalty`  | `float`                         | -                               | Presence penalty                                                   |
-| `frequency_penalty` | `float`                         | -                               | Frequency penalty                                                   |
-| `logit_bias`        | `dict`                          | -                               | Token-level bias                                             |
-| `user` ¹             | `str`                           | -                               | User identifier                                                   |
-| `seed`              | `int`                           | -                               | Random seed, same seed can reproduce results                                   |
-| `stream_options`    | `dict`                          | -                               | Streaming output config, such as `{"include_usage": true}`                      |
-| `logprobs`          | `bool`                          | `False`                         | Whether to return log probabilities of output tokens                                   |
-| `top_logprobs`      | `int`                           | `0`                             | Number of highest probability candidate tokens to return for each position                              |
+| 参数                  | 类型                              | 默认值                             | 说明                                                     | 
+| ------------------- | ------------------------------- | ------------------------------- | ------------------------------------------------------ | 
+| `temperature`       | `float`                         | 由模型端口决定                         | 生成随机性                                                  | 
+| `max_completion_tokens`        | `int`                           | 由模型端口决定                         | 最大生成 token 数（包含思维链）                                           |
+| `max_tokens`        | `int`                           | 由模型端口决定                         | 最大生成 token 数（不包含思维链）                                           |
+| `top_p`             | `float`                         | 由模型端口决定                         | 核采样阈值                                                  | 
+| `stop`              | `str/list`                      | -                               | 停止序列                                                   | 
+| `reasoning_effort`  | `str`                           | 由模型端口决定                         | 推理深度控制                                                 | 
+| `tool_choice`       | `str/dict`                      | -                               | 工具选择策略                                                 | 
+| `response_format`   | `dict`                          | 由模型端口决定，默认多为 `{"type": "text"}` | 响应格式                                                   |
+| `n`                 | `int`                           | `1`                             | 生成候选数                                                  | 
+| `presence_penalty`  | `float`                         | -                               | 存在惩罚                                                   |
+| `frequency_penalty` | `float`                         | -                               | 频率惩罚                                                   |
+| `logit_bias`        | `dict`                          | -                               | Token 级别偏差                                             | 
+| `user` ¹             | `str`                           | -                               | 用户标识                                                   |
+| `seed`              | `int`                           | -                               | 随机种子，相同 seed 可复现结果                                   |
+| `stream_options`    | `dict`                          | -                               | 流式输出配置，如 `{"include_usage": true}`                      |
+| `logprobs`          | `bool`                          | `False`                         | 是否返回输出 Token 的对数概率                                   |
+| `top_logprobs`      | `int`                           | `0`                             | 每个位置返回概率最高的候选 Token 个数                              |
 
-¹ `user` mapping:
+¹ `user` 映射：
    - GLM: `user` → `user_id`
 
-### 4.1.3 Vendor Pass-through Parameters
+### 4.1.3 厂商透传参数
 
-Parameters supported by models but not covered in 4.1.1/4.1.2 will be passed through by CNLLM to the model endpoint.
+4.1.1/4.1.2 中未覆盖的其他模型支持的参数，CNLLM 会透传到模型端口。
 
-| Vendor | Pass-through Parameters |
+| 厂商 | 透传参数 |
 |------|---------|
 | **KIMI** | `prompt_cache_key`, `safety_identifier`, `stream_options` |
 | **Doubao** | `service_tier`, `stream_options` |
 | **GLM** | `do_sample`, `request_id`, `tool_stream`, `dimensions` |
-| **MiniMax** | `stream_options`, `group_id` |
-| **Qwen** | `enable_thinking`, `preserve_thinking`, `thinking_budget`, `top_k`, `repetition_penalty`, `vl_high_resolution_images`, `enable_code_interpreter`, `enable_search`, `search_options`, `parallel_tool_calls`, `dimensions` |
-| **Baidu** | `enable_thinking`, `thinking_budget`, `thinking_strategy`, `penalty_score`, `repetition_penalty`, `parallel_tool_calls`, `web_search`, `metadata` |
+| **MiniMax** | `stream_options`(原生接口),`group_id`(原生接口) |
+| **千问Qwen** | `enable_thinking`, `preserve_thinking`, `thinking_budget`, `top_k`, `repetition_penalty`, `vl_high_resolution_images`, `enable_code_interpreter`, `enable_search`, `search_options`, `parallel_tool_calls`, `dimensions` |
+| **百度千帆Baidu** | `enable_thinking`, `thinking_budget`, `thinking_strategy`, `penalty_score`, `repetition_penalty`, `parallel_tool_calls`, `web_search`, `metadata` |
 
-### 4.2 SDK Control Parameters
+### 4.2 SDK 控制参数
 
-Parameters defined internally by CNLLM to control internal execution behavior or strategy, not transmitted to API endpoint.
+CNLLM 内部定义的参数，控制内部执行的行为或策略，不向 API 端口传输。
 
-#### 4.2.1 General Parameters
+#### 4.2.1 通用参数
 
-| Parameter | Type | Default | Description |
+| 参数                | 类型      | 默认值      | 说明                 |
 | ----------------- | ------- | -------- | ------------------ |
-| `timeout`         | `int`   | `60`     | Request timeout (seconds)            |
-| `max_retries`     | `int`   | `3`      | Max retry times             |
-| `retry_delay`     | `float` | `1.0`    | Retry delay (seconds)            |
-| `fallback_models`¹ | `dict`  | -        | Fallback models (client initialization only), see below for details |
-| `drop_params`     | `str`   | `"warn"` | See [Unknown Parameter Handling Strategy](#255-unknown-parameter-handling-strategy) |
+| `timeout`         | `int`   | `60`     | 请求超时（秒）            |
+| `max_retries`     | `int`   | `3`      | 最大重试次数             |
+| `retry_delay`     | `float` | `1.0`    | 重试延迟（秒）            |
+| `fallback_models`¹ | `dict`  | -        | 备用模型（仅支持客户端初始化配置），见下方说明 |
+| `drop_params`     | `str`   | `"warn"` | 见 [未知参数处理策略](#255) |
 
-¹`fallback_models` model fallback strategy:
+¹`fallback_models` 模型降级策略：
 
-Fallback models are only supported at **client initialization**. If the primary `model` does not respond successfully, it will sequentially try the provided `fallback_models`. For application **robustness**, it is recommended to configure this option and set `drop_params="ignore"` to avoid parameter compatibility issues.
+备用模型仅支持**客户端初始化**时配置，若 `model` 未成功响应，将顺序尝试传入的`fallback_models`，对应用的**稳健性**有要求，建议配置此项，并配置 `drop_params="ignore"` 避免参数支持性的影响。
 
 ```python
 fallback_models = {
     "deepseek-chat": {
-        "api_key": "ds-key-456",     # required
+        "api_key": "ds-key-456",     # 必填
         "base_url": "https://api.deepseek.com/v1",
     },
     "qwen-plus": {
-        "api_key": "my-key",         # when base_url is not configured, default URL is used
+        "api_key": "my-key",         # 不配置 base_url 时，使用默认 URL
     },
 }
 ```
 
-**Notes**:
-- Specifying `model` again at the call entry overrides the client's primary model configuration. When the call entry's `model` fails, it will still try `fallback_models`
-- In `chat.batch()`, fallback is tried per-req independently
-- Non-retryable errors (model not found, missing params, content filtered) are raised directly without triggering fallback
-- When all models fail, `FallbackError` is raised, aggregating all failure information
+**说明**：
+- 调用入口处再次指定 `model` 会覆盖客户端配置的主模型，当调用入口的 `model` 失败时，仍会尝试 `fallback_models`
+- `chat.batch()` 中按 per-req 尝试 fallback
+- 不可重试的错误（模型不存在、参数缺失、内容过滤）会直接抛出，不触发 fallback
+- 全部模型失败时抛出 `FallbackError`，聚合所有失败信息
 
-#### 4.2.2 Batch Method Parameters
+#### 4.2.2 批量方法参数
 
-Only effective for `chat.batch()` and `embeddings.batch()` calls:
+仅对 `chat.batch()` 和 `embeddings.batch()` 调用生效：
 
-| Parameter | Type | Default | Description |
+| 参数               | 类型          | 默认值                          | 说明                    |
 | ---------------- | ----------- | ---------------------------- | --------------------- |
-| `max_concurrent` | `int`       | Chat: `3` / Embeddings: `12` | Max concurrent                 |
-| `rps`            | `float`     | Chat: `2` / Embeddings: `10` | Requests per second limit               |
-| `batch_size`     | `int`       | Dynamic calculation                         | Batch size, only supported by Embeddings |
-| `stop_on_error`  | `bool`      | `False`                      | Stop subsequent requests on error, return already processed results     |
-| `callbacks`      | `list`      | -                            | Progress callback function list              |
-| `custom_ids`     | `list[str]` | -                            | Custom request ID list           |
-| `keep`           | `set/list`  | See [Field Storage Control](#254-field-storage-control)             | Data fields to retain after iteration            |
+| `max_concurrent` | `int`       | Chat: `3` / Embeddings: `12` | 最大并发数                 |
+| `rps`            | `float`     | Chat: `2` / Embeddings: `10` | 每秒请求数限制               |
+| `batch_size`     | `int`       | 动态计算                         | 批处理大小，仅 Embeddings 支持 |
+| `stop_on_error`  | `bool`      | `False`                      | 遇错时停止后续请求，返回已处理结果     |
+| `callbacks`      | `list`      | -                            | 进度回调函数列表              |
+| `custom_ids`     | `list[str]` | -                            | 自定义请求 ID 列表           |
+| `keep`           | `set/list`  | 见 [字段存储控制](#254)             | 迭代后保留的数据字段            |
 
-## 5. Framework Integration
+## 5. 框架集成
 
-### 5.1. LangChainRunnable Implementation
+### 5.1. LangChainRunnable实现
 
-`LangChainRunnable` inherits `BaseChatModel`, natively supports `invoke`/`stream`/`batch` as well as `bind_tools`/`with_structured_output`.
+`LangChainRunnable` 继承 `BaseChatModel`，原生支持 `invoke`/`stream`/`batch` 及 `bind_tools`/`with_structured_output`。
 
 ```python
 from cnllm import CNLLM
@@ -757,63 +837,63 @@ from langchain_core.tools import tool
 from pydantic import BaseModel, Field
 import asyncio
 
-# Create CNLLM client
+# 创建 CNLLM 客户端
 client = CNLLM(model="deepseek-chat", api_key="your_key")
 
-# Create Runnable instance
+# 创建 Runnable 实例
 runnable = LangChainRunnable(client)
 
 prompt = ChatPromptTemplate.from_messages([
-    ("system", "You are a helpful assistant"),
+    ("system", "你是一个热心的智能助手"),
     ("human", "{input}")
 ])
 
-# Build LangChain chain
+# 构建 LangChain chain
 chain = prompt | runnable
 
-# Sync calls with invoke/stream/batch
-resp = chain.invoke({"input": "What is 2+2?"})
+# 同步调用 invoke/stream/batch
+resp = chain.invoke({"input": "2+2等于几？"})
 print(resp.content)
 
-for chunk in chain.stream({"input": "Count to 5"}):
+for chunk in chain.stream({"input": "数到5"}):
     print(chunk.content, end="", flush=True)
 
 resp = chain.batch([{"input": "Hello"}, {"input": "How are you?"}])
 for r in resp:
     print(r.content)
 
-# bind_tools — tool calling
+# bind_tools — 工具调用
 @tool
 def get_weather(city: str) -> str:
-    """Get weather for a city"""
-    return "Sunny 20°C"
+    """获取指定城市的天气"""
+    return "晴天 20°C"
 
 llm_with_tools = runnable.bind_tools([get_weather])
-resp = llm_with_tools.invoke("Weather in Beijing")
+resp = llm_with_tools.invoke("北京天气")
 print(resp.content)
 
-# with_structured_output — structured output
-# deepseek-v4 series requires thinking=False to receive tool_choice from with_structured_output(); other models/vendors do not have this requirement
+# with_structured_output — 结构化输出
+# deepseek-v4 系列需配置 thinking=False ，以接收 with_structured_output() 中包含的 tool_choice 参数；其他模型/厂商无此限制
 class Person(BaseModel):
-    name: str = Field(description="Name")
-    age: int = Field(description="Age")
+    name: str = Field(description="姓名")
+    age: int = Field(description="年龄")
 
 structured = runnable.with_structured_output(Person)
-result = structured.invoke("Zhang San is 28 years old")
-print(result) # → Person(name="Zhang San", age=28)
+result = structured.invoke("张三28岁")  
+print(result) # → Person(name="张三", age=28)
 
-# LangChainEmbeddings — embeddings
+# LangChainEmbeddings — 嵌入向量
 embeddings = LangChainEmbeddings(client)
-vectors = embeddings.embed_documents(["Hello", "World"])
-query_vec = embeddings.embed_query("query")
+vectors = embeddings.embed_documents(["你好", "世界"])
+query_vec = embeddings.embed_query("查询")
 
-# Async calls with ainvoke/astream/abatch
+# 异步调用 ainvoke/astream/abatch
 async def main():
     async with client:
-        resp = await chain.ainvoke({"input": "What is 2+2?"})
+        resp = await chain.ainvoke({"input": "2+2等于几？"})
         print(resp.content)
 
-        async for chunk in chain.astream({"input": "Count to 5"}):
+        async for chunk in chain.astream({"input": "数到5"}):
             print(chunk.content, end="", flush=True)
 
         results = await chain.abatch([{"input": "A"}, {"input": "B"}])
@@ -823,24 +903,24 @@ async def main():
 asyncio.run(main())
 ```
 
-### 5.2. LlamaIndex — Response Consumption
+### 5.2. LlamaIndex — 响应消费
 
-CNLLM responses can be used to construct LlamaIndex's ChatMessage:
+CNLLM 的响应可直接构造 LlamaIndex 的 ChatMessage：
 
 ```python
 from cnllm import CNLLM
 from llama_index.core.llms import ChatMessage, MessageRole
 
 client = CNLLM(model="deepseek-chat", api_key="your_key")
-resp = client.chat.create(prompt="Introduce yourself in one sentence")
+resp = client.chat.create(prompt="用一句话介绍自己")
 
 msg = ChatMessage(role=MessageRole.ASSISTANT, content=resp.still)
 print(msg.content)
 ```
 
-### 5.3. AutoGen — LLM Backend
+### 5.3. AutoGen — LLM 后端
 
-CNLLM integrates with AutoGen via OpenAI-compatible responses:
+CNLLM 通过 OpenAI 兼容接口与 AutoGen 配合：
 
 ```python
 from cnllm import CNLLM
@@ -853,9 +933,9 @@ msg = TextMessage(content=resp.still, source="assistant")
 print(msg.content)
 ```
 
-### 5.4. Haystack — Document & ChatMessage
+### 5.4. Haystack — Document 与 ChatMessage
 
-CNLLM embeddings feed into Haystack Document, chat output constructs ChatMessage:
+CNLLM 的 embedding 注入 Haystack Document，chat 输出构造 ChatMessage：
 
 ```python
 from cnllm import CNLLM
@@ -865,10 +945,10 @@ from haystack.dataclasses import ChatMessage
 client = CNLLM(model="deepseek-chat", api_key="your_key")
 
 # embedding → Document
-text = "CNLLM is a Chinese LLM adapter"
+text = "CNLLM 是一个中文大模型适配器"
 resp = client.embeddings.create(input=text)
 doc = Document(content=text, embedding=resp.vectors)
-print(f"Vector dimension: {len(doc.embedding)}")
+print(f"向量维度: {len(doc.embedding)}")
 
 # chat → ChatMessage
 resp = client.chat.create(prompt="1+1=?")
@@ -876,9 +956,9 @@ msg = ChatMessage.from_assistant(resp.still)
 print(msg.text)
 ```
 
-### 5.5. DeepEval — Evaluation Test Cases
+### 5.5. DeepEval — 评估测试
 
-CNLLM output feeds into DeepEval evaluation:
+CNLLM 的输出用于 DeepEval 评估：
 
 ```python
 from cnllm import CNLLM
@@ -893,11 +973,12 @@ test_case = LLMTestCase(
 print(test_case.actual_output)
 ```
 
-### License
+### 许可证
 
-Apache License 2.0 - See [LICENSE](LICENSE) file
+Apache License 2.0 - 详见 [LICENSE](LICENSE) 文件
 
-### Contact
+### 联系方式
 
 - GitHub Issues: <https://github.com/kanchengw/cnllm/issues>
-- Author Email: <wangkancheng1122@163.com>
+- 作者邮箱：<wangkancheng1122@163.com>
+
