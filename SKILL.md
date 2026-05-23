@@ -372,7 +372,7 @@ except FallbackError:
 | **KIMI**      | kimi-k2.6, kimi-k2.5, moonshot-v1-8k/32k/128k, moonshot-v1-vision-preview | — |
 | **GLM**       | glm-4.6, glm-4.7, glm-4.7-flash, glm-4.7-flashx, glm-5, glm-5.1, glm-4.5 series, glm-5v-turbo, glm-4.5v, glm-4.6v, glm-4.6v-flash | embedding-2, embedding-3, embedding-3-pro |
 | **MiniMax**   | MiniMax-M2, MiniMax-M2.1, MiniMax-M2.5, MiniMax-M2.5-highspeed, MiniMax-M2.7, MiniMax-M2.7-highspeed | embo-01 |
-| **Doubao**    | doubao-seed-2-0-pro/mini/lite/code, doubao-seed-1-8, doubao-seed-1-6, doubao-seed-1-6-flash, doubao-seed-1-6-vision, doubao-1-5-vision-pro, doubao-seed-1-5-lite/pro/pro-256k | — |
+| **Doubao**    | doubao-seed-2-0-pro-260215 (doubao-seed-2-0-pro), doubao-seed-2-0-mini-260215 (doubao-seed-2-0-mini), doubao-seed-2-0-lite-260215 (doubao-seed-2-0-lite), doubao-seed-2-0-code-preview-260215 (doubao-seed-2-0-code), doubao-seed-1-8-251228 (doubao-seed-1-8), doubao-seed-1-6-251015 (doubao-seed-1-6), doubao-seed-1-6-flash-250828 (doubao-seed-1-6-flash), doubao-seed-1-6-vision-250815 (doubao-seed-1-6-vision), doubao-1-5-vision-pro-32k-250115 (doubao-1-5-vision-pro), doubao-seed-1-5-lite-32k-250115 (doubao-seed-1-5-lite), doubao-seed-1-5-pro-32k-250115 (doubao-seed-1-5-pro-32k), doubao-seed-1-5-pro-256k-250115 (doubao-seed-1-5-pro) | — |
 | **Xiaomi**    | mimo-v2-pro, mimo-v2-omni, mimo-v2-flash, mimo-v2.5-pro, mimo-v2.5       | —                                  |
 
 ## Key Parameters

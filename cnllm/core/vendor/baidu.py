@@ -44,18 +44,20 @@ class BaiduResponder(Responder):
 class BaiduAdapter(BaseAdapter):
     ADAPTER_NAME = "baidu"
     CONFIG_DIR = "baidu"
-    # 黑名单：这些模型不支持 web_search
     _model_params = {
+        # 不支持 web_search的模型
         "ernie-5.1": {"web_search"},
         "ernie-5.0": {"web_search"},
-        "ernie-4.5-turbo-128k": {"web_search"},
-        "ernie-4.5-turbo-32k": {"web_search"},
-        "ernie-4.5-turbo-vl": {"web_search"},
-        "ernie-4.5-turbo-vl-32k": {"web_search"},
-        "ernie-4.5-0.3b": {"web_search"},
-        "ernie-speed-pro-128k": {"web_search"},
-        "ernie-lite-pro-128k": {"web_search"},
         "ernie-x1.1": {"web_search"},
+        "ernie-x1-turbo": {"web_search"},
+        # 不支持 thinking 的模型
+        "ernie-4.5-turbo": {"web_search", "thinking"},
+        "ernie-4.5-turbo-32k": {"web_search", "thinking"},
+        "ernie-4.5-turbo-vl": {"web_search", "thinking"},
+        "ernie-4.5-turbo-vl-32k": {"web_search", "thinking"},
+        "ernie-4.5-0.3b": {"web_search", "thinking"},
+        "ernie-speed-pro": {"web_search", "thinking"},
+        "ernie-lite-pro": {"web_search", "thinking"},
     }
 
     def __init__(

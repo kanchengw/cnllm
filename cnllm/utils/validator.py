@@ -124,8 +124,6 @@ class ParamValidator:
                 type_config = base_url_config.get(self.adapter_type, {})
                 if isinstance(type_config, dict):
                     default_base_url = type_config.get("default", "")
-            else:
-                default_base_url = base_url_config.get("default", "")
         elif isinstance(base_url_config, str):
             default_base_url = base_url_config
 
@@ -193,7 +191,7 @@ def detect_protocol(base_url: str, config_dir: str) -> str:
     """
     import os, yaml
     # 查找 YAML 文件
-    base_path = os.path.join(os.path.dirname(__file__), "..", "configs", config_dir)
+    base_path = os.path.join(os.path.dirname(__file__), "..", "..", "configs", config_dir)
     for candidate in [f"request_{config_dir}.yaml", f"request_{config_dir}.yml"]:
         yaml_path = os.path.join(base_path, candidate)
         if os.path.exists(yaml_path):
@@ -230,7 +228,7 @@ def has_protocol_config(config_dir: str) -> bool:
     其他无多协议的厂商返回 False，避免不必要的 protocol 检测。
     """
     import os, yaml
-    base_path = os.path.join(os.path.dirname(__file__), "..", "configs", config_dir)
+    base_path = os.path.join(os.path.dirname(__file__), "..", "..", "configs", config_dir)
     for candidate in [f"request_{config_dir}.yaml", f"request_{config_dir}.yml"]:
         yaml_path = os.path.join(base_path, candidate)
         if os.path.exists(yaml_path):

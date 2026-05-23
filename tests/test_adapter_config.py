@@ -27,7 +27,7 @@ class TestYAMLConfigLoading:
         assert adapter._config is not None, "配置应已加载"
         assert "request" in adapter._config, "配置应包含 request 节点"
         print(f"\n[PASS] Xiaomi 配置加载成功")
-        print(f"  - base_url: {adapter.get_base_url()}")
+        print(f"  - base_url: {adapter.base_url}")
         print(f"  - api_path: {adapter.get_api_path()}")
 
     def test_model_mapping_works(self):

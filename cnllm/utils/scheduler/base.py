@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 from typing import Any, List, Optional, Iterator, AsyncIterator, Callable, Dict
 import time
 import asyncio
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor, as_completed, wait, FIRST_COMPLETED
 from concurrent.futures import TimeoutError
 from cnllm.utils.exceptions import CNLLMError
 from cnllm.core.accumulators.batch_accumulator import (
@@ -199,6 +199,7 @@ class BatchScheduler:
         self.retry_delay = retry_delay
         self._adapter = None
         self._execute_batch_response = None
+        self._stop_flagged = False
 
     def _get_adapter(self):
         if self._adapter is None:
@@ -251,50 +252,69 @@ class BatchScheduler:
         first_error_info = None
         batch_item_results: List[BatchItemResult] = []
         last_submit_time = 0
+        next_idx = 0
+        pending = {}
+        stopped = False
+
+        def _submit_one():
+            nonlocal next_idx, last_submit_time
+            if next_idx >= len(batch_items):
+                return None
+            item = batch_items[next_idx]
+            next_idx += 1
+            if self._min_interval > 0:
+                elapsed_since_last = time.time() - last_submit_time
+                if elapsed_since_last < self._min_interval:
+                    time.sleep(self._min_interval - elapsed_since_last)
+            last_submit_time = time.time()
+            f = executor.submit(self._execute_single, item.index, item.request)
+            pending[f] = item
+            return f
 
         with ThreadPoolExecutor(max_workers=self.max_concurrent) as executor:
-            future_to_item = {}
-            for item in batch_items:
-                if self._min_interval > 0:
-                    elapsed_since_last = time.time() - last_submit_time
-                    if elapsed_since_last < self._min_interval:
-                        time.sleep(self._min_interval - elapsed_since_last)
-                last_submit_time = time.time()
-                future = executor.submit(self._execute_single, item.index, item.request)
-                future_to_item[future] = item
+            for _ in range(min(self.max_concurrent, len(batch_items))):
+                _submit_one()
 
-            for future in as_completed(future_to_item):
-                item = future_to_item[future]
-                request_id = item.request_id
-
-                try:
-                    result = future.result(timeout=self.timeout)
-                    result.request_id = request_id
-                    batch_item_results.append(result)
-                    if result.status == "success":
-                        raw_resp, formatted_resp, extras = _extract_batch_item(result.response)
-                        batch_response.set_raw(request_id, raw_resp)
-                        batch_response.add_result(request_id, formatted_resp)
-                        if "_thinking" in extras:
-                            batch_response.set_think(request_id, extras["_thinking"])
-                        if "_still" in extras:
-                            batch_response.set_still(request_id, extras["_still"])
-                        if "_tools" in extras:
-                            batch_response.set_tools(request_id, extras["_tools"])
-                        if "_usage" in extras:
-                            batch_response.set_usage(request_id, extras["_usage"])
-                    else:
-                        error_data = {"error": str(result.error) if result.error else "unknown error"}
-                        batch_response.add_result(request_id, error_data)
-                        if self.stop_on_error and first_error_info is None:
-                            first_error_info = (request_id, result.error or Exception("未知错误"))
-
-                except Exception as e:
+            while pending:
+                done_set, _ = wait(pending.keys(), timeout=self.timeout, return_when=FIRST_COMPLETED)
+                if not done_set:
+                    break
+                for f in list(done_set):
+                    item = pending.pop(f)
                     request_id = item.request_id
-                    err_msg = str(e) if str(e) else "Execution failed"
-                    batch_response.add_error(request_id, err_msg)
-                    if self.stop_on_error and first_error_info is None:
-                        first_error_info = (request_id, e)
+                    try:
+                        result = f.result(timeout=0)
+                        result.request_id = request_id
+                        batch_item_results.append(result)
+                        if result.status == "success":
+                            raw_resp, formatted_resp, extras = _extract_batch_item(result.response)
+                            batch_response.set_raw(request_id, raw_resp)
+                            batch_response.add_result(request_id, formatted_resp)
+                            if "_thinking" in extras:
+                                batch_response.set_think(request_id, extras["_thinking"])
+                            if "_still" in extras:
+                                batch_response.set_still(request_id, extras["_still"])
+                            if "_tools" in extras:
+                                batch_response.set_tools(request_id, extras["_tools"])
+                            if "_usage" in extras:
+                                batch_response.set_usage(request_id, extras["_usage"])
+                        else:
+                            error_data = {"error": str(result.error) if result.error else "unknown error"}
+                            batch_response.add_result(request_id, error_data)
+                            if self.stop_on_error and first_error_info is None:
+                                first_error_info = (request_id, result.error or Exception("未知错误"))
+                                stopped = True
+                                self._stop_flagged = True
+                    except Exception as e:
+                        err_msg = str(e) if str(e) else "Execution failed"
+                        batch_response.add_error(request_id, err_msg)
+                        if self.stop_on_error and first_error_info is None:
+                            first_error_info = (request_id, e)
+                            stopped = True
+                            self._stop_flagged = True
+
+                if not stopped and next_idx < len(batch_items):
+                    _submit_one()
 
         batch_response.set_total(len(requests))
         batch_response._end_time = time.time()
@@ -303,6 +323,8 @@ class BatchScheduler:
         return batch_response
 
     def _execute_single(self, index: int, request: Any) -> BatchItemResult:
+        if self._stop_flagged:
+            return BatchItemResult(status="error", error=Exception("Stopped by stop_on_error"))
         try:
             if isinstance(request, str):
                 kwargs = {}

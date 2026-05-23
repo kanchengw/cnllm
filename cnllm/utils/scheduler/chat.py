@@ -5,7 +5,7 @@ from typing import Any, List, Optional, Iterator, Dict
 import time
 import asyncio
 import threading
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor, as_completed, wait, FIRST_COMPLETED
 from concurrent.futures import TimeoutError
 from cnllm.utils.exceptions import CNLLMError
 from cnllm.core.accumulators.batch_accumulator import (
@@ -98,6 +98,10 @@ class AsyncBatchScheduler:
 
         sem = asyncio.Semaphore(self.max_concurrent)
         last_submit_time = 0
+        next_idx = 0
+        pending = set()
+        stopped = False
+        first_error_info = None
 
         async def run_single(item):
             async with sem:
@@ -109,30 +113,43 @@ class AsyncBatchScheduler:
                     last_submit_time = time.time()
                 return await self._execute_single(item.index, item.request), item
 
-        tasks = [run_single(item) for item in batch_items]
-        for coro in asyncio.as_completed(tasks):
-            try:
-                result, item = await coro
-            except Exception:
-                continue
-            result.request_id = item.request_id
-            if result.status == "success":
-                raw_resp, formatted_resp, extras = _extract_batch_item(result.response)
-                batch_response.set_raw(item.request_id, raw_resp)
-                batch_response.add_result(item.request_id, formatted_resp)
-                if "_thinking" in extras:
-                    batch_response.set_think(item.request_id, extras["_thinking"])
-                if "_still" in extras:
-                    batch_response.set_still(item.request_id, extras["_still"])
-                if "_tools" in extras:
-                    batch_response.set_tools(item.request_id, extras["_tools"])
-                if "_usage" in extras:
-                    batch_response.set_usage(item.request_id, extras["_usage"])
-            else:
-                error_data = {"error": str(result.error) if result.error else "unknown error"}
-                batch_response.add_result(item.request_id, error_data)
-                if self.stop_on_error:
-                    break
+        for _ in range(min(self.max_concurrent, len(batch_items))):
+            task = asyncio.create_task(run_single(batch_items[next_idx]))
+            pending.add(task)
+            next_idx += 1
+
+        while pending:
+            done, pending = await asyncio.wait(pending, return_when=asyncio.FIRST_COMPLETED)
+            for task in done:
+                try:
+                    result, item = task.result()
+                except Exception:
+                    continue
+                result.request_id = item.request_id
+                if result.status == "success":
+                    raw_resp, formatted_resp, extras = _extract_batch_item(result.response)
+                    batch_response.set_raw(item.request_id, raw_resp)
+                    batch_response.add_result(item.request_id, formatted_resp)
+                    if "_thinking" in extras:
+                        batch_response.set_think(item.request_id, extras["_thinking"])
+                    if "_still" in extras:
+                        batch_response.set_still(item.request_id, extras["_still"])
+                    if "_tools" in extras:
+                        batch_response.set_tools(item.request_id, extras["_tools"])
+                    if "_usage" in extras:
+                        batch_response.set_usage(item.request_id, extras["_usage"])
+                else:
+                    error_data = {"error": str(result.error) if result.error else "unknown error"}
+                    batch_response.add_result(item.request_id, error_data)
+                    if self.stop_on_error and first_error_info is None:
+                        first_error_info = item.request_id
+                        stopped = True
+                        break
+
+            if not stopped and next_idx < len(batch_items):
+                task = asyncio.create_task(run_single(batch_items[next_idx]))
+                pending.add(task)
+                next_idx += 1
 
         batch_response.set_total(len(requests))
         batch_response._end_time = time.time()
@@ -187,7 +204,7 @@ class AsyncBatchScheduler:
 
 
 class StreamBatchScheduler(BatchScheduler):
-    """同步流式批量调度器"""
+    """同步流式批量调度器（实时流式）"""
 
     def execute(self, requests: List[Any], priorities: Optional[List[int]] = None) -> Iterator[Dict[str, Any]]:
         batch_items = []
@@ -199,9 +216,11 @@ class StreamBatchScheduler(BatchScheduler):
 
         batch_items.sort(key=lambda x: -x.priority)
 
+        import queue as queue_mod
+        chunk_queue = queue_mod.Queue(maxsize=200)
+
         def process_stream(item):
-            stream = None
-            adapter = None
+            """生产端：将 chunks 逐条入队"""
             try:
                 if isinstance(item.request, str):
                     kwargs = {'stream': True}
@@ -212,19 +231,15 @@ class StreamBatchScheduler(BatchScheduler):
                     if self.retry_delay is not None:
                         kwargs['retry_delay'] = self.retry_delay
                     result = self.client.chat.create(prompt=item.request, **kwargs)
-                    adapter = getattr(result, '_adapter', None)
-                    stream = iter(result)
                 elif isinstance(item.request, dict):
-                    req_with_batch = {k: v for k, v in item.request.items() if k not in ("_input_type", "_orig_idx")}
-                    if 'timeout' not in req_with_batch and self.timeout is not None:
-                        req_with_batch['timeout'] = self.timeout
-                    if 'max_retries' not in req_with_batch and self.max_retries is not None:
-                        req_with_batch['max_retries'] = self.max_retries
-                    if 'retry_delay' not in req_with_batch and self.retry_delay is not None:
-                        req_with_batch['retry_delay'] = self.retry_delay
-                    result = self.client.chat.create(**{**req_with_batch, "stream": True})
-                    adapter = getattr(result, '_adapter', None)
-                    stream = iter(result)
+                    req_copy = {k: v for k, v in item.request.items() if k not in ("_input_type", "_orig_idx")}
+                    if 'timeout' not in req_copy and self.timeout is not None:
+                        req_copy['timeout'] = self.timeout
+                    if 'max_retries' not in req_copy and self.max_retries is not None:
+                        req_copy['max_retries'] = self.max_retries
+                    if 'retry_delay' not in req_copy and self.retry_delay is not None:
+                        req_copy['retry_delay'] = self.retry_delay
+                    result = self.client.chat.create(**{**req_copy, "stream": True})
                 elif hasattr(item.request, 'to_dict'):
                     req_dict = item.request.to_dict()
                     req_dict.pop("_input_type", None)
@@ -235,113 +250,61 @@ class StreamBatchScheduler(BatchScheduler):
                     if 'retry_delay' not in req_dict and self.retry_delay is not None:
                         req_dict['retry_delay'] = self.retry_delay
                     result = self.client.chat.create(**{**req_dict, "stream": True})
-                    adapter = getattr(result, '_adapter', None)
-                    stream = iter(result)
                 else:
                     raise ValueError(f"Invalid request type: {type(item.request).__name__}")
 
-                chunks = []
-                for chunk in stream:
+                for chunk in result:
                     if chunk is None:
                         continue
-                    chunks.append(chunk)
-                return item.index, iter(chunks), adapter, False, ""
-            except CNLLMError as e:
-                return item.index, iter([{
-                    "request_id": item.request_id,
-                    "error": str(e),
-                    "status": "error"
-                }]), None, True, str(e)
+                    chunk_queue.put((item.index, chunk, False))
+                # 消费完后从 result.usage 提取最终 usage
+                try:
+                    final_usage = result.usage if hasattr(result, 'usage') else None
+                except Exception:
+                    final_usage = None
+                if final_usage:
+                    chunk_queue.put((item.index, {"__usage__": dict(final_usage)}, False))
+                chunk_queue.put((item.index, None, False))  # sentinel
             except Exception as e:
-                from cnllm.utils.exceptions import ModelAPIError, InvalidRequestError, TimeoutError as CNLLMTimeoutError
-                if isinstance(e, ValueError):
-                    error = InvalidRequestError(message=str(e), provider="unknown", original_exc=e)
-                elif isinstance(e, TimeoutError):
-                    error = CNLLMTimeoutError(message=str(e), provider="unknown", original_exc=e)
-                else:
-                    error = ModelAPIError(message=str(e), provider="unknown", original_exc=e)
-                return item.index, iter([{
-                    "error": str(error),
-                    "status": "error"
-                }]), None, True, str(error)
+                error_chunk = {"error": str(e), "status": "error"}
+                chunk_queue.put((item.index, error_chunk, True))
+                chunk_queue.put((item.index, None, False))  # sentinel
 
+        # 提交所有任务（受 RPS 限速）
+        from concurrent.futures import ThreadPoolExecutor
         with ThreadPoolExecutor(max_workers=self.max_concurrent) as executor:
-            future_to_item = {}
             last_submit_time = 0
             for item in batch_items:
                 if self._min_interval > 0:
                     elapsed_since_last = time.time() - last_submit_time
                     if elapsed_since_last < self._min_interval:
                         time.sleep(self._min_interval - elapsed_since_last)
-                last_submit_time = time.time()
-                future = executor.submit(process_stream, item)
-                future_to_item[future] = item
+                    last_submit_time = time.time()
+                executor.submit(process_stream, item)
 
-            all_chunks = {}
-            per_request_extras = {}
-            for future in as_completed(future_to_item):
+            # 消费端：实时 yield
+            active = len(batch_items)
+            request_ids = {item.index: self._get_request_id(item.index) for item in batch_items}
+            stopped = False
+
+            while active > 0:
                 try:
-                    index, chunks_iter, adapter, is_error, error_msg = future.result(timeout=self.timeout)
-                    all_chunks[index] = chunks_iter
-                    if adapter and hasattr(adapter, '_cnllm_extra'):
-                        cnllm = adapter._cnllm_extra
-                        per_request_extras[index] = {}
-                        if cnllm.get("_usage"):
-                            per_request_extras[index]["_usage"] = cnllm["_usage"]
-                        if cnllm.get("_still"):
-                            per_request_extras[index]["_still"] = cnllm["_still"]
-                        if cnllm.get("_thinking"):
-                            per_request_extras[index]["_thinking"] = cnllm["_thinking"]
-                        if cnllm.get("_tools"):
-                            per_request_extras[index]["_tools"] = cnllm["_tools"]
-                    if is_error and self.stop_on_error:
-                        item = future_to_item[future]
-                        logger.warning(f"{item.request_id}请求失败，失败原因：{error_msg}")
-                        for f in future_to_item:
-                            f.cancel()
-                except TimeoutError:
-                    item = future_to_item[future]
-                    err = CNLLMTimeoutError(message=f"请求超时（{self.timeout}秒）", provider="stream-batch", original_exc=None)
-                    all_chunks[item.index] = iter([{"error": str(err), "status": "error"}])
-                    if self.stop_on_error:
-                        for f in future_to_item:
-                            f.cancel()
-                except Exception as e:
-                    item = future_to_item[future]
-                    from cnllm.utils.exceptions import ModelAPIError, InvalidRequestError
-                    if isinstance(e, ValueError):
-                        error = InvalidRequestError(message=str(e), provider="unknown")
-                    elif isinstance(e, TimeoutError):
-                        error = CNLLMTimeoutError(message=str(e), provider="unknown")
-                    else:
-                        error = ModelAPIError(message=str(e), provider="unknown")
-                        error.__cause__ = e
-                    all_chunks[item.index] = iter([{"error": str(error), "status": "error"}])
-                    if self.stop_on_error:
-                        logger.warning(f"{item.request_id}请求失败，失败原因：{error}")
-                        for f in future_to_item:
-                            f.cancel()
-
-            active_indices = list(all_chunks.keys())
-            request_ids = {idx: self._get_request_id(idx) for idx in all_chunks.keys()}
-
-            while active_indices:
-                for idx in active_indices[:]:
-                    request_id = request_ids[idx]
-                    try:
-                        chunk = next(all_chunks[idx])
-                        extras = per_request_extras.get(idx, {})
-                        yield {
-                            "request_id": request_id,
-                            "chunk": chunk,
-                            "extras": extras,
-                        }
-                    except StopIteration:
-                        active_indices.remove(idx)
+                    index, data, is_error = chunk_queue.get(timeout=self.timeout)
+                except queue_mod.Empty:
+                    break
+                if data is None:  # sentinel
+                    active -= 1
+                elif is_error or (isinstance(data, dict) and "error" in data):
+                    yield {"request_id": request_ids.get(index, f"request_{index}"), "chunk": data}
+                    if self.stop_on_error and not stopped:
+                        stopped = True
+                elif not stopped:
+                    yield {"request_id": request_ids.get(index, f"request_{index}"), "chunk": data}
+                # stopped: 仅 drain，不 yield 正常 chunk
 
 
 class AsyncStreamBatchScheduler(AsyncBatchScheduler):
-    """异步流式批量调度器"""
+    """异步流式批量调度器（实时流式）"""
 
     async def execute(self, requests, priorities=None):
         batch_items = []
@@ -353,51 +316,26 @@ class AsyncStreamBatchScheduler(AsyncBatchScheduler):
 
         batch_items.sort(key=lambda x: -x.priority)
 
-        async def process_stream(item):
+        async def _usage_wrapper(ait):
+            """包装 async iterator，在结束时注入 usage chunk"""
             try:
-                if isinstance(item.request, str):
-                    kwargs = {'stream': True}
-                    if self.timeout is not None:
-                        kwargs['timeout'] = self.timeout
-                    if self.max_retries is not None:
-                        kwargs['max_retries'] = self.max_retries
-                    if self.retry_delay is not None:
-                        kwargs['retry_delay'] = self.retry_delay
-                    result = await self.client.chat.create(prompt=item.request, **kwargs)
-                    adapter = getattr(result, '_adapter', None)
-                    chunks = []
-                    async for chunk in result:
-                        if chunk is None:
-                            continue
-                        chunks.append(chunk)
-                    return item.index, iter(chunks), adapter, False, ""
-                elif isinstance(item.request, dict):
-                    req_with_batch = {k: v for k, v in item.request.items() if k not in ("_input_type", "_orig_idx")}
-                    if 'timeout' not in req_with_batch and self.timeout is not None:
-                        req_with_batch['timeout'] = self.timeout
-                    if 'max_retries' not in req_with_batch and self.max_retries is not None:
-                        req_with_batch['max_retries'] = self.max_retries
-                    if 'retry_delay' not in req_with_batch and self.retry_delay is not None:
-                        req_with_batch['retry_delay'] = self.retry_delay
-                    result = await self.client.chat.create(**{**req_with_batch, "stream": True})
-                    adapter = getattr(result, '_adapter', None)
-                    chunks = []
-                    async for chunk in result:
-                        if chunk is None:
-                            continue
-                        chunks.append(chunk)
-                    return item.index, iter(chunks), adapter, False, ""
-                else:
-                    raise ValueError(f"Invalid request type: {type(item.request).__name__}")
-            except Exception as e:
-                return item.index, iter([{"error": str(e), "status": "error"}]), None, True, str(e)
+                async for chunk in ait:
+                    yield chunk
+            finally:
+                try:
+                    usage = getattr(ait, '_usage', None) or getattr(ait, 'usage', None)
+                    if usage:
+                        yield {"__usage__": dict(usage) if hasattr(usage, 'items') else usage}
+                except Exception:
+                    pass
 
+        # Phase 1: 创建所有流（并发受 sem 控制）
         sem = asyncio.Semaphore(self.max_concurrent)
-        all_chunks = {}
-        per_request_extras = {}
+        streams = {}   # index -> async_iterator
+        errors = {}    # index -> error_msg
         last_submit_time = 0
 
-        async def run_item(item):
+        async def create_stream(item):
             async with sem:
                 if self._min_interval > 0:
                     nonlocal last_submit_time
@@ -405,43 +343,96 @@ class AsyncStreamBatchScheduler(AsyncBatchScheduler):
                     if elapsed_since_last < self._min_interval:
                         await asyncio.sleep(self._min_interval - elapsed_since_last)
                     last_submit_time = time.time()
-                return await process_stream(item)
+                try:
+                    if isinstance(item.request, str):
+                        kwargs = {'stream': True}
+                        if self.timeout is not None:
+                            kwargs['timeout'] = self.timeout
+                        if self.max_retries is not None:
+                            kwargs['max_retries'] = self.max_retries
+                        if self.retry_delay is not None:
+                            kwargs['retry_delay'] = self.retry_delay
+                        result = await self.client.chat.create(prompt=item.request, **kwargs)
+                    elif isinstance(item.request, dict):
+                        req_copy = {k: v for k, v in item.request.items() if k not in ("_input_type", "_orig_idx")}
+                        if 'timeout' not in req_copy and self.timeout is not None:
+                            req_copy['timeout'] = self.timeout
+                        if 'max_retries' not in req_copy and self.max_retries is not None:
+                            req_copy['max_retries'] = self.max_retries
+                        if 'retry_delay' not in req_copy and self.retry_delay is not None:
+                            req_copy['retry_delay'] = self.retry_delay
+                        result = await self.client.chat.create(**{**req_copy, "stream": True})
+                    else:
+                        raise ValueError(f"Invalid request type: {type(item.request).__name__}")
+                    return item.index, result.__aiter__(), None
+                except Exception as e:
+                    return item.index, None, str(e)
 
-        tasks = [run_item(item) for item in batch_items]
+        tasks = [create_stream(item) for item in batch_items]
         for coro in asyncio.as_completed(tasks):
+            index, ait, error = await coro
+            if ait:
+                streams[index] = _usage_wrapper(ait)
+            else:
+                errors[index] = error
+
+        request_ids = {item.index: self._get_request_id(item.index) for item in batch_items}
+
+        # 先 yield 失败的流
+        first_error = None
+        for idx, error in errors.items():
+            yield {"request_id": request_ids[idx], "chunk": {"error": error, "status": "error"}}
+            if self.stop_on_error and first_error is None:
+                first_error = error
+                break  # 不再创建正常流
+
+        if first_error:
+            return
+
+        # Phase 2: 实时 yield chunks
+        stopped = False
+        pending = {}  # task -> (index, async_iterator)
+        for idx, ait in streams.items():
             try:
-                index, chunks_iter, adapter, is_error, error_msg = await coro
-                all_chunks[index] = chunks_iter
-                if adapter and hasattr(adapter, '_cnllm_extra'):
-                    cnllm = adapter._cnllm_extra
-                    per_request_extras[index] = {}
-                    if cnllm.get("_usage"):
-                        per_request_extras[index]["_usage"] = cnllm["_usage"]
-                    if cnllm.get("_still"):
-                        per_request_extras[index]["_still"] = cnllm["_still"]
-                    if cnllm.get("_thinking"):
-                        per_request_extras[index]["_thinking"] = cnllm["_thinking"]
-                    if cnllm.get("_tools"):
-                        per_request_extras[index]["_tools"] = cnllm["_tools"]
-            except Exception as e:
+                task = asyncio.create_task(ait.__anext__())
+                pending[task] = (idx, ait)
+            except StopAsyncIteration:
                 pass
 
-        active_indices = list(all_chunks.keys())
-        request_ids = {idx: self._get_request_id(idx) for idx in all_chunks.keys()}
-
-        while active_indices:
-            for idx in active_indices[:]:
-                request_id = request_ids[idx]
+        while pending and not stopped:
+            done, _ = await asyncio.wait(pending.keys(), return_when=asyncio.FIRST_COMPLETED)
+            for task in done:
+                idx, ait = pending.pop(task)
                 try:
-                    chunk = next(all_chunks[idx])
-                    extras = per_request_extras.get(idx, {})
-                    yield {
-                        "request_id": request_id,
-                        "chunk": chunk,
-                        "extras": extras,
-                    }
-                except StopIteration:
-                    active_indices.remove(idx)
+                    chunk = task.result()
+                except StopAsyncIteration:
+                    continue
+                except asyncio.CancelledError:
+                    continue
+                except Exception as e:
+                    yield {"request_id": request_ids[idx], "chunk": {"error": str(e), "status": "error"}}
+                    if self.stop_on_error:
+                        stopped = True
+                    continue
+
+                if chunk is None:
+                    try:
+                        pending[asyncio.create_task(ait.__anext__())] = (idx, ait)
+                    except StopAsyncIteration:
+                        pass
+                    continue
+
+                yield {"request_id": request_ids[idx], "chunk": chunk}
+
+                # 调度下一个
+                try:
+                    pending[asyncio.create_task(ait.__anext__())] = (idx, ait)
+                except StopAsyncIteration:
+                    pass
+
+        # stop_on_error 或结束时，取消残留任务
+        for task in pending:
+            task.cancel()
 
 
 class MixedBatchScheduler:

@@ -420,37 +420,53 @@ Batch calls support three input modes, with parameter validation divided into th
 
 #### 2.4.1 Three-Layer Responsibility Division
 
+Batch calls flow through three architectural layers, each with a distinct responsibility. The **Entry Layer** splits caller-supplied parameters into batch-level and per-request categories. The **Scheduler Layer** orchestrates concurrent execution with lazy dispatch, fault isolation, and progress tracking. The **Create Layer** performs per-request parameter validation and vendor API dispatch.
+
 ```mermaid
 flowchart TB
-    subgraph entry["入口层 chat.batch()"]
-        K[batch kwargs] --> S{split_batch_params}
-        S --> B[batch_level params]
-        S --> P[per_request_defaults]
-        P --> N{_normalize_batch_requests}
-        N --> O[requests list]
+    subgraph entry["Entry Layer: chat.batch()"]
+        K["batch(kwargs)"] --> S["split_batch_params"]
+        S -->|"batch_level params"| B["max_concurrent, stop_on_error, keep, ..."]
+        S -->|"per_request defaults"| P[per_request_defaults]
+        P --> N["_normalize_batch_requests"]
+        N --> O["normalized requests[]"]
     end
 
-    subgraph sched["Scheduler 层 BatchScheduler"]
-        I[__init__] --> E[execute]
-        E --> M[merge defaults]
-        M --> C[clean metadata]
+    subgraph sched["Scheduler Layer: lazy dispatch"]
+        I["BatchScheduler (max_concurrent, stop_on_error, keep)"] --> L["lazy dispatch"]
+        L --> C["collect results"]
+        C --> D{"stop on error?"}
+        D -->|"yes"| X["discard queued"]
+        D -->|"no"| L
+        X --> M["mark done"]
+        C --> M
     end
 
-    subgraph create["Create 层 create_completion"]
-        CR[create_completion] --> V[validate_for_scope]
-        V --> O1[_validate_one_of]
-        O1 --> BP[_build_payload]
-        BP --> H[HTTP request]
+    subgraph create["Create Layer: validation + dispatch"]
+        CR["create()"] --> V1["Step A: PARAM_REGISTRY (scope + type)"]
+        V1 --> V2["Step B: YAML field_mappings (vendor params)"]
+        V2 --> V3["Step C: drop_params (strict / warn / ignore)"]
+        V3 --> FB{"fallback_manager"}
+        FB -->|"primary model"| BP["_build_payload"]
+        BP --> H["HTTP request"]
+        FB -->|"on failure"| F1["try fallback model"]
+        F1 --> V1
     end
 
-    O --> E
+    O --> L
     B --> I
-    C --> CR
+    L -.-> CR
 
     style entry fill:#ffe4b5,stroke:#333,stroke-width:1px
     style sched fill:#bde0fe,stroke:#333,stroke-width:1px
     style create fill:#d4f1be,stroke:#333,stroke-width:1px
 ```
+
+**Entry Layer** (`chat.batch()`): Receives all caller-supplied parameters and splits them by the `batch_level` flag defined in `PARAM_REGISTRY`. Batch-level parameters (concurrency, error handling, memory control) are separated from per-request parameters (model, temperature, tools, etc.). The input requests are normalized into a uniform `requests[]` list. Key functions: `split_batch_params()` — parameter classification; `_normalize_batch_requests()` — request normalization; `resolve_batch_init_defaults()` — default resolution.
+
+**Scheduler Layer** (`BatchScheduler`): Uses lazy dispatch — submits `max_concurrent` requests initially, then submits one more each time a slot frees up via `wait(FIRST_COMPLETED)`. Results are stored in `BatchResponse.results` (success) or `.errors` (failure). If `stop_on_error=True` and a request fails, remaining queued futures are cancelled. Already-running requests complete normally. Key functions: `execute()` — dispatch loop; `_execute_single()` — single request execution; `_submit_one()` — submission gate; `add_result()` / `add_error()` — result collection.
+
+**Create Layer** (`create_completion`): Each request undergoes parameter validation via `validate_for_scope()` (three-step check: PARAM_REGISTRY matching → YAML vendor field matching → `drop_params` strategy), then payload construction via `_build_payload()`, and vendor HTTP dispatch. The `FallbackManager` wraps dispatch: if the primary model fails, it iterates through `fallback_models` sequentially. For streaming requests, a header chunk is eagerly fetched to surface auth errors immediately, ensuring prompt fallback. Key functions: `validate_for_scope()` — parameter validation; `create_completion()` — dispatch; `_build_payload()` — request construction; `_handle_stream()` — streaming with eager auth check; `FallbackManager._try_models()` — sequential fallback.
 
 #### 2.4.2 Batch Parameter Classification (Defined by PARAM\_REGISTRY)
 
