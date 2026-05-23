@@ -895,7 +895,7 @@ print(test_case.actual_output)
 
 ### License
 
-MIT License - See [LICENSE](LICENSE) file
+Apache License 2.0 - See [LICENSE](LICENSE) file
 
 ### Contact
 
