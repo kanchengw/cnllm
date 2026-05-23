@@ -57,15 +57,9 @@ model_mapping:
     moonshot-v1-8k: "moonshot-v1-8k"
     moonshot-v1-32k: "moonshot-v1-32k"
     moonshot-v1: "moonshot-v1-128k"
-    kimi-k2.5:
-      model: "kimi-k2.5"
-      vision: true
-    kimi-k2.6:
-      model: "kimi-k2.6"
-      vision: true
-    moonshot-v1-vision-preview:
-      model: "moonshot-v1-vision-preview"
-      vision: true
+    kimi-k2.5: "kimi-k2.5"
+    kimi-k2.6: "kimi-k2.6"
+    moonshot-v1-vision-preview: "moonshot-v1-vision-preview"
 
 error_check:
   code_path: "error.code"

@@ -67,23 +67,13 @@ optional_fields:
 model_mapping:
   chat:
     ernie-5.1: "ernie-5.1"
-    ernie-5.0:
-      model: "ernie-5.0"
-      vision: true
-    ernie-5.0-thinking-perview:
-      model: "ernie-5.0-thinking-perview"
-      vision: true
-    ernie-4.5-8k-preview:
-      model: "ernie-4.5-8k-preview"
-      vision: true
+    ernie-5.0: "ernie-5.0"
+    ernie-5.0-thinking-perview: "ernie-5.0-thinking-perview"
+    ernie-4.5-8k-preview: "ernie-4.5-8k-preview"
     ernie-4.5-turbo: "ernie-4.5-turbo-128k"
     ernie-4.5-turbo-32k: "ernie-4.5-turbo-32k"
-    ernie-4.5-turbo-vl:
-      model: "ernie-4.5-turbo-vl"
-      vision: true
-    ernie-4.5-turbo-vl-32k:
-      model: "ernie-4.5-turbo-vl-32k"
-      vision: true
+    ernie-4.5-turbo-vl: "ernie-4.5-turbo-vl"
+    ernie-4.5-turbo-vl-32k: "ernie-4.5-turbo-vl-32k"
     ernie-4.5-0.3b: "ernie-4.5-0.3b"
     ernie-speed-pro: "ernie-speed-pro-128k"
     ernie-lite-pro: "ernie-lite-pro-128k"

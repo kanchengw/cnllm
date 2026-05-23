@@ -1,0 +1,171 @@
+{
+  "experiment": "§4.2(b) Error Isolation & Fallback",
+  "scenarios": [
+    {
+      "scenario": "B1",
+      "config": {
+        "stop_on_error": false,
+        "fallback_models": null
+      },
+      "status": {
+        "success_count": 9,
+        "fail_count": 1,
+        "total": 10
+      },
+      "errors": {
+        "B1_req3_invalid": "暂不支持模型: nonexistent-model-xyz，可用厂商: minimax, minimax-native, xiaomi, glm, doubao, kimi, deepseek, qwen, baidu, hunyuan | Status Code: 404 | Error Code: model_not_supported | Suggestion: 请使用支持的模型名称"
+      },
+      "results_keys": [
+        "B1_req1_valid",
+        "B1_req2_valid",
+        "B1_req4_valid",
+        "B1_req5_valid",
+        "B1_req6_valid",
+        "B1_req7_valid",
+        "B1_req8_valid",
+        "B1_req9_valid",
+        "B1_req10_valid"
+      ],
+      "verification": {
+        "req1_2_valid_succeeded": true,
+        "req3_invalid_failed": true,
+        "req4_10_valid_succeeded": true,
+        "pass": true
+      }
+    },
+    {
+      "scenario": "B2",
+      "config": {
+        "stop_on_error": true,
+        "fallback_models": null
+      },
+      "status": {
+        "success_count": 2,
+        "fail_count": 1,
+        "total": 3
+      },
+      "errors": {
+        "B2_req3_invalid": "暂不支持模型: nonexistent-model-xyz，可用厂商: minimax, minimax-native, xiaomi, glm, doubao, kimi, deepseek, qwen, baidu, hunyuan | Status Code: 404 | Error Code: model_not_supported | Suggestion: 请使用支持的模型名称"
+      },
+      "results_keys": [
+        "B2_req1_valid",
+        "B2_req2_valid"
+      ],
+      "verification": {
+        "req1_2_valid_succeeded": true,
+        "req3_invalid_failed": true,
+        "req4_10_skipped_or_batch_stopped": true,
+        "batch_stopped_early": true,
+        "pass": true
+      }
+    },
+    {
+      "scenario": "B3",
+      "config": {
+        "stop_on_error": true,
+        "fallback_models": {
+          "qwen3.5-flash": {
+            "api_key": "***"
+          }
+        },
+        "trigger": "invalid_api_key_fast_fail"
+      },
+      "status": {
+        "success_count": 10,
+        "fail_count": 0,
+        "total": 10
+      },
+      "errors": {},
+      "results_keys": [
+        "B3_req1_valid",
+        "B3_req2_valid",
+        "B3_req3_fallback",
+        "B3_req4_valid",
+        "B3_req5_valid",
+        "B3_req6_valid",
+        "B3_req7_valid",
+        "B3_req8_valid",
+        "B3_req9_valid",
+        "B3_req10_valid"
+      ],
+      "verification": {
+        "req1_2_valid_succeeded": true,
+        "req3_fallback_succeeded": true,
+        "req3_fallback_model": "qwen3.5-flash",
+        "req3_still_preview": "It seems like you're referencing a scenario where a fallback mechanism should activate, but I need more context to assist effectively! Could you clarify:  \n- What action/system/code are you referring to?  \n- What is supposed to trigger the fallback?  \n- What are you trying to accomplish?",
+        "req4_10_valid_succeeded": true,
+        "pass": true
+      }
+    },
+    {
+      "scenario": "B4",
+      "config": {
+        "stop_on_error": false,
+        "fallback_models": {
+          "nonexistent-fallback-xyz": {
+            "api_key": "***"
+          }
+        }
+      },
+      "status": {
+        "success_count": 9,
+        "fail_count": 1,
+        "total": 10
+      },
+      "errors": {
+        "B4_req3_all_fail": "所有模型均失败。已尝试: deepseek-chat, nonexistent-fallback-xyz\n\n失败详情:\n[1] deepseek-chat: AuthenticationError: 认证失败，请检查 API Key 是否正确 | Provider: deepseek | Status Code: 401 | Error Code: authentication_failed | Suggestion: 请检查 API Key 是否正确，或是否已过期\n[2] nonexistent-fallback-xyz: ModelNotSupportedError: 暂不支持模型: nonexistent-fallback-xyz，可用厂商: minimax, minimax-native, xiaomi, glm, doubao, kimi, deepseek, qwen, baidu, hunyuan | Status Code: 404 | Error Code: model_not_supported | Suggestion: 请使用支持的模型名称 | Status Code: 500 | Error Code: server_error | Suggestion: 请检查网络连接，或稍后重试"
+      },
+      "results_keys": [
+        "B4_req1_valid",
+        "B4_req2_valid",
+        "B4_req4_valid",
+        "B4_req5_valid",
+        "B4_req6_valid",
+        "B4_req7_valid",
+        "B4_req8_valid",
+        "B4_req9_valid",
+        "B4_req10_valid"
+      ],
+      "verification": {
+        "req1_2_valid_succeeded": true,
+        "req3_all_fallbacks_failed": true,
+        "req3_is_fallback_error": true,
+        "req3_error_preview": "所有模型均失败。已尝试: deepseek-chat, nonexistent-fallback-xyz\n\n失败详情:\n[1] deepseek-chat: AuthenticationError: 认证失败，请检查 API Key 是否正确 | Provider: deepseek | Status Code: 401 | Error Code: authentication_failed | Suggestion: 请检查 API Key 是否正确，或是否已过期\n[2] nonexistent-fallback-xyz: ModelNotSupportedError: 暂不支持模型: nonexistent-fallback-xyz，可用厂商: minimax, minimax-native, xiaomi, glm, doubao, kimi, deepseek, qwen, baidu, hunyuan | Status Code: 404 | Error Code: model_not_supported | Suggestion: 请使用支持的模型名称 | Status Code: 500 | Error Code: server_error | Suggestion: 请检查网络连接，或稍后重试",
+        "req4_10_valid_succeeded": true,
+        "other_requests_unaffected": true,
+        "pass": true
+      }
+    },
+    {
+      "scenario": "B5",
+      "config": {
+        "stop_on_error": true,
+        "fallback_models": {
+          "nonexistent-fallback-xyz": {
+            "api_key": "***"
+          }
+        }
+      },
+      "status": {
+        "success_count": 2,
+        "fail_count": 1,
+        "total": 3
+      },
+      "errors": {
+        "B5_req3_all_fail": "所有模型均失败。已尝试: deepseek-chat, nonexistent-fallback-xyz\n\n失败详情:\n[1] deepseek-chat: AuthenticationError: 认证失败，请检查 API Key 是否正确 | Provider: deepseek | Status Code: 401 | Error Code: authentication_failed | Suggestion: 请检查 API Key 是否正确，或是否已过期\n[2] nonexistent-fallback-xyz: ModelNotSupportedError: 暂不支持模型: nonexistent-fallback-xyz，可用厂商: minimax, minimax-native, xiaomi, glm, doubao, kimi, deepseek, qwen, baidu, hunyuan | Status Code: 404 | Error Code: model_not_supported | Suggestion: 请使用支持的模型名称 | Status Code: 500 | Error Code: server_error | Suggestion: 请检查网络连接，或稍后重试"
+      },
+      "results_keys": [
+        "B5_req1_valid",
+        "B5_req2_valid"
+      ],
+      "verification": {
+        "req1_2_valid_succeeded": true,
+        "req3_all_fallbacks_failed": true,
+        "req4_10_skipped_or_batch_stopped": true,
+        "batch_stopped_early": true,
+        "pass": true
+      }
+    }
+  ],
+  "overall_pass": true
+}

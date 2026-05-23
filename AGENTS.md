@@ -21,21 +21,6 @@ pytest tests/test_adapter_config.py -v
 
 API-key-dependent tests live in `tests/key_needed/` and are gated by the presence of environment variables (e.g., `MINIMAX_API_KEY`, `XIAOMI_API_KEY`).
 
-## Vision / Multimodal Support
-
-Models with `vision: true` in `model_mapping.chat` support image input via OpenAI-standard content array format:
-
-```python
-{"role": "user", "content": [
-    {"type": "text", "text": "What's in this image?"},
-    {"type": "image_url", "image_url": {"url": "data:image/png;base64,..."}}
-]}
-```
-
-Validation is done at the model level — passing images to a text-only model raises `TypeError` before any API call. See `BaseAdapter._check_image_support()` in `adapter.py`.
-
-Current vision-capable vendors: GLM, Kimi, Doubao, Xiaomi.
-
 ## Architecture
 
 ```

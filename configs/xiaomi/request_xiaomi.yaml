@@ -49,14 +49,10 @@ optional_fields:
 model_mapping:
   chat:
     mimo-v2-pro: "mimo-v2-pro"
-    mimo-v2-omni:
-      model: "mimo-v2-omni"
-      vision: true
+    mimo-v2-omni: "mimo-v2-omni"
     mimo-v2-flash: "mimo-v2-flash"
     mimo-v2.5-pro: "mimo-v2.5-pro"
-    mimo-v2.5:
-      model: "mimo-v2.5"
-      vision: true
+    mimo-v2.5: "mimo-v2.5"
 
 error_check:
   code_path: "error.code"
