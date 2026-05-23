@@ -1,0 +1,181 @@
+{
+  "exp_a_drop_params": [
+    {
+      "test": "unsupported_params_drop_params=warn",
+      "drop_params": "warn",
+      "status": "call_succeeded",
+      "elapsed_ms": 2411.9,
+      "content_preview": "Hi! How can I help you today?",
+      "warning_logged": true,
+      "log_snippet": "{fake_param: 'value'}、{nonexistent_field: True} 在当前作用域(chat)中不支持，已忽略。请使用当前调用方法和模型支持的参数，并确认参数类型正确。可设置 drop_params='ignore' 静默忽略，或设置 drop_params='strict' 在严格模式下报错。"
+    },
+    {
+      "test": "unsupported_params_drop_params=ignore",
+      "drop_params": "ignore",
+      "status": "call_succeeded",
+      "elapsed_ms": 1645.2,
+      "content_preview": "Hi! How can I help you today?",
+      "warning_logged": false,
+      "log_snippet": ""
+    },
+    {
+      "test": "unsupported_params_drop_params=strict",
+      "drop_params": "strict",
+      "status": "blocked_by_InvalidRequestError",
+      "error_type": "InvalidRequestError",
+      "error_msg": "{fake_param: 'value'}、{nonexistent_field: True} 在当前作用域(chat)中不支持。请使用当前调用方法和模型支持的参数，并确认参数类型正确。可设置 drop_params='ignore' 静默忽略，或设置 drop_params='warn' 警告并忽略。 | Provider: chat | Status Code: 400 | Error Cod",
+      "identifies_param": true,
+      "provides_remediation": true
+    },
+    {
+      "test": "type_mismatch_drop_params=strict",
+      "drop_params": "strict",
+      "param": "temperature",
+      "value": "hot",
+      "status": "blocked_by_TypeError",
+      "error_type": "TypeError",
+      "error_msg": "参数 'temperature' 类型不合法：期望 (<class 'float'>, <class 'int'>)，实际为 str。可设置 drop_params='warn' 警告并忽略，或设置 drop_params='ignore' 静默忽略。",
+      "identifies_param": true,
+      "identifies_expected_type": true
+    },
+    {
+      "test": "type_mismatch_drop_params=warn",
+      "drop_params": "warn",
+      "param": "temperature",
+      "value": "hot",
+      "status": "call_succeeded_type_mismatch_ignored",
+      "elapsed_ms": 1704.7,
+      "content_preview": "Hi! How can I help you today?",
+      "warning_logged": true,
+      "log_snippet": "参数 'temperature' 期望类型 (<class 'float'>, <class 'int'>)，实际为 str，已忽略。可设置 drop_params='ignore' 静默忽略，或设置 drop_params='strict' 在严格模式下报错。"
+    },
+    {
+      "test": "type_mismatch_drop_params=ignore",
+      "drop_params": "ignore",
+      "param": "temperature",
+      "value": "hot",
+      "status": "call_succeeded_type_mismatch_ignored",
+      "elapsed_ms": 1650.3,
+      "content_preview": "Hi! How can I help you today?",
+      "warning_logged": false,
+      "log_snippet": ""
+    }
+  ],
+  "exp_b_classification": [
+    {
+      "category": "standard_param",
+      "description": "PARAM_REGISTRY registered + scope match -> accepted",
+      "input_params": {
+        "temperature": 0.7,
+        "max_tokens": 100
+      },
+      "expected_behavior": "accepted",
+      "actual_keys": [
+        "max_tokens",
+        "temperature"
+      ],
+      "expected_keys": [
+        "max_tokens",
+        "temperature"
+      ],
+      "classification_correct": true,
+      "warning_logged": false
+    },
+    {
+      "category": "yaml_skip_marker",
+      "description": "YAML skip markers (api_key, base_url) -> skipped",
+      "input_params": {
+        "api_key": "sk-test",
+        "base_url": "https://api.test.com"
+      },
+      "expected_behavior": "skipped",
+      "actual_keys": [],
+      "expected_keys": [],
+      "classification_correct": true,
+      "warning_logged": false
+    },
+    {
+      "category": "batch_level_param",
+      "description": "batch_level=True params in create scope -> treated as unknown",
+      "input_params": {
+        "max_concurrent": 5,
+        "rps": 2.0
+      },
+      "expected_behavior": "rejected_as_unknown",
+      "actual_keys": [],
+      "expected_keys": [],
+      "classification_correct": true,
+      "warning_logged": true
+    },
+    {
+      "category": "vendor_specific_param",
+      "description": "YAML optional_fields whitelist -> accepted",
+      "input_params": {
+        "search": true
+      },
+      "expected_behavior": "accepted",
+      "actual_keys": [
+        "search"
+      ],
+      "expected_keys": [
+        "search"
+      ],
+      "classification_correct": true,
+      "warning_logged": false
+    },
+    {
+      "category": "unknown_param",
+      "description": "No match in PARAM_REGISTRY or YAML -> drop_params policy",
+      "input_params": {
+        "fake_param": "value"
+      },
+      "expected_behavior": "rejected_as_unknown",
+      "actual_keys": [],
+      "expected_keys": [],
+      "classification_correct": true,
+      "warning_logged": true
+    },
+    {
+      "category": "unknown_param_strict",
+      "description": "Unknown param with drop_params=strict -> InvalidRequestError",
+      "expected_behavior": "raises_InvalidRequestError",
+      "raised": true,
+      "error_type": "InvalidRequestError",
+      "error_msg": "{fake_param: 'value'} 在当前作用域(chat)中不支持。请使用当前调用方法和模型支持的参数，并确认参数类型正确。可设置 drop_params='ignore' 静默忽略，或设置 drop_params='warn' 警告并忽略。 | Provider: chat | Status Code: 400 | Error Code: invalid_request | Sugge",
+      "classification_correct": true
+    },
+    {
+      "category": "batch_level_strict",
+      "description": "Batch-level param with drop_params=strict -> InvalidRequestError",
+      "expected_behavior": "raises_InvalidRequestError",
+      "raised": true,
+      "error_type": "InvalidRequestError",
+      "error_msg": "{max_concurrent: 5} 在当前作用域(chat)中不支持。请使用当前调用方法和模型支持的参数，并确认参数类型正确。可设置 drop_params='ignore' 静默忽略，或设置 drop_params='warn' 警告并忽略。 | Provider: chat | Status Code: 400 | Error Code: invalid_request | Suggest",
+      "classification_correct": true
+    }
+  ],
+  "exp_c_observability": {
+    "cnllm": {
+      "available": true,
+      "status": "ok",
+      "warning_logged": true,
+      "identifies_dropped_param": true,
+      "log_snippet": "{fake_param: 'test_value'}、{nonexistent_option: True} 在当前作用域(chat)中不支持，已忽略。请使用当前调用方法和模型支持的参数，并确认参数类型正确。可设置 drop_params='ignore' 静默忽略，或设置 drop_params='strict' 在严格模式下报错。",
+      "content_preview": "Hi! How can I help you today?"
+    },
+    "litellm": {
+      "available": true,
+      "status": "call_succeeded",
+      "warning_logged": false,
+      "identifies_dropped_param": false,
+      "content_preview": "Hello! How can I help you today?",
+      "note": "LiteLLM silently drops unsupported parameters without any warning or feedback"
+    },
+    "comparison": {
+      "cnllm_observability": true,
+      "litellm_observability": false,
+      "cnllm_identifies_dropped_param": true,
+      "litellm_identifies_dropped_param": false
+    }
+  }
+}

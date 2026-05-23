@@ -193,43 +193,6 @@ class BaseAdapter:
             return entry.get("model", model)
         return entry
 
-    def _has_image_content(self, messages: list) -> bool:
-        """检查 messages 中是否包含图片内容（OpenAI content array 格式）"""
-        if not messages:
-            return False
-        for msg in messages:
-            content = msg.get("content", "")
-            if isinstance(content, list):
-                for part in content:
-                    if isinstance(part, dict) and part.get("type") == "image_url":
-                        return True
-        return False
-
-    def _get_vision_models(self) -> list:
-        """获取当前 adapter 下支持多模态的模型列表"""
-        mapping = self._get_config_value("model_mapping", default={})
-        if isinstance(mapping, dict):
-            if "chat" in mapping:
-                mapping = mapping["chat"]
-        return [
-            name for name, config in mapping.items()
-            if isinstance(config, dict) and config.get("vision")
-        ]
-
-    def _check_image_support(self, params: Dict[str, Any]) -> None:
-        """验证当前模型是否支持图片输入"""
-        messages = params.get("messages")
-        if not messages:
-            return
-        model = params.get("model") or self.model
-        if self._has_image_content(messages):
-            vision_models = self._get_vision_models()
-            if model not in vision_models:
-                suffix = f": {vision_models}" if vision_models else ""
-                raise TypeError(
-                    f"模型 '{model}' 不支持图片输入。请使用其他多模态模型{suffix}"
-                )
-
     def get_api_path(self) -> str:
         """获取 API 路径，根据 protocol 或 adapter_type 选择层级的 path"""
         return self._validator.get_api_path(protocol=self.protocol)
@@ -397,8 +360,6 @@ class BaseAdapter:
         )
         self._validate_one_of(params)
 
-        self._check_image_support(params)
-
         payload = self._build_payload(params)
 
         api_path = self.get_api_path()
@@ -546,8 +507,6 @@ class BaseAdapter:
             protocol_excluded_params=protocol_excluded,
         )
         self._validate_one_of(params)
-
-        self._check_image_support(params)
 
         payload = self._build_payload(params)
 

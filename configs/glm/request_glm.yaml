@@ -73,18 +73,10 @@ model_mapping:
     glm-4.5-air: "glm-4.5-air"
     glm-4.5-airx: "glm-4.5-airx"
     glm-4.5-flash: "glm-4.5-flash"
-    glm-5v-turbo:
-      model: "glm-5v-turbo"
-      vision: true
-    glm-4.5v:
-      model: "glm-4.5v"
-      vision: true
-    glm-4.6v:
-      model: "glm-4.6v"
-      vision: true
-    glm-4.6v-flash:
-      model: "glm-4.6v-flash"
-      vision: true
+    glm-5v-turbo: "glm-5v-turbo"
+    glm-4.5v: "glm-4.5v"
+    glm-4.6v: "glm-4.6v"
+    glm-4.6v-flash: "glm-4.6v-flash"
   embedding:
     embedding-2: "embedding-2"
     embedding-3: "embedding-3"

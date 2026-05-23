@@ -1,0 +1,5506 @@
+{
+  "experiment": "exp45_streaming_latency",
+  "network_condition": "50ms RTT (Clumsy)",
+  "trials": [
+    {
+      "trial": 1,
+      "cnllm": {
+        "vendor": "deepseek",
+        "model": "deepseek-chat",
+        "chunk_count": 127,
+        "per_chunk_metrics": [
+          {
+            "chunk": 1,
+            "still_access_ms": 0.0018,
+            "think_access_ms": 0.001,
+            "repr_ms": 0.0363
+          },
+          {
+            "chunk": 2,
+            "still_access_ms": 0.0032,
+            "think_access_ms": 0.0017,
+            "repr_ms": 0.0562
+          },
+          {
+            "chunk": 3,
+            "still_access_ms": 0.0015,
+            "think_access_ms": 0.0005,
+            "repr_ms": 0.0348
+          },
+          {
+            "chunk": 4,
+            "still_access_ms": 0.002,
+            "think_access_ms": 0.0006,
+            "repr_ms": 0.0492
+          },
+          {
+            "chunk": 5,
+            "still_access_ms": 0.0005,
+            "think_access_ms": 0.0003,
+            "repr_ms": 0.0215
+          },
+          {
+            "chunk": 6,
+            "still_access_ms": 0.0006,
+            "think_access_ms": 0.0003,
+            "repr_ms": 0.0218
+          },
+          {
+            "chunk": 7,
+            "still_access_ms": 0.0003,
+            "think_access_ms": 0.0003,
+            "repr_ms": 0.0139
+          },
+          {
+            "chunk": 8,
+            "still_access_ms": 0.0003,
+            "think_access_ms": 0.0003,
+            "repr_ms": 0.0139
+          },
+          {
+            "chunk": 9,
+            "still_access_ms": 0.0003,
+            "think_access_ms": 0.0002,
+            "repr_ms": 0.0153
+          },
+          {
+            "chunk": 10,
+            "still_access_ms": 0.0025,
+            "think_access_ms": 0.0012,
+            "repr_ms": 0.0724
+          },
+          {
+            "chunk": 11,
+            "still_access_ms": 0.0006,
+            "think_access_ms": 0.0004,
+            "repr_ms": 0.0231
+          },
+          {
+            "chunk": 12,
+            "still_access_ms": 0.0004,
+            "think_access_ms": 0.0002,
+            "repr_ms": 0.0185
+          },
+          {
+            "chunk": 13,
+            "still_access_ms": 0.0021,
+            "think_access_ms": 0.001,
+            "repr_ms": 0.0778
+          },
+          {
+            "chunk": 14,
+            "still_access_ms": 0.0009,
+            "think_access_ms": 0.0005,
+            "repr_ms": 0.0321
+          },
+          {
+            "chunk": 15,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0002,
+            "repr_ms": 0.0112
+          },
+          {
+            "chunk": 16,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.01
+          },
+          {
+            "chunk": 17,
+            "still_access_ms": 0.0019,
+            "think_access_ms": 0.0009,
+            "repr_ms": 0.0752
+          },
+          {
+            "chunk": 18,
+            "still_access_ms": 0.0005,
+            "think_access_ms": 0.0003,
+            "repr_ms": 0.0358
+          },
+          {
+            "chunk": 19,
+            "still_access_ms": 0.0003,
+            "think_access_ms": 0.0003,
+            "repr_ms": 0.0262
+          },
+          {
+            "chunk": 20,
+            "still_access_ms": 0.0005,
+            "think_access_ms": 0.0003,
+            "repr_ms": 0.0296
+          },
+          {
+            "chunk": 21,
+            "still_access_ms": 0.0005,
+            "think_access_ms": 0.0003,
+            "repr_ms": 0.0299
+          },
+          {
+            "chunk": 22,
+            "still_access_ms": 0.0012,
+            "think_access_ms": 0.0007,
+            "repr_ms": 0.0567
+          },
+          {
+            "chunk": 23,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0002,
+            "repr_ms": 0.0137
+          },
+          {
+            "chunk": 24,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0196
+          },
+          {
+            "chunk": 25,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0118
+          },
+          {
+            "chunk": 26,
+            "still_access_ms": 0.0016,
+            "think_access_ms": 0.0006,
+            "repr_ms": 0.062
+          },
+          {
+            "chunk": 27,
+            "still_access_ms": 0.0003,
+            "think_access_ms": 0.0002,
+            "repr_ms": 0.0153
+          },
+          {
+            "chunk": 28,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0142
+          },
+          {
+            "chunk": 29,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0002,
+            "repr_ms": 0.0137
+          },
+          {
+            "chunk": 30,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0124
+          },
+          {
+            "chunk": 31,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0142
+          },
+          {
+            "chunk": 32,
+            "still_access_ms": 0.0017,
+            "think_access_ms": 0.0006,
+            "repr_ms": 0.0697
+          },
+          {
+            "chunk": 33,
+            "still_access_ms": 0.0003,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0271
+          },
+          {
+            "chunk": 34,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0144
+          },
+          {
+            "chunk": 35,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0146
+          },
+          {
+            "chunk": 36,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0173
+          },
+          {
+            "chunk": 37,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0153
+          },
+          {
+            "chunk": 38,
+            "still_access_ms": 0.0025,
+            "think_access_ms": 0.001,
+            "repr_ms": 0.116
+          },
+          {
+            "chunk": 39,
+            "still_access_ms": 0.0018,
+            "think_access_ms": 0.0006,
+            "repr_ms": 0.0736
+          },
+          {
+            "chunk": 40,
+            "still_access_ms": 0.0028,
+            "think_access_ms": 0.0006,
+            "repr_ms": 0.0861
+          },
+          {
+            "chunk": 41,
+            "still_access_ms": 0.0005,
+            "think_access_ms": 0.0002,
+            "repr_ms": 0.0283
+          },
+          {
+            "chunk": 42,
+            "still_access_ms": 0.0036,
+            "think_access_ms": 0.0009,
+            "repr_ms": 0.1591
+          },
+          {
+            "chunk": 43,
+            "still_access_ms": 0.0007,
+            "think_access_ms": 0.0003,
+            "repr_ms": 0.0455
+          },
+          {
+            "chunk": 44,
+            "still_access_ms": 0.0006,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0243
+          },
+          {
+            "chunk": 45,
+            "still_access_ms": 0.0003,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0197
+          },
+          {
+            "chunk": 46,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0178
+          },
+          {
+            "chunk": 47,
+            "still_access_ms": 0.0018,
+            "think_access_ms": 0.0006,
+            "repr_ms": 0.0877
+          },
+          {
+            "chunk": 48,
+            "still_access_ms": 0.0017,
+            "think_access_ms": 0.0006,
+            "repr_ms": 0.0858
+          },
+          {
+            "chunk": 49,
+            "still_access_ms": 0.0003,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0218
+          },
+          {
+            "chunk": 50,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0292
+          },
+          {
+            "chunk": 51,
+            "still_access_ms": 0.0023,
+            "think_access_ms": 0.0006,
+            "repr_ms": 0.1169
+          },
+          {
+            "chunk": 52,
+            "still_access_ms": 0.0016,
+            "think_access_ms": 0.0005,
+            "repr_ms": 0.0963
+          },
+          {
+            "chunk": 53,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0002,
+            "repr_ms": 0.023
+          },
+          {
+            "chunk": 54,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0206
+          },
+          {
+            "chunk": 55,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0002,
+            "repr_ms": 0.0211
+          },
+          {
+            "chunk": 56,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0215
+          },
+          {
+            "chunk": 57,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0219
+          },
+          {
+            "chunk": 58,
+            "still_access_ms": 0.0032,
+            "think_access_ms": 0.0011,
+            "repr_ms": 0.1611
+          },
+          {
+            "chunk": 59,
+            "still_access_ms": 0.0007,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0286
+          },
+          {
+            "chunk": 60,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0002,
+            "repr_ms": 0.0237
+          },
+          {
+            "chunk": 61,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0258
+          },
+          {
+            "chunk": 62,
+            "still_access_ms": 0.0005,
+            "think_access_ms": 0.0002,
+            "repr_ms": 0.0226
+          },
+          {
+            "chunk": 63,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0236
+          },
+          {
+            "chunk": 64,
+            "still_access_ms": 0.0025,
+            "think_access_ms": 0.0005,
+            "repr_ms": 0.0969
+          },
+          {
+            "chunk": 65,
+            "still_access_ms": 0.0003,
+            "think_access_ms": 0.0002,
+            "repr_ms": 0.0255
+          },
+          {
+            "chunk": 66,
+            "still_access_ms": 0.0003,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0236
+          },
+          {
+            "chunk": 67,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0416
+          },
+          {
+            "chunk": 68,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0254
+          },
+          {
+            "chunk": 69,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0263
+          },
+          {
+            "chunk": 70,
+            "still_access_ms": 0.0022,
+            "think_access_ms": 0.0006,
+            "repr_ms": 0.0997
+          },
+          {
+            "chunk": 71,
+            "still_access_ms": 0.0003,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0275
+          },
+          {
+            "chunk": 72,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0362
+          },
+          {
+            "chunk": 73,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0276
+          },
+          {
+            "chunk": 74,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0276
+          },
+          {
+            "chunk": 75,
+            "still_access_ms": 0.0022,
+            "think_access_ms": 0.0008,
+            "repr_ms": 0.1364
+          },
+          {
+            "chunk": 76,
+            "still_access_ms": 0.0023,
+            "think_access_ms": 0.0011,
+            "repr_ms": 0.1282
+          },
+          {
+            "chunk": 77,
+            "still_access_ms": 0.0004,
+            "think_access_ms": 0.0002,
+            "repr_ms": 0.0306
+          },
+          {
+            "chunk": 78,
+            "still_access_ms": 0.0003,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0282
+          },
+          {
+            "chunk": 79,
+            "still_access_ms": 0.004,
+            "think_access_ms": 0.0009,
+            "repr_ms": 0.1986
+          },
+          {
+            "chunk": 80,
+            "still_access_ms": 0.0003,
+            "think_access_ms": 0.0002,
+            "repr_ms": 0.0333
+          },
+          {
+            "chunk": 81,
+            "still_access_ms": 0.0003,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0317
+          },
+          {
+            "chunk": 82,
+            "still_access_ms": 0.0036,
+            "think_access_ms": 0.0009,
+            "repr_ms": 0.1986
+          },
+          {
+            "chunk": 83,
+            "still_access_ms": 0.0036,
+            "think_access_ms": 0.0009,
+            "repr_ms": 0.1292
+          },
+          {
+            "chunk": 84,
+            "still_access_ms": 0.0003,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0422
+          },
+          {
+            "chunk": 85,
+            "still_access_ms": 0.0003,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0306
+          },
+          {
+            "chunk": 86,
+            "still_access_ms": 0.0035,
+            "think_access_ms": 0.0009,
+            "repr_ms": 0.1933
+          },
+          {
+            "chunk": 87,
+            "still_access_ms": 0.0011,
+            "think_access_ms": 0.0003,
+            "repr_ms": 0.1006
+          },
+          {
+            "chunk": 88,
+            "still_access_ms": 0.0007,
+            "think_access_ms": 0.0003,
+            "repr_ms": 0.0957
+          },
+          {
+            "chunk": 89,
+            "still_access_ms": 0.0007,
+            "think_access_ms": 0.0003,
+            "repr_ms": 0.0945
+          },
+          {
+            "chunk": 90,
+            "still_access_ms": 0.0006,
+            "think_access_ms": 0.0003,
+            "repr_ms": 0.0917
+          },
+          {
+            "chunk": 91,
+            "still_access_ms": 0.0006,
+            "think_access_ms": 0.0003,
+            "repr_ms": 0.0537
+          },
+          {
+            "chunk": 92,
+            "still_access_ms": 0.0024,
+            "think_access_ms": 0.001,
+            "repr_ms": 0.2065
+          },
+          {
+            "chunk": 93,
+            "still_access_ms": 0.0008,
+            "think_access_ms": 0.0004,
+            "repr_ms": 0.1084
+          },
+          {
+            "chunk": 94,
+            "still_access_ms": 0.0007,
+            "think_access_ms": 0.0004,
+            "repr_ms": 0.1038
+          },
+          {
+            "chunk": 95,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0329
+          },
+          {
+            "chunk": 96,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0344
+          },
+          {
+            "chunk": 97,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0348
+          },
+          {
+            "chunk": 98,
+            "still_access_ms": 0.0029,
+            "think_access_ms": 0.0013,
+            "repr_ms": 0.2185
+          },
+          {
+            "chunk": 99,
+            "still_access_ms": 0.0008,
+            "think_access_ms": 0.0005,
+            "repr_ms": 0.1186
+          },
+          {
+            "chunk": 100,
+            "still_access_ms": 0.0006,
+            "think_access_ms": 0.0004,
+            "repr_ms": 0.1125
+          },
+          {
+            "chunk": 101,
+            "still_access_ms": 0.0006,
+            "think_access_ms": 0.0004,
+            "repr_ms": 0.1056
+          },
+          {
+            "chunk": 102,
+            "still_access_ms": 0.0005,
+            "think_access_ms": 0.0003,
+            "repr_ms": 0.1029
+          },
+          {
+            "chunk": 103,
+            "still_access_ms": 0.0005,
+            "think_access_ms": 0.0003,
+            "repr_ms": 0.0661
+          },
+          {
+            "chunk": 104,
+            "still_access_ms": 0.0025,
+            "think_access_ms": 0.001,
+            "repr_ms": 0.23
+          },
+          {
+            "chunk": 105,
+            "still_access_ms": 0.0009,
+            "think_access_ms": 0.0004,
+            "repr_ms": 0.1229
+          },
+          {
+            "chunk": 106,
+            "still_access_ms": 0.0025,
+            "think_access_ms": 0.0009,
+            "repr_ms": 0.228
+          },
+          {
+            "chunk": 107,
+            "still_access_ms": 0.0009,
+            "think_access_ms": 0.0003,
+            "repr_ms": 0.1185
+          },
+          {
+            "chunk": 108,
+            "still_access_ms": 0.0006,
+            "think_access_ms": 0.0004,
+            "repr_ms": 0.1143
+          },
+          {
+            "chunk": 109,
+            "still_access_ms": 0.0006,
+            "think_access_ms": 0.0004,
+            "repr_ms": 0.1127
+          },
+          {
+            "chunk": 110,
+            "still_access_ms": 0.0006,
+            "think_access_ms": 0.0004,
+            "repr_ms": 0.1178
+          },
+          {
+            "chunk": 111,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.039
+          },
+          {
+            "chunk": 112,
+            "still_access_ms": 0.0019,
+            "think_access_ms": 0.0007,
+            "repr_ms": 0.1464
+          },
+          {
+            "chunk": 113,
+            "still_access_ms": 0.0003,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0419
+          },
+          {
+            "chunk": 114,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0436
+          },
+          {
+            "chunk": 115,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0002,
+            "repr_ms": 0.0419
+          },
+          {
+            "chunk": 116,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0398
+          },
+          {
+            "chunk": 117,
+            "still_access_ms": 0.0001,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0407
+          },
+          {
+            "chunk": 118,
+            "still_access_ms": 0.0034,
+            "think_access_ms": 0.0011,
+            "repr_ms": 0.2956
+          },
+          {
+            "chunk": 119,
+            "still_access_ms": 0.0006,
+            "think_access_ms": 0.0003,
+            "repr_ms": 0.1048
+          },
+          {
+            "chunk": 120,
+            "still_access_ms": 0.0005,
+            "think_access_ms": 0.0002,
+            "repr_ms": 0.0974
+          },
+          {
+            "chunk": 121,
+            "still_access_ms": 0.0004,
+            "think_access_ms": 0.0003,
+            "repr_ms": 0.0796
+          },
+          {
+            "chunk": 122,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0529
+          },
+          {
+            "chunk": 123,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0421
+          },
+          {
+            "chunk": 124,
+            "still_access_ms": 0.0028,
+            "think_access_ms": 0.0012,
+            "repr_ms": 0.2854
+          },
+          {
+            "chunk": 125,
+            "still_access_ms": 0.0003,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0465
+          },
+          {
+            "chunk": 126,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0458
+          },
+          {
+            "chunk": 127,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0438
+          }
+        ],
+        "summary": {
+          "still_access_ms_max": 0.004,
+          "still_access_ms_mean": 0.0009,
+          "still_access_ms_p50": 0.0005,
+          "think_access_ms_max": 0.0017,
+          "think_access_ms_mean": 0.0004,
+          "think_access_ms_p50": 0.0003,
+          "repr_ms_max": 0.2956,
+          "repr_ms_mean": 0.0657,
+          "repr_ms_p50": 0.0407,
+          "iteration_ms_max": 1731.6327,
+          "iteration_ms_mean": 21.8506,
+          "iteration_ms_p50": 0.0236
+        },
+        "per_chunk_iteration_ms": [
+          1731.6327,
+          381.9916,
+          157.5978,
+          27.1399,
+          0.0356,
+          0.0225,
+          0.02,
+          0.0197,
+          29.3401,
+          0.0222,
+          0.0151,
+          0.0125,
+          35.776,
+          0.0398,
+          0.0291,
+          0.0267,
+          0.0258,
+          24.8765,
+          0.04,
+          30.8275,
+          0.0278,
+          0.0195,
+          26.5077,
+          0.0563,
+          0.0439,
+          0.0405,
+          122.4642,
+          0.0202,
+          0.0174,
+          0.011,
+          0.0111,
+          0.0111,
+          27.1214,
+          0.0203,
+          0.0132,
+          0.0148,
+          0.0115,
+          0.0106,
+          29.5927,
+          0.02,
+          0.0137,
+          0.0111,
+          90.6637,
+          0.0619,
+          31.8392,
+          0.0539,
+          0.0376,
+          0.0412,
+          0.0322,
+          0.0287,
+          0.0663,
+          0.0117,
+          0.0125,
+          0.0108,
+          0.0131,
+          3.3896,
+          0.021,
+          0.0134,
+          0.0602,
+          0.012,
+          0.0128,
+          0.0117,
+          0.0107,
+          3.7228,
+          0.0577,
+          0.0381,
+          0.0318,
+          3.3277,
+          0.0462,
+          0.0369,
+          0.0365,
+          0.0314,
+          21.1877,
+          0.0208,
+          0.0152,
+          0.0122,
+          0.0125,
+          0.0104,
+          24.3359,
+          0.0257,
+          0.0121,
+          0.0111,
+          0.0104,
+          37.2493,
+          0.0408,
+          0.0129,
+          0.2071,
+          0.0125,
+          22.7159,
+          0.0293,
+          33.3845,
+          0.0544,
+          0.0438,
+          0.0352,
+          29.0183,
+          0.0203,
+          0.0127,
+          0.0123,
+          0.0117,
+          27.1367,
+          0.0188,
+          0.012,
+          0.0156,
+          0.012,
+          0.0116,
+          0.0116,
+          33.5029,
+          0.0193,
+          26.8291,
+          0.019,
+          0.0129,
+          0.018,
+          0.0105,
+          28.2002,
+          0.0263,
+          0.0138,
+          0.0108,
+          77.3109,
+          0.0202,
+          0.0764,
+          0.0151,
+          0.0119,
+          0.0146,
+          11.9285,
+          0.0236,
+          0.013,
+          0.0108,
+          0.0104,
+          29.282,
+          0.03,
+          0.0145,
+          0.0125,
+          0.0155,
+          0.012,
+          31.4105,
+          0.0522,
+          0.0403,
+          0.0325,
+          0.0357,
+          0.0273,
+          44.8367,
+          0.0195,
+          0.016,
+          0.0134,
+          0.0122,
+          0.0105,
+          16.7019,
+          0.0237,
+          0.0222
+        ]
+      },
+      "openai_sdk": {
+        "vendor": "deepseek",
+        "model": "deepseek-chat",
+        "chunk_count": 124,
+        "per_chunk_iteration_ms": [
+          2.8466,
+          326.9185,
+          161.5194,
+          6.007,
+          0.2503,
+          0.4468,
+          0.0582,
+          0.0555,
+          0.0544,
+          0.0537,
+          0.0524,
+          25.3698,
+          0.0703,
+          0.0666,
+          0.0616,
+          26.7904,
+          0.0659,
+          29.379,
+          0.1993,
+          0.1624,
+          0.0541,
+          27.5087,
+          0.1945,
+          0.1702,
+          28.1849,
+          0.1983,
+          31.3365,
+          0.0654,
+          0.0563,
+          0.0566,
+          34.1827,
+          0.0673,
+          0.0571,
+          0.0553,
+          0.0529,
+          21.1794,
+          0.065,
+          0.0673,
+          0.0537,
+          0.0536,
+          0.0543,
+          25.77,
+          0.0662,
+          29.4788,
+          0.0683,
+          0.0606,
+          0.0541,
+          0.0541,
+          0.056,
+          31.0552,
+          0.1993,
+          0.17,
+          0.1618,
+          0.1594,
+          0.1271,
+          25.0872,
+          0.0646,
+          0.0591,
+          30.5314,
+          0.0661,
+          28.2218,
+          0.0666,
+          0.0571,
+          0.0563,
+          0.0542,
+          0.0522,
+          26.8945,
+          0.1463,
+          0.1259,
+          0.122,
+          28.4599,
+          0.1631,
+          28.8178,
+          0.1981,
+          0.1707,
+          0.1636,
+          0.1596,
+          0.1162,
+          27.6724,
+          0.1395,
+          0.0564,
+          0.0537,
+          0.0552,
+          28.4385,
+          0.1942,
+          0.1701,
+          28.3756,
+          0.0667,
+          0.0579,
+          0.0543,
+          0.0541,
+          0.0524,
+          31.5683,
+          0.1443,
+          0.151,
+          0.0921,
+          0.0766,
+          0.0817,
+          35.437,
+          0.2019,
+          0.1718,
+          0.1664,
+          0.1518,
+          0.0526,
+          17.0264,
+          0.0674,
+          0.0567,
+          0.0559,
+          0.0524,
+          0.0521,
+          28.7967,
+          0.0668,
+          0.0577,
+          0.0543,
+          28.3411,
+          0.067,
+          0.0576,
+          0.0681,
+          0.0545,
+          0.0537,
+          29.7255,
+          0.1974,
+          0.1028,
+          0.9599
+        ],
+        "summary": {
+          "iteration_ms_max": 326.9185,
+          "iteration_ms_mean": 10.0091,
+          "iteration_ms_p50": 0.1095
+        }
+      },
+      "processing_overhead_ms": {
+        "max": 1728.7861,
+        "mean": 15.2575,
+        "p50": -0.0534
+      }
+    },
+    {
+      "trial": 2,
+      "cnllm": {
+        "vendor": "deepseek",
+        "model": "deepseek-chat",
+        "chunk_count": 156,
+        "per_chunk_metrics": [
+          {
+            "chunk": 1,
+            "still_access_ms": 0.0008,
+            "think_access_ms": 0.0005,
+            "repr_ms": 0.025
+          },
+          {
+            "chunk": 2,
+            "still_access_ms": 0.002,
+            "think_access_ms": 0.0012,
+            "repr_ms": 0.0398
+          },
+          {
+            "chunk": 3,
+            "still_access_ms": 0.0006,
+            "think_access_ms": 0.0002,
+            "repr_ms": 0.0158
+          },
+          {
+            "chunk": 4,
+            "still_access_ms": 0.0012,
+            "think_access_ms": 0.0005,
+            "repr_ms": 0.0448
+          },
+          {
+            "chunk": 5,
+            "still_access_ms": 0.0007,
+            "think_access_ms": 0.0004,
+            "repr_ms": 0.0233
+          },
+          {
+            "chunk": 6,
+            "still_access_ms": 0.0005,
+            "think_access_ms": 0.0004,
+            "repr_ms": 0.0233
+          },
+          {
+            "chunk": 7,
+            "still_access_ms": 0.0004,
+            "think_access_ms": 0.0004,
+            "repr_ms": 0.0181
+          },
+          {
+            "chunk": 8,
+            "still_access_ms": 0.0004,
+            "think_access_ms": 0.0003,
+            "repr_ms": 0.0168
+          },
+          {
+            "chunk": 9,
+            "still_access_ms": 0.0021,
+            "think_access_ms": 0.0009,
+            "repr_ms": 0.0769
+          },
+          {
+            "chunk": 10,
+            "still_access_ms": 0.0008,
+            "think_access_ms": 0.0004,
+            "repr_ms": 0.031
+          },
+          {
+            "chunk": 11,
+            "still_access_ms": 0.0005,
+            "think_access_ms": 0.0004,
+            "repr_ms": 0.0248
+          },
+          {
+            "chunk": 12,
+            "still_access_ms": 0.0004,
+            "think_access_ms": 0.0004,
+            "repr_ms": 0.0257
+          },
+          {
+            "chunk": 13,
+            "still_access_ms": 0.0001,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0082
+          },
+          {
+            "chunk": 14,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0083
+          },
+          {
+            "chunk": 15,
+            "still_access_ms": 0.0031,
+            "think_access_ms": 0.0007,
+            "repr_ms": 0.0566
+          },
+          {
+            "chunk": 16,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0113
+          },
+          {
+            "chunk": 17,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0197
+          },
+          {
+            "chunk": 18,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0089
+          },
+          {
+            "chunk": 19,
+            "still_access_ms": 0.0001,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0092
+          },
+          {
+            "chunk": 20,
+            "still_access_ms": 0.0008,
+            "think_access_ms": 0.0005,
+            "repr_ms": 0.0468
+          },
+          {
+            "chunk": 21,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0002,
+            "repr_ms": 0.0124
+          },
+          {
+            "chunk": 22,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0117
+          },
+          {
+            "chunk": 23,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.011
+          },
+          {
+            "chunk": 24,
+            "still_access_ms": 0.0014,
+            "think_access_ms": 0.0005,
+            "repr_ms": 0.057
+          },
+          {
+            "chunk": 25,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0136
+          },
+          {
+            "chunk": 26,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0134
+          },
+          {
+            "chunk": 27,
+            "still_access_ms": 0.003,
+            "think_access_ms": 0.0009,
+            "repr_ms": 0.0997
+          },
+          {
+            "chunk": 28,
+            "still_access_ms": 0.0007,
+            "think_access_ms": 0.0004,
+            "repr_ms": 0.039
+          },
+          {
+            "chunk": 29,
+            "still_access_ms": 0.0028,
+            "think_access_ms": 0.001,
+            "repr_ms": 0.112
+          },
+          {
+            "chunk": 30,
+            "still_access_ms": 0.0008,
+            "think_access_ms": 0.0004,
+            "repr_ms": 0.0459
+          },
+          {
+            "chunk": 31,
+            "still_access_ms": 0.0006,
+            "think_access_ms": 0.0003,
+            "repr_ms": 0.0393
+          },
+          {
+            "chunk": 32,
+            "still_access_ms": 0.0005,
+            "think_access_ms": 0.0003,
+            "repr_ms": 0.04
+          },
+          {
+            "chunk": 33,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0371
+          },
+          {
+            "chunk": 34,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0135
+          },
+          {
+            "chunk": 35,
+            "still_access_ms": 0.0025,
+            "think_access_ms": 0.0009,
+            "repr_ms": 0.1063
+          },
+          {
+            "chunk": 36,
+            "still_access_ms": 0.0007,
+            "think_access_ms": 0.0003,
+            "repr_ms": 0.0398
+          },
+          {
+            "chunk": 37,
+            "still_access_ms": 0.0005,
+            "think_access_ms": 0.0002,
+            "repr_ms": 0.0367
+          },
+          {
+            "chunk": 38,
+            "still_access_ms": 0.0004,
+            "think_access_ms": 0.0002,
+            "repr_ms": 0.0344
+          },
+          {
+            "chunk": 39,
+            "still_access_ms": 0.0014,
+            "think_access_ms": 0.0006,
+            "repr_ms": 0.0767
+          },
+          {
+            "chunk": 40,
+            "still_access_ms": 0.0003,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0208
+          },
+          {
+            "chunk": 41,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0169
+          },
+          {
+            "chunk": 42,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0197
+          },
+          {
+            "chunk": 43,
+            "still_access_ms": 0.0003,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0177
+          },
+          {
+            "chunk": 44,
+            "still_access_ms": 0.0001,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0175
+          },
+          {
+            "chunk": 45,
+            "still_access_ms": 0.0018,
+            "think_access_ms": 0.0006,
+            "repr_ms": 0.0836
+          },
+          {
+            "chunk": 46,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0002,
+            "repr_ms": 0.0204
+          },
+          {
+            "chunk": 47,
+            "still_access_ms": 0.0001,
+            "think_access_ms": 0.0002,
+            "repr_ms": 0.0206
+          },
+          {
+            "chunk": 48,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0002,
+            "repr_ms": 0.0185
+          },
+          {
+            "chunk": 49,
+            "still_access_ms": 0.0022,
+            "think_access_ms": 0.0007,
+            "repr_ms": 0.1044
+          },
+          {
+            "chunk": 50,
+            "still_access_ms": 0.0003,
+            "think_access_ms": 0.0002,
+            "repr_ms": 0.0234
+          },
+          {
+            "chunk": 51,
+            "still_access_ms": 0.0011,
+            "think_access_ms": 0.0004,
+            "repr_ms": 0.0568
+          },
+          {
+            "chunk": 52,
+            "still_access_ms": 0.0003,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0221
+          },
+          {
+            "chunk": 53,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0197
+          },
+          {
+            "chunk": 54,
+            "still_access_ms": 0.0018,
+            "think_access_ms": 0.0006,
+            "repr_ms": 0.0962
+          },
+          {
+            "chunk": 55,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0002,
+            "repr_ms": 0.0243
+          },
+          {
+            "chunk": 56,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0204
+          },
+          {
+            "chunk": 57,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0206
+          },
+          {
+            "chunk": 58,
+            "still_access_ms": 0.0027,
+            "think_access_ms": 0.0009,
+            "repr_ms": 0.1432
+          },
+          {
+            "chunk": 59,
+            "still_access_ms": 0.0007,
+            "think_access_ms": 0.0004,
+            "repr_ms": 0.0553
+          },
+          {
+            "chunk": 60,
+            "still_access_ms": 0.0005,
+            "think_access_ms": 0.0002,
+            "repr_ms": 0.0535
+          },
+          {
+            "chunk": 61,
+            "still_access_ms": 0.0007,
+            "think_access_ms": 0.0003,
+            "repr_ms": 0.0419
+          },
+          {
+            "chunk": 62,
+            "still_access_ms": 0.0003,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0243
+          },
+          {
+            "chunk": 63,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.023
+          },
+          {
+            "chunk": 64,
+            "still_access_ms": 0.0029,
+            "think_access_ms": 0.0009,
+            "repr_ms": 0.1524
+          },
+          {
+            "chunk": 65,
+            "still_access_ms": 0.0008,
+            "think_access_ms": 0.0004,
+            "repr_ms": 0.0604
+          },
+          {
+            "chunk": 66,
+            "still_access_ms": 0.0006,
+            "think_access_ms": 0.0003,
+            "repr_ms": 0.0585
+          },
+          {
+            "chunk": 67,
+            "still_access_ms": 0.002,
+            "think_access_ms": 0.0006,
+            "repr_ms": 0.106
+          },
+          {
+            "chunk": 68,
+            "still_access_ms": 0.0003,
+            "think_access_ms": 0.0002,
+            "repr_ms": 0.0279
+          },
+          {
+            "chunk": 69,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0271
+          },
+          {
+            "chunk": 70,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0249
+          },
+          {
+            "chunk": 71,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0259
+          },
+          {
+            "chunk": 72,
+            "still_access_ms": 0.0001,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.315
+          },
+          {
+            "chunk": 73,
+            "still_access_ms": 0.002,
+            "think_access_ms": 0.0007,
+            "repr_ms": 0.1182
+          },
+          {
+            "chunk": 74,
+            "still_access_ms": 0.0003,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0303
+          },
+          {
+            "chunk": 75,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0002,
+            "repr_ms": 0.0296
+          },
+          {
+            "chunk": 76,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0279
+          },
+          {
+            "chunk": 77,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0335
+          },
+          {
+            "chunk": 78,
+            "still_access_ms": 0.0016,
+            "think_access_ms": 0.0007,
+            "repr_ms": 0.1223
+          },
+          {
+            "chunk": 79,
+            "still_access_ms": 0.0003,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0322
+          },
+          {
+            "chunk": 80,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0,
+            "repr_ms": 0.0323
+          },
+          {
+            "chunk": 81,
+            "still_access_ms": 0.0001,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0283
+          },
+          {
+            "chunk": 82,
+            "still_access_ms": 0.0007,
+            "think_access_ms": 0.0002,
+            "repr_ms": 0.0787
+          },
+          {
+            "chunk": 83,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0331
+          },
+          {
+            "chunk": 84,
+            "still_access_ms": 0.0004,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0301
+          },
+          {
+            "chunk": 85,
+            "still_access_ms": 0.002,
+            "think_access_ms": 0.0009,
+            "repr_ms": 0.1287
+          },
+          {
+            "chunk": 86,
+            "still_access_ms": 0.0004,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0362
+          },
+          {
+            "chunk": 87,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0348
+          },
+          {
+            "chunk": 88,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0308
+          },
+          {
+            "chunk": 89,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0311
+          },
+          {
+            "chunk": 90,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0311
+          },
+          {
+            "chunk": 91,
+            "still_access_ms": 0.0027,
+            "think_access_ms": 0.0006,
+            "repr_ms": 0.1317
+          },
+          {
+            "chunk": 92,
+            "still_access_ms": 0.0004,
+            "think_access_ms": 0.0002,
+            "repr_ms": 0.0374
+          },
+          {
+            "chunk": 93,
+            "still_access_ms": 0.0014,
+            "think_access_ms": 0.0009,
+            "repr_ms": 0.1267
+          },
+          {
+            "chunk": 94,
+            "still_access_ms": 0.0003,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0358
+          },
+          {
+            "chunk": 95,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0354
+          },
+          {
+            "chunk": 96,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0342
+          },
+          {
+            "chunk": 97,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0335
+          },
+          {
+            "chunk": 98,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0002,
+            "repr_ms": 0.034
+          },
+          {
+            "chunk": 99,
+            "still_access_ms": 0.0018,
+            "think_access_ms": 0.0007,
+            "repr_ms": 0.1489
+          },
+          {
+            "chunk": 100,
+            "still_access_ms": 0.0003,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0375
+          },
+          {
+            "chunk": 101,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0381
+          },
+          {
+            "chunk": 102,
+            "still_access_ms": 0.0001,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0347
+          },
+          {
+            "chunk": 103,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.038
+          },
+          {
+            "chunk": 104,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0362
+          },
+          {
+            "chunk": 105,
+            "still_access_ms": 0.0028,
+            "think_access_ms": 0.0009,
+            "repr_ms": 0.2379
+          },
+          {
+            "chunk": 106,
+            "still_access_ms": 0.0008,
+            "think_access_ms": 0.0005,
+            "repr_ms": 0.1297
+          },
+          {
+            "chunk": 107,
+            "still_access_ms": 0.0008,
+            "think_access_ms": 0.0004,
+            "repr_ms": 0.116
+          },
+          {
+            "chunk": 108,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0403
+          },
+          {
+            "chunk": 109,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0369
+          },
+          {
+            "chunk": 110,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0376
+          },
+          {
+            "chunk": 111,
+            "still_access_ms": 0.0027,
+            "think_access_ms": 0.001,
+            "repr_ms": 0.1584
+          },
+          {
+            "chunk": 112,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0002,
+            "repr_ms": 0.0438
+          },
+          {
+            "chunk": 113,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0407
+          },
+          {
+            "chunk": 114,
+            "still_access_ms": 0.0003,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0408
+          },
+          {
+            "chunk": 115,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0402
+          },
+          {
+            "chunk": 116,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.045
+          },
+          {
+            "chunk": 117,
+            "still_access_ms": 0.0016,
+            "think_access_ms": 0.0008,
+            "repr_ms": 0.159
+          },
+          {
+            "chunk": 118,
+            "still_access_ms": 0.0003,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0453
+          },
+          {
+            "chunk": 119,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0429
+          },
+          {
+            "chunk": 120,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0433
+          },
+          {
+            "chunk": 121,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0412
+          },
+          {
+            "chunk": 122,
+            "still_access_ms": 0.0001,
+            "think_access_ms": 0.0002,
+            "repr_ms": 0.0422
+          },
+          {
+            "chunk": 123,
+            "still_access_ms": 0.0029,
+            "think_access_ms": 0.0008,
+            "repr_ms": 0.1927
+          },
+          {
+            "chunk": 124,
+            "still_access_ms": 0.0003,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0548
+          },
+          {
+            "chunk": 125,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0002,
+            "repr_ms": 0.045
+          },
+          {
+            "chunk": 126,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0455
+          },
+          {
+            "chunk": 127,
+            "still_access_ms": 0.0007,
+            "think_access_ms": 0.0002,
+            "repr_ms": 0.0624
+          },
+          {
+            "chunk": 128,
+            "still_access_ms": 0.002,
+            "think_access_ms": 0.0007,
+            "repr_ms": 0.1653
+          },
+          {
+            "chunk": 129,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0498
+          },
+          {
+            "chunk": 130,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0498
+          },
+          {
+            "chunk": 131,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0455
+          },
+          {
+            "chunk": 132,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0441
+          },
+          {
+            "chunk": 133,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0481
+          },
+          {
+            "chunk": 134,
+            "still_access_ms": 0.0021,
+            "think_access_ms": 0.0005,
+            "repr_ms": 0.1717
+          },
+          {
+            "chunk": 135,
+            "still_access_ms": 0.0003,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0511
+          },
+          {
+            "chunk": 136,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0002,
+            "repr_ms": 0.0471
+          },
+          {
+            "chunk": 137,
+            "still_access_ms": 0.0001,
+            "think_access_ms": 0.0002,
+            "repr_ms": 0.0487
+          },
+          {
+            "chunk": 138,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0467
+          },
+          {
+            "chunk": 139,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0494
+          },
+          {
+            "chunk": 140,
+            "still_access_ms": 0.0015,
+            "think_access_ms": 0.0009,
+            "repr_ms": 0.1745
+          },
+          {
+            "chunk": 141,
+            "still_access_ms": 0.0003,
+            "think_access_ms": 0.0002,
+            "repr_ms": 0.0582
+          },
+          {
+            "chunk": 142,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0502
+          },
+          {
+            "chunk": 143,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0002,
+            "repr_ms": 0.0503
+          },
+          {
+            "chunk": 144,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0494
+          },
+          {
+            "chunk": 145,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0519
+          },
+          {
+            "chunk": 146,
+            "still_access_ms": 0.0017,
+            "think_access_ms": 0.0009,
+            "repr_ms": 0.1781
+          },
+          {
+            "chunk": 147,
+            "still_access_ms": 0.0003,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0558
+          },
+          {
+            "chunk": 148,
+            "still_access_ms": 0.0006,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0528
+          },
+          {
+            "chunk": 149,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0523
+          },
+          {
+            "chunk": 150,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0529
+          },
+          {
+            "chunk": 151,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0547
+          },
+          {
+            "chunk": 152,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0511
+          },
+          {
+            "chunk": 153,
+            "still_access_ms": 0.0001,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0525
+          },
+          {
+            "chunk": 154,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0527
+          },
+          {
+            "chunk": 155,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0509
+          },
+          {
+            "chunk": 156,
+            "still_access_ms": 0.0003,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0602
+          }
+        ],
+        "summary": {
+          "still_access_ms_max": 0.0031,
+          "still_access_ms_mean": 0.0006,
+          "still_access_ms_p50": 0.0002,
+          "think_access_ms_max": 0.0012,
+          "think_access_ms_mean": 0.0003,
+          "think_access_ms_p50": 0.0001,
+          "repr_ms_max": 0.315,
+          "repr_ms_mean": 0.0547,
+          "repr_ms_p50": 0.0405,
+          "iteration_ms_max": 1778.4858,
+          "iteration_ms_mean": 21.7765,
+          "iteration_ms_p50": 0.0299
+        },
+        "per_chunk_iteration_ms": [
+          1778.4858,
+          350.8383,
+          62.4838,
+          29.5638,
+          0.0531,
+          0.0377,
+          30.2226,
+          0.0195,
+          0.0135,
+          0.0114,
+          0.0111,
+          0.0111,
+          29.2986,
+          0.0246,
+          0.0141,
+          0.0117,
+          32.4377,
+          0.0282,
+          0.0132,
+          0.0116,
+          27.3947,
+          0.019,
+          0.0142,
+          0.0119,
+          0.0108,
+          30.0184,
+          0.0431,
+          0.0299,
+          0.0276,
+          0.025,
+          0.0254,
+          29.9203,
+          0.019,
+          0.013,
+          0.0115,
+          0.0104,
+          0.0104,
+          31.1388,
+          0.0201,
+          0.0121,
+          0.0171,
+          0.0111,
+          0.0159,
+          27.6349,
+          0.0189,
+          0.0144,
+          0.0113,
+          0.0121,
+          0.011,
+          29.4384,
+          0.0208,
+          0.0139,
+          0.0118,
+          30.5639,
+          0.0173,
+          0.0229,
+          0.0123,
+          51.3383,
+          0.0402,
+          0.0384,
+          5.9989,
+          0.0193,
+          31.0725,
+          0.0437,
+          0.0306,
+          0.0312,
+          0.3087,
+          0.0163,
+          27.4926,
+          0.0186,
+          0.0141,
+          0.0109,
+          28.8473,
+          0.0191,
+          0.0172,
+          57.8607,
+          0.0487,
+          0.0334,
+          0.026,
+          0.0267,
+          0.0245,
+          3.4963,
+          0.0459,
+          0.0385,
+          0.033,
+          0.0358,
+          31.5378,
+          0.0634,
+          0.0352,
+          0.0371,
+          26.276,
+          0.0194,
+          0.0261,
+          0.0124,
+          30.2098,
+          0.0248,
+          0.0149,
+          29.9876,
+          0.0206,
+          0.0138,
+          0.0179,
+          0.0135,
+          0.0116,
+          33.6949,
+          0.0415,
+          0.0397,
+          0.0249,
+          30.4419,
+          0.0258,
+          0.0142,
+          0.0295,
+          0.0122,
+          0.015,
+          28.9251,
+          0.0463,
+          0.0381,
+          0.0367,
+          0.0425,
+          29.8283,
+          31.0062,
+          0.0214,
+          0.0131,
+          0.0126,
+          0.0115,
+          0.0121,
+          30.0142,
+          0.0568,
+          0.0409,
+          0.0377,
+          0.0381,
+          0.0324,
+          30.5932,
+          0.0576,
+          0.0421,
+          0.043,
+          0.0353,
+          0.032,
+          30.9367,
+          0.0502,
+          0.0299,
+          0.2845,
+          0.0423
+        ]
+      },
+      "openai_sdk": {
+        "vendor": "deepseek",
+        "model": "deepseek-chat",
+        "chunk_count": 77,
+        "per_chunk_iteration_ms": [
+          0.5629,
+          311.3343,
+          80.3003,
+          33.3634,
+          0.0612,
+          0.0514,
+          0.0486,
+          0.0475,
+          0.0565,
+          26.3325,
+          0.0614,
+          0.0538,
+          0.0506,
+          0.083,
+          30.4233,
+          0.0606,
+          0.0511,
+          0.0494,
+          39.5671,
+          0.0619,
+          0.0531,
+          0.0515,
+          0.0493,
+          21.1662,
+          0.0673,
+          0.0526,
+          27.3911,
+          0.062,
+          0.0518,
+          30.3602,
+          0.0633,
+          0.0521,
+          30.1809,
+          0.1689,
+          0.1396,
+          0.2003,
+          0.1311,
+          0.1274,
+          29.7404,
+          0.0621,
+          0.0536,
+          0.051,
+          0.0489,
+          0.0502,
+          29.3047,
+          0.0889,
+          0.0791,
+          0.0776,
+          0.083,
+          0.0763,
+          29.2527,
+          32.8458,
+          0.0606,
+          0.0542,
+          29.0783,
+          0.061,
+          0.0543,
+          0.0497,
+          0.1045,
+          0.0507,
+          29.072,
+          0.0616,
+          0.0537,
+          0.0518,
+          29.5943,
+          31.6932,
+          0.1805,
+          0.1307,
+          0.1673,
+          0.0743,
+          27.5104,
+          0.0652,
+          0.0551,
+          0.0527,
+          32.1347,
+          0.111,
+          0.0959
+        ],
+        "summary": {
+          "iteration_ms_max": 311.3343,
+          "iteration_ms_mean": 12.1483,
+          "iteration_ms_p50": 0.0743
+        }
+      },
+      "processing_overhead_ms": {
+        "max": 1777.9229,
+        "mean": 23.2216,
+        "p50": -0.0472
+      }
+    },
+    {
+      "trial": 3,
+      "cnllm": {
+        "vendor": "deepseek",
+        "model": "deepseek-chat",
+        "chunk_count": 201,
+        "per_chunk_metrics": [
+          {
+            "chunk": 1,
+            "still_access_ms": 0.0009,
+            "think_access_ms": 0.0005,
+            "repr_ms": 0.0242
+          },
+          {
+            "chunk": 2,
+            "still_access_ms": 0.0022,
+            "think_access_ms": 0.0009,
+            "repr_ms": 0.047
+          },
+          {
+            "chunk": 3,
+            "still_access_ms": 0.0014,
+            "think_access_ms": 0.0007,
+            "repr_ms": 0.0309
+          },
+          {
+            "chunk": 4,
+            "still_access_ms": 0.0016,
+            "think_access_ms": 0.0008,
+            "repr_ms": 0.0318
+          },
+          {
+            "chunk": 5,
+            "still_access_ms": 0.0003,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0096
+          },
+          {
+            "chunk": 6,
+            "still_access_ms": 0.0013,
+            "think_access_ms": 0.0005,
+            "repr_ms": 0.0345
+          },
+          {
+            "chunk": 7,
+            "still_access_ms": 0.0003,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0092
+          },
+          {
+            "chunk": 8,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0094
+          },
+          {
+            "chunk": 9,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0077
+          },
+          {
+            "chunk": 10,
+            "still_access_ms": 0.0001,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0073
+          },
+          {
+            "chunk": 11,
+            "still_access_ms": 0.0021,
+            "think_access_ms": 0.001,
+            "repr_ms": 0.0682
+          },
+          {
+            "chunk": 12,
+            "still_access_ms": 0.0006,
+            "think_access_ms": 0.0003,
+            "repr_ms": 0.0237
+          },
+          {
+            "chunk": 13,
+            "still_access_ms": 0.0004,
+            "think_access_ms": 0.0002,
+            "repr_ms": 0.0202
+          },
+          {
+            "chunk": 14,
+            "still_access_ms": 0.0003,
+            "think_access_ms": 0.0003,
+            "repr_ms": 0.0185
+          },
+          {
+            "chunk": 15,
+            "still_access_ms": 0.0017,
+            "think_access_ms": 0.0005,
+            "repr_ms": 0.0473
+          },
+          {
+            "chunk": 16,
+            "still_access_ms": 0.0003,
+            "think_access_ms": 0.0002,
+            "repr_ms": 0.0115
+          },
+          {
+            "chunk": 17,
+            "still_access_ms": 0.0001,
+            "think_access_ms": 0.0002,
+            "repr_ms": 0.0095
+          },
+          {
+            "chunk": 18,
+            "still_access_ms": 0.0001,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.015
+          },
+          {
+            "chunk": 19,
+            "still_access_ms": 0.0013,
+            "think_access_ms": 0.0009,
+            "repr_ms": 0.053
+          },
+          {
+            "chunk": 20,
+            "still_access_ms": 0.0003,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0144
+          },
+          {
+            "chunk": 21,
+            "still_access_ms": 0.0003,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.012
+          },
+          {
+            "chunk": 22,
+            "still_access_ms": 0.0021,
+            "think_access_ms": 0.0006,
+            "repr_ms": 0.0611
+          },
+          {
+            "chunk": 23,
+            "still_access_ms": 0.0003,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0158
+          },
+          {
+            "chunk": 24,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0134
+          },
+          {
+            "chunk": 25,
+            "still_access_ms": 0.0019,
+            "think_access_ms": 0.0005,
+            "repr_ms": 0.0557
+          },
+          {
+            "chunk": 26,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0002,
+            "repr_ms": 0.0146
+          },
+          {
+            "chunk": 27,
+            "still_access_ms": 0.0017,
+            "think_access_ms": 0.0007,
+            "repr_ms": 0.0722
+          },
+          {
+            "chunk": 28,
+            "still_access_ms": 0.0003,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0169
+          },
+          {
+            "chunk": 29,
+            "still_access_ms": 0.0001,
+            "think_access_ms": 0.0002,
+            "repr_ms": 0.0132
+          },
+          {
+            "chunk": 30,
+            "still_access_ms": 0.0007,
+            "think_access_ms": 0.0002,
+            "repr_ms": 0.0319
+          },
+          {
+            "chunk": 31,
+            "still_access_ms": 0.0007,
+            "think_access_ms": 0.0003,
+            "repr_ms": 0.0361
+          },
+          {
+            "chunk": 32,
+            "still_access_ms": 0.0006,
+            "think_access_ms": 0.0004,
+            "repr_ms": 0.0401
+          },
+          {
+            "chunk": 33,
+            "still_access_ms": 0.0006,
+            "think_access_ms": 0.0004,
+            "repr_ms": 0.0449
+          },
+          {
+            "chunk": 34,
+            "still_access_ms": 0.0004,
+            "think_access_ms": 0.0003,
+            "repr_ms": 0.0337
+          },
+          {
+            "chunk": 35,
+            "still_access_ms": 0.0004,
+            "think_access_ms": 0.0002,
+            "repr_ms": 0.0339
+          },
+          {
+            "chunk": 36,
+            "still_access_ms": 0.0004,
+            "think_access_ms": 0.0002,
+            "repr_ms": 0.0274
+          },
+          {
+            "chunk": 37,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0165
+          },
+          {
+            "chunk": 38,
+            "still_access_ms": 0.0017,
+            "think_access_ms": 0.0005,
+            "repr_ms": 0.0674
+          },
+          {
+            "chunk": 39,
+            "still_access_ms": 0.0005,
+            "think_access_ms": 0.0002,
+            "repr_ms": 0.0258
+          },
+          {
+            "chunk": 40,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0002,
+            "repr_ms": 0.0174
+          },
+          {
+            "chunk": 41,
+            "still_access_ms": 0.0001,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0166
+          },
+          {
+            "chunk": 42,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0159
+          },
+          {
+            "chunk": 43,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0158
+          },
+          {
+            "chunk": 44,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.016
+          },
+          {
+            "chunk": 45,
+            "still_access_ms": 0.0015,
+            "think_access_ms": 0.0005,
+            "repr_ms": 0.076
+          },
+          {
+            "chunk": 46,
+            "still_access_ms": 0.0008,
+            "think_access_ms": 0.0004,
+            "repr_ms": 0.0541
+          },
+          {
+            "chunk": 47,
+            "still_access_ms": 0.0005,
+            "think_access_ms": 0.0003,
+            "repr_ms": 0.0399
+          },
+          {
+            "chunk": 48,
+            "still_access_ms": 0.0001,
+            "think_access_ms": 0.0002,
+            "repr_ms": 0.0184
+          },
+          {
+            "chunk": 49,
+            "still_access_ms": 0.0016,
+            "think_access_ms": 0.0006,
+            "repr_ms": 0.0855
+          },
+          {
+            "chunk": 50,
+            "still_access_ms": 0.0003,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0213
+          },
+          {
+            "chunk": 51,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0002,
+            "repr_ms": 0.0203
+          },
+          {
+            "chunk": 52,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0191
+          },
+          {
+            "chunk": 53,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0188
+          },
+          {
+            "chunk": 54,
+            "still_access_ms": 0.0001,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0188
+          },
+          {
+            "chunk": 55,
+            "still_access_ms": 0.0001,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0204
+          },
+          {
+            "chunk": 56,
+            "still_access_ms": 0.0001,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0188
+          },
+          {
+            "chunk": 57,
+            "still_access_ms": 0.0001,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0196
+          },
+          {
+            "chunk": 58,
+            "still_access_ms": 0.0019,
+            "think_access_ms": 0.0007,
+            "repr_ms": 0.1166
+          },
+          {
+            "chunk": 59,
+            "still_access_ms": 0.0008,
+            "think_access_ms": 0.0005,
+            "repr_ms": 0.0796
+          },
+          {
+            "chunk": 60,
+            "still_access_ms": 0.0026,
+            "think_access_ms": 0.0008,
+            "repr_ms": 0.1406
+          },
+          {
+            "chunk": 61,
+            "still_access_ms": 0.0006,
+            "think_access_ms": 0.0004,
+            "repr_ms": 0.0592
+          },
+          {
+            "chunk": 62,
+            "still_access_ms": 0.0005,
+            "think_access_ms": 0.0002,
+            "repr_ms": 0.0514
+          },
+          {
+            "chunk": 63,
+            "still_access_ms": 0.0016,
+            "think_access_ms": 0.0007,
+            "repr_ms": 0.1111
+          },
+          {
+            "chunk": 64,
+            "still_access_ms": 0.0003,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.026
+          },
+          {
+            "chunk": 65,
+            "still_access_ms": 0.0019,
+            "think_access_ms": 0.0007,
+            "repr_ms": 0.097
+          },
+          {
+            "chunk": 66,
+            "still_access_ms": 0.0021,
+            "think_access_ms": 0.0006,
+            "repr_ms": 0.1011
+          },
+          {
+            "chunk": 67,
+            "still_access_ms": 0.0003,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0262
+          },
+          {
+            "chunk": 68,
+            "still_access_ms": 0.0019,
+            "think_access_ms": 0.0006,
+            "repr_ms": 0.099
+          },
+          {
+            "chunk": 69,
+            "still_access_ms": 0.0021,
+            "think_access_ms": 0.0008,
+            "repr_ms": 0.1469
+          },
+          {
+            "chunk": 70,
+            "still_access_ms": 0.0003,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0282
+          },
+          {
+            "chunk": 71,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0002,
+            "repr_ms": 0.0252
+          },
+          {
+            "chunk": 72,
+            "still_access_ms": 0.0001,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.024
+          },
+          {
+            "chunk": 73,
+            "still_access_ms": 0.0001,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0271
+          },
+          {
+            "chunk": 74,
+            "still_access_ms": 0.0001,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0266
+          },
+          {
+            "chunk": 75,
+            "still_access_ms": 0.0017,
+            "think_access_ms": 0.0006,
+            "repr_ms": 0.1123
+          },
+          {
+            "chunk": 76,
+            "still_access_ms": 0.0003,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0367
+          },
+          {
+            "chunk": 77,
+            "still_access_ms": 0.0003,
+            "think_access_ms": 0.0002,
+            "repr_ms": 0.0282
+          },
+          {
+            "chunk": 78,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0284
+          },
+          {
+            "chunk": 79,
+            "still_access_ms": 0.0001,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0273
+          },
+          {
+            "chunk": 80,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0273
+          },
+          {
+            "chunk": 81,
+            "still_access_ms": 0.002,
+            "think_access_ms": 0.0005,
+            "repr_ms": 0.1024
+          },
+          {
+            "chunk": 82,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0002,
+            "repr_ms": 0.0296
+          },
+          {
+            "chunk": 83,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0002,
+            "repr_ms": 0.0294
+          },
+          {
+            "chunk": 84,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0386
+          },
+          {
+            "chunk": 85,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0286
+          },
+          {
+            "chunk": 86,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0288
+          },
+          {
+            "chunk": 87,
+            "still_access_ms": 0.0018,
+            "think_access_ms": 0.0008,
+            "repr_ms": 0.1274
+          },
+          {
+            "chunk": 88,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0002,
+            "repr_ms": 0.0321
+          },
+          {
+            "chunk": 89,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0293
+          },
+          {
+            "chunk": 90,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0301
+          },
+          {
+            "chunk": 91,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0296
+          },
+          {
+            "chunk": 92,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0292
+          },
+          {
+            "chunk": 93,
+            "still_access_ms": 0.0019,
+            "think_access_ms": 0.0006,
+            "repr_ms": 0.1236
+          },
+          {
+            "chunk": 94,
+            "still_access_ms": 0.0003,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0368
+          },
+          {
+            "chunk": 95,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0322
+          },
+          {
+            "chunk": 96,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0321
+          },
+          {
+            "chunk": 97,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0332
+          },
+          {
+            "chunk": 98,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0313
+          },
+          {
+            "chunk": 99,
+            "still_access_ms": 0.0019,
+            "think_access_ms": 0.0006,
+            "repr_ms": 0.1332
+          },
+          {
+            "chunk": 100,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0002,
+            "repr_ms": 0.037
+          },
+          {
+            "chunk": 101,
+            "still_access_ms": 0.0001,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0353
+          },
+          {
+            "chunk": 102,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.034
+          },
+          {
+            "chunk": 103,
+            "still_access_ms": 0.0029,
+            "think_access_ms": 0.0011,
+            "repr_ms": 0.2213
+          },
+          {
+            "chunk": 104,
+            "still_access_ms": 0.0003,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0474
+          },
+          {
+            "chunk": 105,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0352
+          },
+          {
+            "chunk": 106,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0347
+          },
+          {
+            "chunk": 107,
+            "still_access_ms": 0.0001,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0347
+          },
+          {
+            "chunk": 108,
+            "still_access_ms": 0.0001,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0336
+          },
+          {
+            "chunk": 109,
+            "still_access_ms": 0.0017,
+            "think_access_ms": 0.0007,
+            "repr_ms": 0.1342
+          },
+          {
+            "chunk": 110,
+            "still_access_ms": 0.0003,
+            "think_access_ms": 0.0002,
+            "repr_ms": 0.0429
+          },
+          {
+            "chunk": 111,
+            "still_access_ms": 0.0001,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0358
+          },
+          {
+            "chunk": 112,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0379
+          },
+          {
+            "chunk": 113,
+            "still_access_ms": 0.0001,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.039
+          },
+          {
+            "chunk": 114,
+            "still_access_ms": 0.0001,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0378
+          },
+          {
+            "chunk": 115,
+            "still_access_ms": 0.0017,
+            "think_access_ms": 0.0009,
+            "repr_ms": 0.1453
+          },
+          {
+            "chunk": 116,
+            "still_access_ms": 0.0003,
+            "think_access_ms": 0.0002,
+            "repr_ms": 0.0418
+          },
+          {
+            "chunk": 117,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0393
+          },
+          {
+            "chunk": 118,
+            "still_access_ms": 0.0001,
+            "think_access_ms": 0.0002,
+            "repr_ms": 0.0386
+          },
+          {
+            "chunk": 119,
+            "still_access_ms": 0.0001,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0395
+          },
+          {
+            "chunk": 120,
+            "still_access_ms": 0.0013,
+            "think_access_ms": 0.0009,
+            "repr_ms": 0.114
+          },
+          {
+            "chunk": 121,
+            "still_access_ms": 0.0026,
+            "think_access_ms": 0.0008,
+            "repr_ms": 0.2302
+          },
+          {
+            "chunk": 122,
+            "still_access_ms": 0.0006,
+            "think_access_ms": 0.0003,
+            "repr_ms": 0.1015
+          },
+          {
+            "chunk": 123,
+            "still_access_ms": 0.0004,
+            "think_access_ms": 0.0002,
+            "repr_ms": 0.0979
+          },
+          {
+            "chunk": 124,
+            "still_access_ms": 0.0004,
+            "think_access_ms": 0.0002,
+            "repr_ms": 0.0982
+          },
+          {
+            "chunk": 125,
+            "still_access_ms": 0.003,
+            "think_access_ms": 0.0013,
+            "repr_ms": 0.2537
+          },
+          {
+            "chunk": 126,
+            "still_access_ms": 0.0008,
+            "think_access_ms": 0.0004,
+            "repr_ms": 0.1326
+          },
+          {
+            "chunk": 127,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0433
+          },
+          {
+            "chunk": 128,
+            "still_access_ms": 0.0001,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.043
+          },
+          {
+            "chunk": 129,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0419
+          },
+          {
+            "chunk": 130,
+            "still_access_ms": 0.0022,
+            "think_access_ms": 0.0009,
+            "repr_ms": 0.2514
+          },
+          {
+            "chunk": 131,
+            "still_access_ms": 0.0006,
+            "think_access_ms": 0.0003,
+            "repr_ms": 0.1106
+          },
+          {
+            "chunk": 132,
+            "still_access_ms": 0.0005,
+            "think_access_ms": 0.0003,
+            "repr_ms": 0.1016
+          },
+          {
+            "chunk": 133,
+            "still_access_ms": 0.0005,
+            "think_access_ms": 0.0002,
+            "repr_ms": 0.0706
+          },
+          {
+            "chunk": 134,
+            "still_access_ms": 0.0001,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0422
+          },
+          {
+            "chunk": 135,
+            "still_access_ms": 0.0014,
+            "think_access_ms": 0.0008,
+            "repr_ms": 0.1602
+          },
+          {
+            "chunk": 136,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0002,
+            "repr_ms": 0.049
+          },
+          {
+            "chunk": 137,
+            "still_access_ms": 0.0001,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0442
+          },
+          {
+            "chunk": 138,
+            "still_access_ms": 0.0001,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0444
+          },
+          {
+            "chunk": 139,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0443
+          },
+          {
+            "chunk": 140,
+            "still_access_ms": 0.0014,
+            "think_access_ms": 0.0006,
+            "repr_ms": 0.1637
+          },
+          {
+            "chunk": 141,
+            "still_access_ms": 0.0003,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0516
+          },
+          {
+            "chunk": 142,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0002,
+            "repr_ms": 0.0476
+          },
+          {
+            "chunk": 143,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0451
+          },
+          {
+            "chunk": 144,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0475
+          },
+          {
+            "chunk": 145,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0479
+          },
+          {
+            "chunk": 146,
+            "still_access_ms": 0.0003,
+            "think_access_ms": 0.0002,
+            "repr_ms": 0.0533
+          },
+          {
+            "chunk": 147,
+            "still_access_ms": 0.0001,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0479
+          },
+          {
+            "chunk": 148,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.049
+          },
+          {
+            "chunk": 149,
+            "still_access_ms": 0.0001,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.046
+          },
+          {
+            "chunk": 150,
+            "still_access_ms": 0.0001,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.046
+          },
+          {
+            "chunk": 151,
+            "still_access_ms": 0.0001,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0466
+          },
+          {
+            "chunk": 152,
+            "still_access_ms": 0.0016,
+            "think_access_ms": 0.0007,
+            "repr_ms": 0.1621
+          },
+          {
+            "chunk": 153,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0524
+          },
+          {
+            "chunk": 154,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0616
+          },
+          {
+            "chunk": 155,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0516
+          },
+          {
+            "chunk": 156,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0519
+          },
+          {
+            "chunk": 157,
+            "still_access_ms": 0.0001,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0531
+          },
+          {
+            "chunk": 158,
+            "still_access_ms": 0.0021,
+            "think_access_ms": 0.0008,
+            "repr_ms": 0.1914
+          },
+          {
+            "chunk": 159,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.054
+          },
+          {
+            "chunk": 160,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0511
+          },
+          {
+            "chunk": 161,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0519
+          },
+          {
+            "chunk": 162,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0,
+            "repr_ms": 0.0522
+          },
+          {
+            "chunk": 163,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0507
+          },
+          {
+            "chunk": 164,
+            "still_access_ms": 0.0004,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0748
+          },
+          {
+            "chunk": 165,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0527
+          },
+          {
+            "chunk": 166,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0524
+          },
+          {
+            "chunk": 167,
+            "still_access_ms": 0.0001,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0566
+          },
+          {
+            "chunk": 168,
+            "still_access_ms": 0.0026,
+            "think_access_ms": 0.0012,
+            "repr_ms": 0.2405
+          },
+          {
+            "chunk": 169,
+            "still_access_ms": 0.0003,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0585
+          },
+          {
+            "chunk": 170,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0542
+          },
+          {
+            "chunk": 171,
+            "still_access_ms": 0.0016,
+            "think_access_ms": 0.0006,
+            "repr_ms": 0.2958
+          },
+          {
+            "chunk": 172,
+            "still_access_ms": 0.0009,
+            "think_access_ms": 0.0004,
+            "repr_ms": 0.168
+          },
+          {
+            "chunk": 173,
+            "still_access_ms": 0.0007,
+            "think_access_ms": 0.0003,
+            "repr_ms": 0.1752
+          },
+          {
+            "chunk": 174,
+            "still_access_ms": 0.0007,
+            "think_access_ms": 0.0002,
+            "repr_ms": 0.0909
+          },
+          {
+            "chunk": 175,
+            "still_access_ms": 0.0003,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0626
+          },
+          {
+            "chunk": 176,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0551
+          },
+          {
+            "chunk": 177,
+            "still_access_ms": 0.0001,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0564
+          },
+          {
+            "chunk": 178,
+            "still_access_ms": 0.0029,
+            "think_access_ms": 0.0009,
+            "repr_ms": 0.3817
+          },
+          {
+            "chunk": 179,
+            "still_access_ms": 0.001,
+            "think_access_ms": 0.0003,
+            "repr_ms": 0.1627
+          },
+          {
+            "chunk": 180,
+            "still_access_ms": 0.0004,
+            "think_access_ms": 0.0003,
+            "repr_ms": 0.1459
+          },
+          {
+            "chunk": 181,
+            "still_access_ms": 0.0004,
+            "think_access_ms": 0.0003,
+            "repr_ms": 0.1402
+          },
+          {
+            "chunk": 182,
+            "still_access_ms": 0.0003,
+            "think_access_ms": 0.0003,
+            "repr_ms": 0.1709
+          },
+          {
+            "chunk": 183,
+            "still_access_ms": 0.0009,
+            "think_access_ms": 0.0003,
+            "repr_ms": 0.1639
+          },
+          {
+            "chunk": 184,
+            "still_access_ms": 0.0014,
+            "think_access_ms": 0.0003,
+            "repr_ms": 0.1769
+          },
+          {
+            "chunk": 185,
+            "still_access_ms": 0.0004,
+            "think_access_ms": 0.0003,
+            "repr_ms": 2.0023
+          },
+          {
+            "chunk": 186,
+            "still_access_ms": 0.0015,
+            "think_access_ms": 0.0006,
+            "repr_ms": 0.1848
+          },
+          {
+            "chunk": 187,
+            "still_access_ms": 0.0008,
+            "think_access_ms": 0.0003,
+            "repr_ms": 0.152
+          },
+          {
+            "chunk": 188,
+            "still_access_ms": 0.0004,
+            "think_access_ms": 0.0003,
+            "repr_ms": 0.1461
+          },
+          {
+            "chunk": 189,
+            "still_access_ms": 0.0004,
+            "think_access_ms": 0.0002,
+            "repr_ms": 0.1451
+          },
+          {
+            "chunk": 190,
+            "still_access_ms": 0.0013,
+            "think_access_ms": 0.0007,
+            "repr_ms": 0.2235
+          },
+          {
+            "chunk": 191,
+            "still_access_ms": 0.0003,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0728
+          },
+          {
+            "chunk": 192,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0613
+          },
+          {
+            "chunk": 193,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0622
+          },
+          {
+            "chunk": 194,
+            "still_access_ms": 0.0001,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0597
+          },
+          {
+            "chunk": 195,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0607
+          },
+          {
+            "chunk": 196,
+            "still_access_ms": 0.0017,
+            "think_access_ms": 0.0005,
+            "repr_ms": 0.2114
+          },
+          {
+            "chunk": 197,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0002,
+            "repr_ms": 0.0663
+          },
+          {
+            "chunk": 198,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0619
+          },
+          {
+            "chunk": 199,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0,
+            "repr_ms": 0.0646
+          },
+          {
+            "chunk": 200,
+            "still_access_ms": 0.0014,
+            "think_access_ms": 0.0006,
+            "repr_ms": 0.1507
+          },
+          {
+            "chunk": 201,
+            "still_access_ms": 0.0003,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.071
+          }
+        ],
+        "summary": {
+          "still_access_ms_max": 0.003,
+          "still_access_ms_mean": 0.0006,
+          "still_access_ms_p50": 0.0003,
+          "think_access_ms_max": 0.0013,
+          "think_access_ms_mean": 0.0003,
+          "think_access_ms_p50": 0.0001,
+          "repr_ms_max": 2.0023,
+          "repr_ms_mean": 0.077,
+          "repr_ms_p50": 0.047,
+          "iteration_ms_max": 1702.992,
+          "iteration_ms_mean": 25.1667,
+          "iteration_ms_p50": 0.0284
+        },
+        "per_chunk_iteration_ms": [
+          1702.992,
+          404.9462,
+          192.683,
+          22.0971,
+          0.0188,
+          0.0129,
+          29.4607,
+          0.0635,
+          0.0351,
+          0.0444,
+          0.0483,
+          0.0284,
+          29.4178,
+          0.0206,
+          0.0128,
+          29.8098,
+          0.0192,
+          0.0125,
+          0.0139,
+          30.2513,
+          0.0199,
+          0.0221,
+          0.0119,
+          0.0115,
+          0.0108,
+          50.7106,
+          0.045,
+          0.0292,
+          0.027,
+          0.0249,
+          0.025,
+          6.8283,
+          0.0181,
+          0.0134,
+          0.0131,
+          0.011,
+          0.0108,
+          40.8508,
+          0.0181,
+          0.0227,
+          0.0125,
+          0.0121,
+          0.01,
+          68.9816,
+          0.054,
+          0.0149,
+          0.0116,
+          0.0107,
+          0.0118,
+          1.7513,
+          0.0462,
+          0.0404,
+          0.0376,
+          0.0315,
+          0.0308,
+          25.2981,
+          0.0202,
+          29.6798,
+          0.0192,
+          31.5452,
+          0.0418,
+          0.0427,
+          0.0268,
+          0.0248,
+          0.0251,
+          38.5827,
+          0.028,
+          0.0135,
+          0.0122,
+          30.393,
+          0.0191,
+          0.0227,
+          0.0132,
+          44.22,
+          0.0219,
+          0.0149,
+          0.0144,
+          0.0185,
+          0.022,
+          13.8572,
+          0.0231,
+          31.1775,
+          0.0566,
+          0.0391,
+          0.037,
+          28.5129,
+          0.0465,
+          0.0286,
+          0.028,
+          0.027,
+          28.0211,
+          0.0285,
+          0.0157,
+          0.0153,
+          0.0116,
+          0.011,
+          29.5032,
+          0.0198,
+          0.0175,
+          0.0142,
+          0.0118,
+          0.0139,
+          30.053,
+          0.0273,
+          0.0158,
+          0.0151,
+          30.4253,
+          0.0467,
+          0.0334,
+          0.0257,
+          0.0253,
+          0.0337,
+          27.8081,
+          0.0561,
+          0.0397,
+          0.0336,
+          29.5308,
+          0.0534,
+          0.0437,
+          0.0337,
+          0.038,
+          0.0351,
+          83.9435,
+          0.0563,
+          0.0615
+        ]
+      },
+      "openai_sdk": {
+        "vendor": "deepseek",
+        "model": "deepseek-chat",
+        "chunk_count": 81,
+        "per_chunk_iteration_ms": [
+          4.1682,
+          285.8511,
+          88.8133,
+          36.2888,
+          0.1827,
+          0.1534,
+          0.1484,
+          0.1426,
+          0.0963,
+          21.7321,
+          0.0568,
+          0.0494,
+          0.0486,
+          0.0479,
+          29.9483,
+          29.6246,
+          0.0603,
+          0.0521,
+          0.0551,
+          0.0479,
+          49.9071,
+          0.1705,
+          0.2487,
+          9.8555,
+          0.0784,
+          0.0632,
+          30.0982,
+          0.1052,
+          27.9018,
+          0.1657,
+          31.143,
+          0.0612,
+          0.0521,
+          28.6347,
+          0.0613,
+          0.0507,
+          0.0495,
+          0.0481,
+          0.0481,
+          28.7054,
+          30.5279,
+          0.061,
+          0.0523,
+          0.0485,
+          0.0494,
+          0.0485,
+          31.6605,
+          0.0587,
+          0.0518,
+          0.0484,
+          0.0477,
+          0.0469,
+          29.2962,
+          0.0621,
+          0.0606,
+          0.0513,
+          29.3968,
+          0.0586,
+          0.0523,
+          40.9775,
+          0.1433,
+          0.1319,
+          0.1029,
+          0.0527,
+          0.0501,
+          23.0725,
+          0.3759,
+          0.2245,
+          33.7805,
+          0.064,
+          0.0552,
+          0.0521,
+          0.0514,
+          0.0505,
+          20.4471,
+          0.0646,
+          0.0552,
+          0.0533,
+          30.4187,
+          0.0605,
+          0.104
+        ],
+        "summary": {
+          "iteration_ms_max": 285.8511,
+          "iteration_ms_mean": 12.0628,
+          "iteration_ms_p50": 0.064
+        }
+      },
+      "processing_overhead_ms": {
+        "max": 1698.8238,
+        "mean": 22.8233,
+        "p50": -0.0408
+      }
+    },
+    {
+      "trial": 4,
+      "cnllm": {
+        "vendor": "deepseek",
+        "model": "deepseek-chat",
+        "chunk_count": 98,
+        "per_chunk_metrics": [
+          {
+            "chunk": 1,
+            "still_access_ms": 0.0011,
+            "think_access_ms": 0.0006,
+            "repr_ms": 0.0249
+          },
+          {
+            "chunk": 2,
+            "still_access_ms": 0.0023,
+            "think_access_ms": 0.001,
+            "repr_ms": 0.052
+          },
+          {
+            "chunk": 3,
+            "still_access_ms": 0.0015,
+            "think_access_ms": 0.0007,
+            "repr_ms": 0.0308
+          },
+          {
+            "chunk": 4,
+            "still_access_ms": 0.0024,
+            "think_access_ms": 0.001,
+            "repr_ms": 0.0501
+          },
+          {
+            "chunk": 5,
+            "still_access_ms": 0.0005,
+            "think_access_ms": 0.0002,
+            "repr_ms": 0.0175
+          },
+          {
+            "chunk": 6,
+            "still_access_ms": 0.0003,
+            "think_access_ms": 0.0003,
+            "repr_ms": 0.0151
+          },
+          {
+            "chunk": 7,
+            "still_access_ms": 0.0003,
+            "think_access_ms": 0.0002,
+            "repr_ms": 0.0142
+          },
+          {
+            "chunk": 8,
+            "still_access_ms": 0.0003,
+            "think_access_ms": 0.0002,
+            "repr_ms": 0.0137
+          },
+          {
+            "chunk": 9,
+            "still_access_ms": 0.0003,
+            "think_access_ms": 0.0002,
+            "repr_ms": 0.0152
+          },
+          {
+            "chunk": 10,
+            "still_access_ms": 0.002,
+            "think_access_ms": 0.0007,
+            "repr_ms": 0.0648
+          },
+          {
+            "chunk": 11,
+            "still_access_ms": 0.0005,
+            "think_access_ms": 0.0003,
+            "repr_ms": 0.0226
+          },
+          {
+            "chunk": 12,
+            "still_access_ms": 0.0004,
+            "think_access_ms": 0.0003,
+            "repr_ms": 0.019
+          },
+          {
+            "chunk": 13,
+            "still_access_ms": 0.0018,
+            "think_access_ms": 0.0008,
+            "repr_ms": 0.0682
+          },
+          {
+            "chunk": 14,
+            "still_access_ms": 0.0023,
+            "think_access_ms": 0.0011,
+            "repr_ms": 0.0712
+          },
+          {
+            "chunk": 15,
+            "still_access_ms": 0.0006,
+            "think_access_ms": 0.0004,
+            "repr_ms": 0.0277
+          },
+          {
+            "chunk": 16,
+            "still_access_ms": 0.0004,
+            "think_access_ms": 0.0003,
+            "repr_ms": 0.0229
+          },
+          {
+            "chunk": 17,
+            "still_access_ms": 0.0005,
+            "think_access_ms": 0.0004,
+            "repr_ms": 0.0233
+          },
+          {
+            "chunk": 18,
+            "still_access_ms": 0.0004,
+            "think_access_ms": 0.0003,
+            "repr_ms": 0.0234
+          },
+          {
+            "chunk": 19,
+            "still_access_ms": 0.0012,
+            "think_access_ms": 0.0005,
+            "repr_ms": 0.0496
+          },
+          {
+            "chunk": 20,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0002,
+            "repr_ms": 0.0126
+          },
+          {
+            "chunk": 21,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0115
+          },
+          {
+            "chunk": 22,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0106
+          },
+          {
+            "chunk": 23,
+            "still_access_ms": 0.0001,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0105
+          },
+          {
+            "chunk": 24,
+            "still_access_ms": 0.0001,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0113
+          },
+          {
+            "chunk": 25,
+            "still_access_ms": 0.0015,
+            "think_access_ms": 0.0006,
+            "repr_ms": 0.0595
+          },
+          {
+            "chunk": 26,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0002,
+            "repr_ms": 0.0142
+          },
+          {
+            "chunk": 27,
+            "still_access_ms": 0.0003,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.014
+          },
+          {
+            "chunk": 28,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0002,
+            "repr_ms": 0.0123
+          },
+          {
+            "chunk": 29,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0125
+          },
+          {
+            "chunk": 30,
+            "still_access_ms": 0.0001,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0118
+          },
+          {
+            "chunk": 31,
+            "still_access_ms": 0.0019,
+            "think_access_ms": 0.0006,
+            "repr_ms": 0.0668
+          },
+          {
+            "chunk": 32,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0002,
+            "repr_ms": 0.0166
+          },
+          {
+            "chunk": 33,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.015
+          },
+          {
+            "chunk": 34,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0135
+          },
+          {
+            "chunk": 35,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.014
+          },
+          {
+            "chunk": 36,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0002,
+            "repr_ms": 0.0156
+          },
+          {
+            "chunk": 37,
+            "still_access_ms": 0.0029,
+            "think_access_ms": 0.0011,
+            "repr_ms": 0.1221
+          },
+          {
+            "chunk": 38,
+            "still_access_ms": 0.0007,
+            "think_access_ms": 0.0004,
+            "repr_ms": 0.0421
+          },
+          {
+            "chunk": 39,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0167
+          },
+          {
+            "chunk": 40,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0152
+          },
+          {
+            "chunk": 41,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0173
+          },
+          {
+            "chunk": 42,
+            "still_access_ms": 0.0003,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0153
+          },
+          {
+            "chunk": 43,
+            "still_access_ms": 0.0031,
+            "think_access_ms": 0.0011,
+            "repr_ms": 0.1295
+          },
+          {
+            "chunk": 44,
+            "still_access_ms": 0.0007,
+            "think_access_ms": 0.0005,
+            "repr_ms": 0.0564
+          },
+          {
+            "chunk": 45,
+            "still_access_ms": 0.0005,
+            "think_access_ms": 0.0005,
+            "repr_ms": 0.0515
+          },
+          {
+            "chunk": 46,
+            "still_access_ms": 0.0006,
+            "think_access_ms": 0.0003,
+            "repr_ms": 0.0487
+          },
+          {
+            "chunk": 47,
+            "still_access_ms": 0.0005,
+            "think_access_ms": 0.0003,
+            "repr_ms": 0.0496
+          },
+          {
+            "chunk": 48,
+            "still_access_ms": 0.0006,
+            "think_access_ms": 0.0003,
+            "repr_ms": 0.0504
+          },
+          {
+            "chunk": 49,
+            "still_access_ms": 0.0016,
+            "think_access_ms": 0.0006,
+            "repr_ms": 0.0908
+          },
+          {
+            "chunk": 50,
+            "still_access_ms": 0.0003,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0228
+          },
+          {
+            "chunk": 51,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0207
+          },
+          {
+            "chunk": 52,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.021
+          },
+          {
+            "chunk": 53,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0208
+          },
+          {
+            "chunk": 54,
+            "still_access_ms": 0.0003,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0229
+          },
+          {
+            "chunk": 55,
+            "still_access_ms": 0.0014,
+            "think_access_ms": 0.0005,
+            "repr_ms": 0.093
+          },
+          {
+            "chunk": 56,
+            "still_access_ms": 0.0004,
+            "think_access_ms": 0.0002,
+            "repr_ms": 0.0303
+          },
+          {
+            "chunk": 57,
+            "still_access_ms": 0.0003,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0227
+          },
+          {
+            "chunk": 58,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0002,
+            "repr_ms": 0.0214
+          },
+          {
+            "chunk": 59,
+            "still_access_ms": 0.0024,
+            "think_access_ms": 0.0009,
+            "repr_ms": 0.1458
+          },
+          {
+            "chunk": 60,
+            "still_access_ms": 0.0007,
+            "think_access_ms": 0.0004,
+            "repr_ms": 0.0621
+          },
+          {
+            "chunk": 61,
+            "still_access_ms": 0.0014,
+            "think_access_ms": 0.0003,
+            "repr_ms": 0.0707
+          },
+          {
+            "chunk": 62,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0002,
+            "repr_ms": 0.0265
+          },
+          {
+            "chunk": 63,
+            "still_access_ms": 0.0024,
+            "think_access_ms": 0.0008,
+            "repr_ms": 0.1494
+          },
+          {
+            "chunk": 64,
+            "still_access_ms": 0.0008,
+            "think_access_ms": 0.0004,
+            "repr_ms": 0.0914
+          },
+          {
+            "chunk": 65,
+            "still_access_ms": 0.0005,
+            "think_access_ms": 0.0004,
+            "repr_ms": 0.0727
+          },
+          {
+            "chunk": 66,
+            "still_access_ms": 0.0006,
+            "think_access_ms": 0.0003,
+            "repr_ms": 0.0699
+          },
+          {
+            "chunk": 67,
+            "still_access_ms": 0.0005,
+            "think_access_ms": 0.0002,
+            "repr_ms": 0.0699
+          },
+          {
+            "chunk": 68,
+            "still_access_ms": 0.0005,
+            "think_access_ms": 0.0003,
+            "repr_ms": 0.0354
+          },
+          {
+            "chunk": 69,
+            "still_access_ms": 0.0016,
+            "think_access_ms": 0.0005,
+            "repr_ms": 0.1182
+          },
+          {
+            "chunk": 70,
+            "still_access_ms": 0.0003,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0283
+          },
+          {
+            "chunk": 71,
+            "still_access_ms": 0.0003,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0499
+          },
+          {
+            "chunk": 72,
+            "still_access_ms": 0.0007,
+            "think_access_ms": 0.0006,
+            "repr_ms": 0.0404
+          },
+          {
+            "chunk": 73,
+            "still_access_ms": 0.0023,
+            "think_access_ms": 0.0011,
+            "repr_ms": 0.1645
+          },
+          {
+            "chunk": 74,
+            "still_access_ms": 0.0006,
+            "think_access_ms": 0.0003,
+            "repr_ms": 0.0643
+          },
+          {
+            "chunk": 75,
+            "still_access_ms": 0.0005,
+            "think_access_ms": 0.0002,
+            "repr_ms": 0.0617
+          },
+          {
+            "chunk": 76,
+            "still_access_ms": 0.0023,
+            "think_access_ms": 0.0005,
+            "repr_ms": 0.1209
+          },
+          {
+            "chunk": 77,
+            "still_access_ms": 0.0003,
+            "think_access_ms": 0.0002,
+            "repr_ms": 0.03
+          },
+          {
+            "chunk": 78,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0002,
+            "repr_ms": 0.0279
+          },
+          {
+            "chunk": 79,
+            "still_access_ms": 0.0001,
+            "think_access_ms": 0.0002,
+            "repr_ms": 0.0272
+          },
+          {
+            "chunk": 80,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0289
+          },
+          {
+            "chunk": 81,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0,
+            "repr_ms": 0.0292
+          },
+          {
+            "chunk": 82,
+            "still_access_ms": 0.0019,
+            "think_access_ms": 0.0008,
+            "repr_ms": 0.1309
+          },
+          {
+            "chunk": 83,
+            "still_access_ms": 0.0003,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0331
+          },
+          {
+            "chunk": 84,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0296
+          },
+          {
+            "chunk": 85,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0303
+          },
+          {
+            "chunk": 86,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0002,
+            "repr_ms": 0.0297
+          },
+          {
+            "chunk": 87,
+            "still_access_ms": 0.0037,
+            "think_access_ms": 0.0017,
+            "repr_ms": 0.2518
+          },
+          {
+            "chunk": 88,
+            "still_access_ms": 0.0006,
+            "think_access_ms": 0.0002,
+            "repr_ms": 0.0376
+          },
+          {
+            "chunk": 89,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0324
+          },
+          {
+            "chunk": 90,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0335
+          },
+          {
+            "chunk": 91,
+            "still_access_ms": 0.0015,
+            "think_access_ms": 0.0003,
+            "repr_ms": 0.1203
+          },
+          {
+            "chunk": 92,
+            "still_access_ms": 0.0006,
+            "think_access_ms": 0.0004,
+            "repr_ms": 0.1005
+          },
+          {
+            "chunk": 93,
+            "still_access_ms": 0.0006,
+            "think_access_ms": 0.0003,
+            "repr_ms": 0.0959
+          },
+          {
+            "chunk": 94,
+            "still_access_ms": 0.0006,
+            "think_access_ms": 0.0003,
+            "repr_ms": 0.0951
+          },
+          {
+            "chunk": 95,
+            "still_access_ms": 0.0004,
+            "think_access_ms": 0.0003,
+            "repr_ms": 0.0957
+          },
+          {
+            "chunk": 96,
+            "still_access_ms": 0.0006,
+            "think_access_ms": 0.0003,
+            "repr_ms": 0.0966
+          },
+          {
+            "chunk": 97,
+            "still_access_ms": 0.0006,
+            "think_access_ms": 0.0003,
+            "repr_ms": 0.0962
+          },
+          {
+            "chunk": 98,
+            "still_access_ms": 0.0005,
+            "think_access_ms": 0.0004,
+            "repr_ms": 0.0393
+          }
+        ],
+        "summary": {
+          "still_access_ms_max": 0.0037,
+          "still_access_ms_mean": 0.0007,
+          "still_access_ms_p50": 0.0004,
+          "think_access_ms_max": 0.0017,
+          "think_access_ms_mean": 0.0003,
+          "think_access_ms_p50": 0.0003,
+          "repr_ms_max": 0.2518,
+          "repr_ms_mean": 0.0496,
+          "repr_ms_p50": 0.0306,
+          "iteration_ms_max": 1741.3963,
+          "iteration_ms_mean": 24.19,
+          "iteration_ms_p50": 0.0249
+        },
+        "per_chunk_iteration_ms": [
+          1741.3963,
+          324.761,
+          74.95,
+          66.4688,
+          0.0451,
+          0.4538,
+          0.0379,
+          0.0333,
+          0.0409,
+          0.0317,
+          0.0309,
+          19.3216,
+          0.0185,
+          0.0135,
+          0.0124,
+          31.1199,
+          0.1031,
+          0.0342,
+          0.0298,
+          36.58,
+          0.0204,
+          0.0151,
+          0.0134,
+          41.9058,
+          0.0206,
+          0.0143,
+          6.2049,
+          0.0591,
+          28.8267,
+          0.0177,
+          0.0127,
+          0.0116,
+          0.0114,
+          0.0106,
+          28.6091,
+          0.0221,
+          0.0134,
+          0.0333,
+          0.0118,
+          0.0112,
+          29.1395,
+          0.0441,
+          32.0943,
+          0.02,
+          0.0155,
+          0.0125,
+          26.1496,
+          0.0336,
+          0.0146,
+          28.557,
+          0.0205,
+          0.013,
+          29.2383,
+          0.0298,
+          0.0145,
+          0.0135,
+          30.2769,
+          0.043,
+          0.0397,
+          0.0264,
+          35.0999,
+          0.024,
+          0.0137,
+          0.0225,
+          23.0716,
+          0.0195,
+          0.0212,
+          0.0131,
+          0.012,
+          28.0588,
+          0.0575,
+          0.0393,
+          0.0467,
+          27.0416,
+          0.0197,
+          0.0131,
+          0.0238,
+          40.2041,
+          0.0213,
+          0.0137,
+          0.0127,
+          20.7851,
+          0.0185,
+          0.013,
+          0.0114,
+          0.0181,
+          0.0122,
+          53.5173,
+          0.0258,
+          0.0129,
+          0.0131,
+          0.8458,
+          0.0202,
+          0.718,
+          0.0182,
+          0.0127,
+          0.0124,
+          0.0126,
+          0.0107,
+          29.0019,
+          0.0481,
+          0.0339,
+          0.0292,
+          0.0292,
+          0.0291,
+          26.4373,
+          0.0207,
+          0.0141,
+          0.0147,
+          0.012,
+          0.0108,
+          55.883,
+          0.0237,
+          0.0146,
+          0.0119,
+          2.7691,
+          0.0154,
+          0.0129,
+          29.6073,
+          0.0394,
+          0.029,
+          0.0371
+        ]
+      },
+      "openai_sdk": {
+        "vendor": "deepseek",
+        "model": "deepseek-chat",
+        "chunk_count": 112,
+        "per_chunk_iteration_ms": [
+          11.2041,
+          545.0281,
+          263.9294,
+          30.3189,
+          31.0651,
+          29.3892,
+          0.0638,
+          0.055,
+          0.0521,
+          0.0535,
+          0.051,
+          31.301,
+          0.0717,
+          0.0561,
+          0.0543,
+          37.7051,
+          0.0672,
+          24.3503,
+          0.1557,
+          0.1103,
+          0.0799,
+          29.7202,
+          0.1438,
+          27.8098,
+          0.1904,
+          38.7732,
+          21.4597,
+          0.1614,
+          0.1311,
+          0.0549,
+          29.757,
+          0.064,
+          0.0537,
+          0.0534,
+          0.0519,
+          0.0508,
+          83.2212,
+          0.0652,
+          0.0564,
+          0.0522,
+          0.0523,
+          0.0525,
+          1.8931,
+          0.0608,
+          0.0533,
+          0.0524,
+          0.0519,
+          0.0519,
+          2.8621,
+          0.0591,
+          0.0541,
+          0.0519,
+          30.0336,
+          0.0596,
+          30.2823,
+          0.0671,
+          35.7118,
+          0.066,
+          0.0554,
+          0.0529,
+          0.0514,
+          0.051,
+          24.7695,
+          0.0661,
+          0.0559,
+          0.0542,
+          0.0527,
+          0.0516,
+          30.9233,
+          0.0645,
+          0.0555,
+          0.0535,
+          0.0513,
+          0.0511,
+          28.6094,
+          0.0655,
+          0.0544,
+          0.0516,
+          0.053,
+          0.0513,
+          29.9172,
+          0.1926,
+          30.2011,
+          0.1243,
+          0.0544,
+          0.0526,
+          0.0522,
+          0.0519,
+          29.6118,
+          0.1877,
+          0.0951,
+          0.0539,
+          0.0508,
+          0.0507,
+          29.2412,
+          0.1951,
+          0.1175,
+          0.0527,
+          0.0522,
+          32.6831,
+          0.0651,
+          0.1031,
+          0.0545,
+          0.0524,
+          0.0515,
+          26.637,
+          0.1431,
+          0.127,
+          0.1335,
+          0.1087,
+          0.0547,
+          31.1236
+        ],
+        "summary": {
+          "iteration_ms_max": 545.0281,
+          "iteration_ms_mean": 14.6034,
+          "iteration_ms_p50": 0.0648
+        }
+      },
+      "processing_overhead_ms": {
+        "max": 1730.1922,
+        "mean": 11.4556,
+        "p50": -0.0401
+      }
+    },
+    {
+      "trial": 5,
+      "cnllm": {
+        "vendor": "deepseek",
+        "model": "deepseek-chat",
+        "chunk_count": 97,
+        "per_chunk_metrics": [
+          {
+            "chunk": 1,
+            "still_access_ms": 0.0012,
+            "think_access_ms": 0.0006,
+            "repr_ms": 0.0235
+          },
+          {
+            "chunk": 2,
+            "still_access_ms": 0.0017,
+            "think_access_ms": 0.0007,
+            "repr_ms": 0.0292
+          },
+          {
+            "chunk": 3,
+            "still_access_ms": 0.0016,
+            "think_access_ms": 0.0009,
+            "repr_ms": 0.0309
+          },
+          {
+            "chunk": 4,
+            "still_access_ms": 0.0014,
+            "think_access_ms": 0.0006,
+            "repr_ms": 0.0308
+          },
+          {
+            "chunk": 5,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0002,
+            "repr_ms": 0.0078
+          },
+          {
+            "chunk": 6,
+            "still_access_ms": 0.0006,
+            "think_access_ms": 0.0003,
+            "repr_ms": 0.0206
+          },
+          {
+            "chunk": 7,
+            "still_access_ms": 0.0005,
+            "think_access_ms": 0.0004,
+            "repr_ms": 0.0223
+          },
+          {
+            "chunk": 8,
+            "still_access_ms": 0.0004,
+            "think_access_ms": 0.0003,
+            "repr_ms": 0.0268
+          },
+          {
+            "chunk": 9,
+            "still_access_ms": 0.0005,
+            "think_access_ms": 0.0004,
+            "repr_ms": 0.0191
+          },
+          {
+            "chunk": 10,
+            "still_access_ms": 0.0004,
+            "think_access_ms": 0.0003,
+            "repr_ms": 0.0177
+          },
+          {
+            "chunk": 11,
+            "still_access_ms": 0.0003,
+            "think_access_ms": 0.0004,
+            "repr_ms": 0.0181
+          },
+          {
+            "chunk": 12,
+            "still_access_ms": 0.0004,
+            "think_access_ms": 0.0003,
+            "repr_ms": 0.0185
+          },
+          {
+            "chunk": 13,
+            "still_access_ms": 0.0023,
+            "think_access_ms": 0.0009,
+            "repr_ms": 0.0627
+          },
+          {
+            "chunk": 14,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0002,
+            "repr_ms": 0.0112
+          },
+          {
+            "chunk": 15,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0094
+          },
+          {
+            "chunk": 16,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.01
+          },
+          {
+            "chunk": 17,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0097
+          },
+          {
+            "chunk": 18,
+            "still_access_ms": 0.001,
+            "think_access_ms": 0.0006,
+            "repr_ms": 0.0369
+          },
+          {
+            "chunk": 19,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0002,
+            "repr_ms": 0.0139
+          },
+          {
+            "chunk": 20,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0117
+          },
+          {
+            "chunk": 21,
+            "still_access_ms": 0.0001,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0111
+          },
+          {
+            "chunk": 22,
+            "still_access_ms": 0.0021,
+            "think_access_ms": 0.0008,
+            "repr_ms": 0.075
+          },
+          {
+            "chunk": 23,
+            "still_access_ms": 0.0003,
+            "think_access_ms": 0.0002,
+            "repr_ms": 0.0137
+          },
+          {
+            "chunk": 24,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0137
+          },
+          {
+            "chunk": 25,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0117
+          },
+          {
+            "chunk": 26,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0126
+          },
+          {
+            "chunk": 27,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0188
+          },
+          {
+            "chunk": 28,
+            "still_access_ms": 0.003,
+            "think_access_ms": 0.001,
+            "repr_ms": 0.1077
+          },
+          {
+            "chunk": 29,
+            "still_access_ms": 0.0007,
+            "think_access_ms": 0.0004,
+            "repr_ms": 0.046
+          },
+          {
+            "chunk": 30,
+            "still_access_ms": 0.0007,
+            "think_access_ms": 0.0004,
+            "repr_ms": 0.04
+          },
+          {
+            "chunk": 31,
+            "still_access_ms": 0.0005,
+            "think_access_ms": 0.0004,
+            "repr_ms": 0.0389
+          },
+          {
+            "chunk": 32,
+            "still_access_ms": 0.0004,
+            "think_access_ms": 0.0003,
+            "repr_ms": 0.0427
+          },
+          {
+            "chunk": 33,
+            "still_access_ms": 0.0005,
+            "think_access_ms": 0.0003,
+            "repr_ms": 0.0412
+          },
+          {
+            "chunk": 34,
+            "still_access_ms": 0.002,
+            "think_access_ms": 0.0005,
+            "repr_ms": 0.0683
+          },
+          {
+            "chunk": 35,
+            "still_access_ms": 0.0003,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.018
+          },
+          {
+            "chunk": 36,
+            "still_access_ms": 0.0003,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0165
+          },
+          {
+            "chunk": 37,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0169
+          },
+          {
+            "chunk": 38,
+            "still_access_ms": 0.0003,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0156
+          },
+          {
+            "chunk": 39,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0153
+          },
+          {
+            "chunk": 40,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0167
+          },
+          {
+            "chunk": 41,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0,
+            "repr_ms": 0.0183
+          },
+          {
+            "chunk": 42,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0162
+          },
+          {
+            "chunk": 43,
+            "still_access_ms": 0.0001,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0162
+          },
+          {
+            "chunk": 44,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0165
+          },
+          {
+            "chunk": 45,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0165
+          },
+          {
+            "chunk": 46,
+            "still_access_ms": 0.0021,
+            "think_access_ms": 0.0007,
+            "repr_ms": 0.0802
+          },
+          {
+            "chunk": 47,
+            "still_access_ms": 0.0003,
+            "think_access_ms": 0.0002,
+            "repr_ms": 0.0207
+          },
+          {
+            "chunk": 48,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0199
+          },
+          {
+            "chunk": 49,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0197
+          },
+          {
+            "chunk": 50,
+            "still_access_ms": 0.0001,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0214
+          },
+          {
+            "chunk": 51,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0195
+          },
+          {
+            "chunk": 52,
+            "still_access_ms": 0.0028,
+            "think_access_ms": 0.0009,
+            "repr_ms": 0.1576
+          },
+          {
+            "chunk": 53,
+            "still_access_ms": 0.0003,
+            "think_access_ms": 0.0002,
+            "repr_ms": 0.0267
+          },
+          {
+            "chunk": 54,
+            "still_access_ms": 0.0003,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0221
+          },
+          {
+            "chunk": 55,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0212
+          },
+          {
+            "chunk": 56,
+            "still_access_ms": 0.0023,
+            "think_access_ms": 0.0008,
+            "repr_ms": 0.1209
+          },
+          {
+            "chunk": 57,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0002,
+            "repr_ms": 0.0278
+          },
+          {
+            "chunk": 58,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0243
+          },
+          {
+            "chunk": 59,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0228
+          },
+          {
+            "chunk": 60,
+            "still_access_ms": 0.0027,
+            "think_access_ms": 0.0009,
+            "repr_ms": 0.1488
+          },
+          {
+            "chunk": 61,
+            "still_access_ms": 0.0008,
+            "think_access_ms": 0.0005,
+            "repr_ms": 0.0765
+          },
+          {
+            "chunk": 62,
+            "still_access_ms": 0.0027,
+            "think_access_ms": 0.0011,
+            "repr_ms": 0.1486
+          },
+          {
+            "chunk": 63,
+            "still_access_ms": 0.0007,
+            "think_access_ms": 0.0003,
+            "repr_ms": 0.0613
+          },
+          {
+            "chunk": 64,
+            "still_access_ms": 0.0005,
+            "think_access_ms": 0.0002,
+            "repr_ms": 0.0532
+          },
+          {
+            "chunk": 65,
+            "still_access_ms": 0.0015,
+            "think_access_ms": 0.0004,
+            "repr_ms": 0.0764
+          },
+          {
+            "chunk": 66,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0002,
+            "repr_ms": 0.0289
+          },
+          {
+            "chunk": 67,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0253
+          },
+          {
+            "chunk": 68,
+            "still_access_ms": 0.0001,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0251
+          },
+          {
+            "chunk": 69,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0245
+          },
+          {
+            "chunk": 70,
+            "still_access_ms": 0.0001,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0254
+          },
+          {
+            "chunk": 71,
+            "still_access_ms": 0.0016,
+            "think_access_ms": 0.0007,
+            "repr_ms": 0.1753
+          },
+          {
+            "chunk": 72,
+            "still_access_ms": 0.0008,
+            "think_access_ms": 0.0005,
+            "repr_ms": 0.0869
+          },
+          {
+            "chunk": 73,
+            "still_access_ms": 0.0006,
+            "think_access_ms": 0.0004,
+            "repr_ms": 0.0821
+          },
+          {
+            "chunk": 74,
+            "still_access_ms": 0.0005,
+            "think_access_ms": 0.0004,
+            "repr_ms": 0.078
+          },
+          {
+            "chunk": 75,
+            "still_access_ms": 0.0004,
+            "think_access_ms": 0.0003,
+            "repr_ms": 0.0833
+          },
+          {
+            "chunk": 76,
+            "still_access_ms": 0.0013,
+            "think_access_ms": 0.0003,
+            "repr_ms": 0.079
+          },
+          {
+            "chunk": 77,
+            "still_access_ms": 0.0024,
+            "think_access_ms": 0.0006,
+            "repr_ms": 0.1264
+          },
+          {
+            "chunk": 78,
+            "still_access_ms": 0.0004,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.032
+          },
+          {
+            "chunk": 79,
+            "still_access_ms": 0.0003,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.029
+          },
+          {
+            "chunk": 80,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0279
+          },
+          {
+            "chunk": 81,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0296
+          },
+          {
+            "chunk": 82,
+            "still_access_ms": 0.0001,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0387
+          },
+          {
+            "chunk": 83,
+            "still_access_ms": 0.0019,
+            "think_access_ms": 0.0005,
+            "repr_ms": 0.1267
+          },
+          {
+            "chunk": 84,
+            "still_access_ms": 0.0003,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0358
+          },
+          {
+            "chunk": 85,
+            "still_access_ms": 0.0003,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0303
+          },
+          {
+            "chunk": 86,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0294
+          },
+          {
+            "chunk": 87,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.031
+          },
+          {
+            "chunk": 88,
+            "still_access_ms": 0.0019,
+            "think_access_ms": 0.0005,
+            "repr_ms": 0.1246
+          },
+          {
+            "chunk": 89,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0375
+          },
+          {
+            "chunk": 90,
+            "still_access_ms": 0.0019,
+            "think_access_ms": 0.0006,
+            "repr_ms": 0.151
+          },
+          {
+            "chunk": 91,
+            "still_access_ms": 0.0003,
+            "think_access_ms": 0.0002,
+            "repr_ms": 0.0384
+          },
+          {
+            "chunk": 92,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0349
+          },
+          {
+            "chunk": 93,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0328
+          },
+          {
+            "chunk": 94,
+            "still_access_ms": 0.0016,
+            "think_access_ms": 0.0006,
+            "repr_ms": 0.1259
+          },
+          {
+            "chunk": 95,
+            "still_access_ms": 0.0003,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0425
+          },
+          {
+            "chunk": 96,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0382
+          },
+          {
+            "chunk": 97,
+            "still_access_ms": 0.0002,
+            "think_access_ms": 0.0001,
+            "repr_ms": 0.0348
+          }
+        ],
+        "summary": {
+          "still_access_ms_max": 0.003,
+          "still_access_ms_mean": 0.0007,
+          "still_access_ms_p50": 0.0003,
+          "think_access_ms_max": 0.0011,
+          "think_access_ms_mean": 0.0003,
+          "think_access_ms_p50": 0.0002,
+          "repr_ms_max": 0.1753,
+          "repr_ms_mean": 0.0437,
+          "repr_ms_p50": 0.0289,
+          "iteration_ms_max": 1693.064,
+          "iteration_ms_mean": 25.3242,
+          "iteration_ms_p50": 0.0348
+        },
+        "per_chunk_iteration_ms": [
+          1693.064,
+          435.3335,
+          4.9645,
+          49.3206,
+          0.0195,
+          0.0191,
+          0.0126,
+          0.0116,
+          0.0105,
+          6.6889,
+          0.0409,
+          0.0271,
+          0.0121,
+          0.0109,
+          0.0102,
+          38.0047,
+          0.0695,
+          0.0366,
+          0.0335,
+          18.0243,
+          0.0513,
+          29.7249,
+          0.0582,
+          0.037,
+          0.0354,
+          0.0323,
+          0.0413,
+          30.2554,
+          0.0439,
+          0.0296,
+          29.4224,
+          0.0535,
+          0.0506,
+          0.0343,
+          0.0314,
+          0.0304,
+          48.308,
+          0.0258,
+          0.014,
+          0.0122,
+          0.0125,
+          0.0116,
+          21.3309,
+          0.0561,
+          0.0393,
+          19.5473,
+          0.0314,
+          31.7666,
+          0.0201,
+          0.0143,
+          0.0113,
+          0.0196,
+          0.012,
+          31.4639,
+          0.0199,
+          0.0137,
+          27.0078,
+          0.0583,
+          38.8317,
+          22.6875,
+          0.0261,
+          0.0139,
+          0.0117,
+          0.0126,
+          0.0128,
+          29.4596,
+          0.0673,
+          0.0442,
+          0.0348,
+          0.0349,
+          0.0314,
+          30.0323,
+          0.0572,
+          0.0305,
+          0.0134,
+          0.0113,
+          0.014,
+          27.3097,
+          0.0605,
+          0.0399,
+          0.0344,
+          0.0347,
+          29.5179,
+          0.0491,
+          0.0324,
+          2.1222,
+          0.0151,
+          35.3184,
+          0.0581,
+          0.0409,
+          22.1348,
+          29.8418,
+          0.0571,
+          0.038,
+          29.0041,
+          30.8332,
+          0.0214,
+          30.7197,
+          0.0215,
+          0.0152,
+          0.0128,
+          27.9922,
+          0.0349,
+          0.0175,
+          0.0141,
+          0.0128,
+          0.0128,
+          29.3981,
+          0.026,
+          0.0156,
+          0.0144,
+          0.0141,
+          31.1131,
+          0.0206,
+          0.0152,
+          0.0132,
+          0.0188
+        ]
+      },
+      "openai_sdk": {
+        "vendor": "deepseek",
+        "model": "deepseek-chat",
+        "chunk_count": 148,
+        "per_chunk_iteration_ms": [
+          0.3327,
+          349.8049,
+          55.5879,
+          29.7115,
+          29.5514,
+          30.518,
+          28.7993,
+          0.1224,
+          0.057,
+          0.054,
+          0.0519,
+          0.0513,
+          28.8479,
+          0.065,
+          0.0556,
+          0.0542,
+          29.9269,
+          0.2397,
+          0.1342,
+          28.1837,
+          0.0651,
+          0.0547,
+          29.9219,
+          0.2134,
+          35.3779,
+          0.0632,
+          0.0563,
+          0.0531,
+          35.9247,
+          0.0995,
+          0.0595,
+          0.0537,
+          0.0523,
+          0.0512,
+          18.4475,
+          0.1951,
+          0.1397,
+          0.0525,
+          0.0508,
+          0.0505,
+          29.3795,
+          0.0664,
+          0.1037,
+          0.054,
+          0.0538,
+          0.0521,
+          47.7277,
+          0.066,
+          30.1012,
+          0.1467,
+          29.6236,
+          127.5045,
+          0.0657,
+          0.056,
+          0.0529,
+          0.0511,
+          0.0517,
+          0.1139,
+          0.0524,
+          0.0521,
+          0.0524,
+          0.0508,
+          0.0513,
+          0.0808,
+          0.0515,
+          0.0506,
+          0.0501,
+          0.0501,
+          0.0502,
+          9.1426,
+          0.1575,
+          0.1374,
+          0.1295,
+          0.1301,
+          0.127,
+          25.8555,
+          0.1933,
+          0.0771,
+          0.0516,
+          29.368,
+          0.1928,
+          0.1635,
+          0.2579,
+          0.1302,
+          0.0511,
+          49.2784,
+          0.0654,
+          0.0544,
+          0.0526,
+          0.0512,
+          0.0525,
+          42.1239,
+          0.0652,
+          0.0554,
+          0.0532,
+          0.0515,
+          0.0527,
+          18.5465,
+          0.066,
+          0.0557,
+          0.0522,
+          0.0514,
+          0.051,
+          30.8486,
+          0.0846,
+          30.3253,
+          31.0015,
+          0.0638,
+          0.0576,
+          0.0525,
+          36.376,
+          0.2144,
+          0.1272,
+          0.0895,
+          0.0526,
+          0.0509,
+          25.0923,
+          0.1908,
+          30.5464,
+          0.0995,
+          0.0845,
+          0.0798,
+          0.0749,
+          28.4141,
+          0.0648,
+          0.057,
+          0.0542,
+          0.0523,
+          0.0514,
+          34.0564,
+          0.0654,
+          0.0552,
+          0.0518,
+          0.0513,
+          0.05,
+          30.4286,
+          0.0665,
+          0.0545,
+          0.052,
+          0.0519,
+          0.0507,
+          27.0126,
+          0.1366,
+          0.0549,
+          0.0526,
+          32.0608,
+          0.0633,
+          0.0949
+        ],
+        "summary": {
+          "iteration_ms_max": 349.8049,
+          "iteration_ms_mean": 10.2342,
+          "iteration_ms_p50": 0.0655
+        }
+      },
+      "processing_overhead_ms": {
+        "max": 1692.7313,
+        "mean": 13.9535,
+        "p50": -0.0377
+      }
+    }
+  ],
+  "overall_summary": {
+    "still_access_ms_max": 0.004,
+    "still_access_ms_mean": 0.0007,
+    "still_access_ms_p50": 0.0003,
+    "think_access_ms_max": 0.0017,
+    "think_access_ms_mean": 0.0003,
+    "think_access_ms_p50": 0.0002,
+    "repr_ms_max": 2.0023,
+    "repr_ms_mean": 0.0611,
+    "repr_ms_p50": 0.0393,
+    "processing_overhead_ms_max": 1777.9229,
+    "processing_overhead_ms_mean": 16.525,
+    "processing_overhead_ms_p50": -0.0423
+  }
+}

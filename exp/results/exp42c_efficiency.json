@@ -1,0 +1,50 @@
+{
+  "experiment": "§4.2(c) Dual-Layer Decoupling Efficiency",
+  "timestamp": "2026-05-18 07:41:42",
+  "n_requests_per_config": 6,
+  "results": [
+    {
+      "config": "CNLLM per-request batch",
+      "n_requests": 6,
+      "n_vendors": 1,
+      "vendor": "deepseek-chat",
+      "independent_params": "temperature per-request",
+      "max_concurrent": 6,
+      "rps_limit": 3,
+      "elapsed_s": 3.35,
+      "throughput_req_s": 1.79,
+      "success_count": 6,
+      "fail_count": 0
+    },
+    {
+      "config": "CNLLM uniform batch",
+      "n_requests": 6,
+      "n_vendors": 1,
+      "vendor": "deepseek-chat",
+      "max_concurrent": 6,
+      "rps_limit": 3,
+      "elapsed_s": 3.99,
+      "throughput_req_s": 1.5,
+      "success_count": 6,
+      "fail_count": 0
+    },
+    {
+      "config": "OpenAI SDK sequential",
+      "n_requests": 6,
+      "n_vendors": 1,
+      "vendor": "deepseek-chat",
+      "max_concurrent": 1,
+      "elapsed_s": 4.14,
+      "throughput_req_s": 1.45,
+      "success_count": 6,
+      "fail_count": 0
+    }
+  ],
+  "comparison": {
+    "per_request_vs_uniform_ratio": 0.84,
+    "uniform_vs_sequential_speedup": 1.04,
+    "per_request_vs_sequential_speedup": 1.24,
+    "note_per_request_overhead": "Per-request batch is 0.84x uniform batch time. Ratio near 1.0 means per-request config adds minimal overhead.",
+    "note_batch_speedup": "Uniform batch is 1.04x faster than sequential. Measures batch scheduling benefit."
+  }
+}

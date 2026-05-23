@@ -64,49 +64,7 @@ print(resp.choices[0].message.content)
 resp = client.chat.create(prompt="Hello", stream=True)
 ```
 
-### 2. Image Recognition (Multimodal)
-
-Vision-capable models accept images via OpenAI-standard content array format.
-
-```python
-client = CNLLM(model="glm-4.6v-flash", api_key="your_key")
-
-# Image URL
-resp = client.chat.create(messages=[{
-    "role": "user",
-    "content": [
-        {"type": "text", "text": "What's in this image?"},
-        {"type": "image_url", "image_url": {"url": "https://example.com/photo.jpg"}}
-    ]
-}])
-print(resp.still)  # Image description
-
-# Base64 encoded image
-with open("photo.png", "rb") as f:
-    b64 = base64.b64encode(f.read()).decode()
-resp = client.chat.create(messages=[{
-    "role": "user",
-    "content": [
-        {"type": "text", "text": "Describe this image"},
-        {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{b64}"}}
-    ]
-}])
-print(resp.still)
-
-# Text-only model with image → raises TypeError
-client2 = CNLLM(model="glm-4.6", api_key="your_key")  # text-only
-try:
-    client2.chat.create(messages=[{"role": "user", "content": [
-        {"type": "text", "text": "What?"},
-        {"type": "image_url", "image_url": {"url": "data:image/png;base64,..."}}
-    ]}])
-except TypeError as e:
-    print(f"Rejected: {e}")  # Guides user to multimodal models
-```
-
-Supported multimodal models: GLM (glm-5v-turbo, glm-4.5v, glm-4.6v, glm-4.6v-flash), Kimi (kimi-k2.5, kimi-k2.6, moonshot-v1-vision-preview), Doubao (2.0 vision series), Xiaomi (mimo-v2-omni).
-
-### 3. Streaming with Thinking Content
+### 2. Streaming with Thinking Content
 
 ```python
 client = CNLLM(model="deepseek-reasoner", api_key="your_key")
