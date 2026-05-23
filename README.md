@@ -21,10 +21,10 @@ This implementation path uniformly defines CNLLM standard parameters, aligns wit
 Through CNLLM, developers can seamlessly use Chinese LLMs in the OpenAI ecosystem — LangChain, LlamaIndex, AutoGen, Haystack, DeepEval and other mainstream large language model application frameworks. Especially in development and application scenarios requiring multi-model collaboration, using CNLLM can **significantly reduce adaptation, parsing, feature implementation, and maintenance workload, and effectively lower token consumption in AI agent development**.
 
 - **Unified Interface** - One set of interfaces and parameters to call different Chinese LLMs, returns OpenAI API standard format
-- **Complete Model Capabilities** - Calls Chinese LLMs' native interfaces (or backward-compatible interfaces), supports all model native parameters, preserving complete model capabilities
-- **Mainstream Framework Integration** - Deeply integrated with LangChain Runnable, more framework deep adaptation development in progress
-- **Encapsulated Key Fields** - Provides `.still`/`.tools`/`.think` property access for content/tool_calls/reasoning_content fields, supporting real-time updates and accumulation in streaming and batch requests
-- **Batch Capability Enhancement** - Supports independent configuration for single requests in batch tasks, real-time statistics, callbacks, stop on error, custom indices, field storage, and various other engineered batch processing features
+- **Mainstream Framework Integration** - Built-in integration with LangChain Runnable, and adaptable with other OpenAI-compatible frameworks. 
+- **Parameter Observability** - Validation and explicit feedback for all parameters, especially vendor-specific ones.
+- **Streaming Enrichment** - Streaming lifecycle inspection via repr, and properties for automated accumulation.
+- **Batch Capability Enhancement** - Independent configuration for single requests in batch tasks, real-time statistics, and cofigurable failure policy and memory management.
 
 ### Collaboration Opportunities
 
