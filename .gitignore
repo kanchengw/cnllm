@@ -1,147 +1,79 @@
+# Local / generated
 files/
+outputs/
+test_venv/
+backup*/
+
+# Python cache
 __pycache__/
 *.py[cod]
 *$py.class
-test_venv/
-.venv_test/
-.venv_test2/
-.venv_test3/
-.venv_test4/
-backup*/
-scripts/
-CLAUDE.md
-edit_tool.py
-# IDE / Editor
-.trae/
-# Claude Code — local config (private)
-.claude/
-test_*/
-outputs/
-usercase.md
-# C extensions
-*.so
-skills/
-.claude/
-# Distribution / packaging
-.Python
+*.egg-info/
+*.egg
+.eggs/
 build/
 dist/
-develop-eggs/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
 *.egg-info/
-.installed.cfg
-*.egg
+
+# Virtual environments
+.venv
+.venv/
+env/
+venv/
+ENV/
+
+# IDE / Editor
+.vscode/
+.idea/
+.trae/
+*.swp
+*.swo
+*~
+
+# Claude Code
+.claude/
+CLAUDE.md
+edit_tool.py
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# API keys / secrets
+.env
+*.key
+secrets/
+credentials/
+
+# Logs
+*.log
+
+# Testing
+.pytest_cache/
+.python-version
+
+# Jupyter
+.ipynb_checkpoints
 
 # PyInstaller
 *.manifest
 *.spec
 
-# Installer logs
-pip-log.txt
-pip-delete-this-directory.txt
-
-# Unit test / coverage reports
+# Coverage
 htmlcov/
-.tox/
-.nox/
 .coverage
 .coverage.*
-.cache
 nosetests.xml
 coverage.xml
-*.cover
-*.py,cover
 .hypothesis/
-.pytest_cache/
-
-# Translations
-*.mo
-*.pot
-
-# Django stuff:
-*.log
-local_settings.py
-
-# Flask stuff:
-instance/
-.webassets-cache
-
-# Scrapy stuff:
-.scrapy
-
-# Sphinx documentation
-docs/_build/
-
-# PyBuilder
-target/
-
-# Jupyter Notebook
-.ipynb_checkpoints
-
-# IPython
-profile_default/
-ipython_config.py
-
-# pyenv
-.python-version
-
-# celery beat schedule file
-celerybeat-schedule
-
-# SageMath parsed files
-*.sage.py
-
-# Environments
-.env
-.venv
-env/
-venv/
-ENV/
-env.bak/
-venv.bak/
-.venv
-
-# Spyder project settings
-.spyderproject
-.spyproject
-
-# Rope project settings
-.ropeproject
-
-# mkdocs documentation
-/site
 
 # mypy
 .mypy_cache/
 .dmypy.json
 dmypy.json
 
-# Pyre type checker
-.pyre/
+# Sphinx
+docs/_build/
 
-# IDEs
-.vscode/
-.idea/
-*.swp
-*.swo
+# OS misc
 *~
-
-# OS
-.DS_Store
-Thumbs.db
-
-# Project specific
-*.log
-
-# API keys and secrets (should not be committed)
-*.key
-secrets/
-credentials/
