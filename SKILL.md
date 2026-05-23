@@ -11,7 +11,7 @@ description: >-
   支持同步/异步、流式/非流式、批量/非批量及混合流式策略的批量 chat 和 embeddings 调用。
   提供纯净回复、推理内容、工具调用快捷访问入口，无需额外解析。
   工程化能力：参数验证、未知参数处理策略控制、备用模型自动降级等，提高模型调用的稳定性和可靠性。
-  批量高级功能：单个请求独立配置、实时进度、字段存储控制、回调、custom_ids、遇错停止、并发控制。
+  批量高级功能：单个请求独立配置、实时进度、可配置的失败策略和内存控制、回调、自定义索引。
 ---
 
 # CNLLM: Chinese LLM Unified Adapter
@@ -22,9 +22,9 @@ description: >-
 - **Multi-model workflows** where different stages use different models (e.g., embedding with MiniMax → reasoning with DeepSeek-reasoner → generation with GLM in a single LangChain pipeline)
 - **Multi-model evaluation / LLM-as-Judge** — same input sent to multiple models in one batch call to compare or score outputs
 - **Transparency & control** — CNLLM's YAML-driven config explicitly declares every supported param, its mapping, and its behavior. Unlike OpenAI-compatible interfaces where `extra_body` params may silently fail with no feedback, CNLLM gives you deterministic, visible parameter handling
-- **Streaming** with real-time access to reasoning/thinking content (`.think`, `.still`, `.tools` properties)
+- **Streaming lifecycle inspection** with real-time access to automated content accumulation (`.think`, `.still`, `.tools` properties).
 - **Multi-model fallback** for production resilience — auto-retry with different providers on failure
-- **Batch data processing** — high-throughput labeling, classification, translation, or synthetic data generation. CNLLM supports **real-time progress monitoring** (request_counts updated per-request), **per-request independent configuration** (different model/params/thinking for each item), **progress callbacks**, **custom IDs**, **stop-on-error** — features the OpenAI batch API does not offer
+- **Batch data processing** — high-throughput labeling, classification, translation, or synthetic data generation. CNLLM supports **real-time progress monitoring** (request_counts updated per-request), **per-request independent configuration** (different model/params/thinking for each item), **real-time progress statitic**, **configurable failure policy** and **memory mannagement**, **callbacks**, **custom IDs** — features the OpenAI batch API does not offer
 - Project uses **LangChain**, **LlamaIndex**, or **LiteLLM** and needs Chinese LLM integration
 - Codebase already has `cnllm` in dependencies (check `requirements.txt`, `pyproject.toml`, or existing imports)
 
