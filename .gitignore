@@ -3,6 +3,7 @@ files/
 outputs/
 test_venv/
 backup*/
+demo/
 
 # Python cache
 __pycache__/

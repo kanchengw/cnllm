@@ -20,8 +20,14 @@ Through CNLLM, developers can seamlessly use Chinese LLMs in the OpenAI ecosyste
 
 - **Unified Interface** - One set of interfaces and parameters to call different Chinese LLMs, returns OpenAI API standard format response
 - **Parameter Validation** - Validation and explicit feedback for all parameters, especially vendor native parameters, with support for parameter handling behavior control (`drop_params`)
-- **Streaming Response** - Streaming lifecycle monitoring via `repr()`, and automatic accumulation of incremental values via `.still`/`.think`/`.tools` property access
+- **Streaming Response** - Streaming lifecycle monitoring via `repr()`, and automatic accumulation of incremental fields via `.still`/`.think`/`.tools` property access
 - **Batch Capability** - Independent configuration for single requests in batch tasks, real-time batch progress statistics (`.status`), and configurable failure policy (`stop_on_error`) and memory management (`keep`).
+
+**Streaming lifecycle monitoring and automatic accumulation demonstration for model responses, reasoning content, and tool calls:**
+
+![Figure 2][repr]
+
+[repr]: docs/pics/repr.gif
 
 ### Collaboration Opportunities
 
