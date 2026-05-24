@@ -14,21 +14,12 @@
 
 ## Why CNLLM?
 
-中文大模型的能力已跻身第一梯队，但在实际的生产环境中却缺面临基础设施的匮乏。一个无法忽视的、**两难的痛点**在于：
+CNLLM 提供了一个**统一的 OpenAI 兼容接口层**与一套**标准化的参数规则和响应格式规范**。通过 CNLLM，开发者可以无障碍地在 OpenAI 生态内的 langchain、LlamaIndex、AutoGen、Haystack、DeepEval 等主流大模型应用框架中使用中文大模型；尤其在需要多模型协作的开发和应用场景中，使用 CNLLM 可**显著减少适配解析、功能实现及维护工程量，并有效降低 AI agent 开发中的 Token 消耗**。
 
-通过 OpenAI SDK/LiteLLM 来使用厂商提供的兼容接口时，**不支持的原生参数被静默忽略**，导致**结果不可控以及功能缺失**；而使用厂商自研 SDK 则需要进行**额外的字段解析、结构转换**，当工作流涉及使用不同厂商的多个模型，更要为不同模型做不同的代码适配，导致**工程量和维护成本上升**。
-
-CNLLM 提供了一个**统一的 OpenAI 兼容接口层**与一套**标准化的参数规则和响应格式规范**。CNLLM 通过为各厂商量身定制的标准化 YAML 配置文件，实现请求和响应的**双端映射**，将 CNLLM 标准参数映射为厂商接受的参数名，并透传其他原生参数，最终再将异构的模型响应自动封装为 OpenAI 标准响应。
-
-此实现路径统一定义了 CNLLM 标准参数，对齐了 OpenAI 标准响应结构，又保留了中文大模型的完整能力，并且保证了接入更多厂商的可扩展性。相较于 OpenAI SDK 和厂商自研 SDK，CNLLM 还实现了对于**关键字段的解析、前端流式渲染、工程化批量处理**等场景的系统性增强。
-
-通过 CNLLM，开发者可以无障碍地在 OpenAI 生态内的 langchain、LlamaIndex、AutoGen、Haystack、DeepEval 等主流大模型应用框架中使用中文大模型；尤其在需要多模型协作的开发和应用场景中，使用 CNLLM 可**显著减少适配解析、功能实现及维护工程量，并有效降低 AI agent 开发中的 Token 消耗**。
-
-- **统一接口** - 一套接口和参数调用不同中文大模型，返回 OpenAI API 标准格式
-- **主流框架集成** - 内置集成 LangChain Runnable，并可适配其他 OpenAI 兼容框架
-- **参数可观测性** - 对所有参数进行验证和明确反馈，尤其是厂商特定参数
-- **流式增强** - 通过 repr 进行流式生命周期检查，以及自动累积属性
-- **批量能力增强** - 批量任务中单个请求的独立配置、实时批量进度统计，以及可配置的失败策略和内存管理
+- **统一接口** - 一套接口和参数调用不同中文大模型，返回 OpenAI API 标准格式的响应
+- **参数验证** - 对所有参数进行验证和明确反馈，尤其是厂商原生参数，并支持参数处理行为控制 (`drop_params`)
+- **流式响应** - 通过 `repr()` 进行流式生命周期监测，以及通过 `.still/.think/.tools` 属性访问增量值自动累积
+- **批量能力** - 支持批量任务中单个请求的独立配置、实时批量进度统计 (`.status`)，以及可配置的失败策略 (`stop_on_error`) 和内存管理 (`keep`).
 
 ### 开发者招募
 
@@ -57,8 +48,8 @@ CNLLM 提供了一个**统一的 OpenAI 兼容接口层**与一套**标准化的
 ### v0.9.3 (2026-05-14)
 
 - ✨ **新厂商接入**
-  - 通义千问 Qwen：qwen3.6/qwen3.5/qwen-plus/qwen-turbo/qwen-max 等 13 个模型 + Embedding 模型
-  - 百度千帆 Baidu：ernie-5.1/ernie-4.5/ernie-speed/ernie-lite/ernie-x1 等 11 个模型 + Embeddings 模型
+  - 通义千问 Qwen：qwen3.6/qwen3.5 系列 9 个模型 + Embedding 模型
+  - 百度千帆 Baidu：ernie-5.1/ernie-4.5/ernie-speed/ernie-lite/ernie-x1 等 13 个模型 + Embeddings 模型
   - 腾讯混元 Hunyuan：hy3-preview/hunyuan-2.0-thinking/hunyuan-2.0-instruct
 - ✨ **LangChain 集成**
   - `LangChainRunnable(BaseChatModel)` 中新增支持 `bind_tools()` / `with_structured_output()` 方法

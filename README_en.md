@@ -24,11 +24,10 @@ This implementation path uniformly defines CNLLM standard parameters, aligns wit
 
 Through CNLLM, developers can seamlessly use Chinese LLMs in the OpenAI ecosystem — LangChain, LlamaIndex, AutoGen, Haystack, DeepEval and other mainstream large language model application frameworks. Especially in development and application scenarios requiring multi-model collaboration, using CNLLM can **significantly reduce adaptation, parsing, feature implementation, and maintenance workload, and effectively lower token consumption in AI agent development**.
 
-- **Unified Interface** - One set of interfaces and parameters to call different Chinese LLMs, returns OpenAI API standard format
-- **Mainstream Framework Integration** - Built-in integration with LangChain Runnable, and adaptable with other OpenAI-compatible frameworks. 
-- **Parameter Observability** - Validation and explicit feedback for all parameters, especially vendor-specific ones.
-- **Streaming Enrichment** - Streaming lifecycle inspection via repr, and properties for automated accumulation.
-- **Batch Capability Enhancement** - Independent configuration for single requests in batch tasks, real-time statistics, and cofigurable failure policy and memory management.
+- **Unified Interface** - One set of interfaces and parameters to call different Chinese LLMs, returns OpenAI API standard format response
+- **Parameter Validation** - Validation and explicit feedback for all parameters, especially vendor native parameters, with support for parameter handling behavior control (`drop_params`)
+- **Streaming Response** - Streaming lifecycle monitoring via `repr()`, and automatic accumulation of incremental values via `.still`/`.think`/`.tools` property access
+- **Batch Capability** - Independent configuration for single requests in batch tasks, real-time batch progress statistics (`.status`), and configurable failure policy (`stop_on_error`) and memory management (`keep`).
 
 ### Collaboration Opportunities
 
@@ -57,8 +56,8 @@ Project Documentation:
 ### v0.9.3 (2026-05-14)
 
 - ✨ **New Vendors**
-  - Qwen: qwen3.6/qwen3.5/qwen-plus/qwen-turbo/qwen-max and 13 models total + Embedding models
-  - Baidu: ernie-5.1/ernie-4.5/ernie-speed/ernie-lite/ernie-x1 and 11 models total + Embeddings models
+  - Qwen: qwen3.6/qwen3.5/qwen-plus/qwen-turbo/qwen-max and 9 models total + Embedding models
+  - Baidu: ernie-5.1/ernie-4.5/ernie-speed/ernie-lite/ernie-x1 and 13 models total + Embeddings models
   - Hunyuan: hy3-preview/hunyuan-2.0-thinking/hunyuan-2.0-instruct
 - ✨ **LangChain Integration**
   - `LangChainRunnable(BaseChatModel)` adds support for `bind_tools()` / `with_structured_output()` methods
