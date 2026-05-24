@@ -62,10 +62,6 @@ Project Documentation:
 - ✨ **LangChain Integration**
   - `LangChainRunnable(BaseChatModel)` adds support for `bind_tools()` / `with_structured_output()` methods
   - New `LangChainEmbeddings`: adapts `langchain_core.embeddings.Embeddings`, supports `embed_documents()` / `embed_query()`
-- ✨ **MiniMax Dual Interface Adaptation**
-  - Added `MiniMaxNativeAdapter`: CNLLM now adapts MiniMax models with both native and OpenAI-compatible dual interfaces
-  - Native interface supports `stream_options`, `group_id` vendor-specific pass-through parameters, and CNLLM returns OpenAI standard responses
-  - In OpenAI-compatible interface, the `.think` property extracts and accumulates model's thinking content in real-time
 
 ### v0.9.2 (2026-05-10)
 

@@ -54,10 +54,6 @@ CNLLM 提供了一个**统一的 OpenAI 兼容接口层**与一套**标准化的
 - ✨ **LangChain 集成**
   - `LangChainRunnable(BaseChatModel)` 中新增支持 `bind_tools()` / `with_structured_output()` 方法
   - 新增 `LangChainEmbeddings`：适配 `langchain_core.embeddings.Embeddings`，支持 `embed_documents()` / `embed_query()`
-- ✨ **MiniMax 双接口适配**
-  - 新增 `MiniMaxNativeAdapter`：CNLLM 现在适配 MiniMax 模型原生和 OpenAI 兼容双接口
-  - 原生接口支持 `stream_options`,`group_id` 厂商特有参数透传，并且 CNLLM 会返回 OpenAI 标准响应
-  - OpenAI 兼容接口中， `.think` 属性实时提取并累积模型思考内容
 
 ### v0.9.2 (2026-05-10)
 
