@@ -20,8 +20,14 @@ CNLLM 为中文大模型提供了一个**统一的 OpenAI 兼容接口层**与�
 
 - **统一接口** - 一套接口和参数调用不同中文大模型，返回 OpenAI API 标准响应
 - **参数验证** - 对所有参数进行验证和明确反馈，尤其是厂商原生参数，并支持参数处理行为控制 (`drop_params`)
-- **流式响应** - 通过 `repr()` 进行流式生命周期监测，以及通过 `.still/.think/.tools` 属性访问增量值自动累积
+- **流式响应** - 通过 `repr()` 进行流式生命周期监测，以及通过 `.still/.think/.tools` 属性访问增量字段自动累积
 - **批量能力** - 支持批量任务中单个请求的独立配置、实时批量进度统计 (`.status`)，以及可配置的失败策略 (`stop_on_error`) 和内存管理 (`keep`).
+
+**流式生命周期监控以及模型回复、思考内容、工具调用的自动累积演示：**
+
+![Figure 2][repr]
+
+[repr]: pics/repr.gif
 
 ### 开发者招募
 
@@ -266,7 +272,6 @@ for chunk in resp:
     print(resp)
 # {'id': '...', 'object': '...', 'created': '...', 'model': '...', 'choices': [{'delta': {'content': '实时累积的模型回复', 'reasoning_content': '实时累积的推理过程'}, 'finish_reason': 'None'}]}
 ```
-
 
 ### 2.2 chat completions 批量调用
 
