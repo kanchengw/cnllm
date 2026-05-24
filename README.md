@@ -1,3 +1,7 @@
+![Figure 1][Figure 1]
+
+[Figure 1]: pics/figure_1.png
+
 # CNLLM - Chinese LLM Adapter
 
 [English](README.md) | [中文](README_zh.md)
