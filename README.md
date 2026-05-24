@@ -14,9 +14,11 @@
 
 ## Why CNLLM?
 
-CNLLM 提供了一个**统一的 OpenAI 兼容接口层**与一套**标准化的参数规则和响应格式规范**。通过 CNLLM，开发者可以无障碍地在 OpenAI 生态内的 langchain、LlamaIndex、AutoGen、Haystack、DeepEval 等主流大模型应用框架中使用中文大模型；尤其在需要多模型协作的开发和应用场景中，使用 CNLLM 可**显著减少适配解析、功能实现及维护工程量，并有效降低 AI agent 开发中的 Token 消耗**。
+CNLLM 为中文大模型提供了一个**统一的 OpenAI 兼容接口层**与一套**标准化的参数规则和响应格式规范**。
 
-- **统一接口** - 一套接口和参数调用不同中文大模型，返回 OpenAI API 标准格式的响应
+通过 CNLLM，开发者可以无障碍地在 OpenAI 生态内的 langchain、LlamaIndex、AutoGen、Haystack、DeepEval 等主流大模型应用框架中使用中文大模型；尤其在需要多模型协作的开发和应用场景中，使用 CNLLM 可**显著减少适配解析、功能实现及维护工程量，并有效降低 AI agent 开发中的 Token 消耗**。
+
+- **统一接口** - 一套接口和参数调用不同中文大模型，返回 OpenAI API 标准响应
 - **参数验证** - 对所有参数进行验证和明确反馈，尤其是厂商原生参数，并支持参数处理行为控制 (`drop_params`)
 - **流式响应** - 通过 `repr()` 进行流式生命周期监测，以及通过 `.still/.think/.tools` 属性访问增量值自动累积
 - **批量能力** - 支持批量任务中单个请求的独立配置、实时批量进度统计 (`.status`)，以及可配置的失败策略 (`stop_on_error`) 和内存管理 (`keep`).
