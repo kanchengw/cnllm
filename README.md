@@ -124,19 +124,22 @@ CNLLM 为中文大模型提供了一个**统一的 OpenAI 兼容接口层**与�
 
 ### 1.1 安装
 
-#### 1.1.1 SDK 安装
+#### 1.1.1 作为 Agent Skill 安装 （推荐）
+
+CNLLM 遵循 Claude Skills 规范提供标准 Agent Skill。
+
+**安装 Skill**：
+```bash
+npx skills add kanchengw/cnllm-skill
+```
+
+📖 完整文档和示例，请访问 CNLLM Skill 仓库：
+https://github.com/kanchengw/cnllm-skill
+
+#### 1.1.2 SDK 安装
 ```bash
 pip install cnllm
 ```
-
-#### 1.1.2 作为 Agent Skill 安装
-
-**一键安装**：
-```bash
-npx skills add https://github.com/kanchengw/cnllm
-```
-
-或手动将项目根目录的 `SKILL.md` 文件复制到 Agent 的技能目录下，在**调用中文大模型时， 会优先使用 CNLLM**。
 
 ### 1.2 客户端初始化
 
@@ -266,7 +269,7 @@ print(resp.raw)  # 完整累积后的模型原生响应
 | **raw**: 模型原生响应            | `resp.raw`   | `List[Dict]`      | `[模型原生流式 chunks 列表]`           |
 
 **repr():** 
-流式调用中，展示**chunks 合并和字段累积的实时结果**，而非流式 chunks 列表；不改变流式响应对象类型，即包含所有标准流式 chunks 的**迭代器**。
+以类似非流式响应的**字典结构**展示流式响应的**字段名聚合和字段值累积的实时结果**；不改变流式响应对象类型，即包含所有标准流式 chunks 的**迭代器**。
 ```python
 for chunk in resp:
     print(resp)
@@ -275,7 +278,7 @@ for chunk in resp:
 
 ### 2.2 chat completions 批量调用
 
-可通过`prompt`和`messages`参数输入并快速配置全局参数，也可以通过`requests`参数为单个请求进行独立配置。
+可通过 `prompt` 和 `messages` 参数输入并快速配置全局参数，也可以通过 `requests` 参数为单个请求进行独立配置。
 
 **prompt 参数：**
 
@@ -325,15 +328,12 @@ BatchResponse 外层结构，其中 `results[request_id]` 字段下的每条响�
 ```python
 {
     "status": {"elapsed": "3.42s", "success_count": 2, "fail_count": 1, "total": 3},  # 统计信息
-    "usage": {"prompt_tokens": 5, "total_tokens": 5},  # 批处理的总用量信息
-    "errors": {"request_2": "error message"},  # 所有失败请求的 request_id 和错误信息映射
-    "results": {     # 所有成功请求的 request_id 和标准响应映射
-        "request_0": {...}, 
-        "request_1": {...}  
-    },
+    "usage": {"prompt_tokens": 5, "total_tokens": 5},     # 批处理的总用量信息
+    "errors": {"request_2": "error message"},             # 所有失败请求的 request_id 和错误信息映射
+    "results": {"request_0": {...}, "request_1": {...}},  # 所有成功请求的 request_id 和标准响应映射
     "think": {"request_0": "...", "request_1": "..."},
     "still": {"request_0": "...", "request_1": "..."},
-    "tools": {"request_0": [...], "request_1": [...]},
+    "tools": {"request_0": {...}, "request_1": {...}},
     "raw": {"request_0": {...}, "request_1": {...}}
 }
 ```
@@ -429,22 +429,12 @@ BatchEmbeddingResponse 外层结构，其中 `results[request_id]` 字段下每�
 
 ```python
 {   
-    "status": {
-        "elapsed": "3.35s", "success_count": 1, "fail_count": 1, "total": 2
-    },
-    "batch_info": {
-        "batch_size": 2, "batch_count": 2, "dimension": 1024
-    },
+    "status": {"elapsed": "3.35s", "success_count": 1, "fail_count": 1, "total": 2},
+    "batch_info": {"batch_size": 2, "batch_count": 2, "dimension": 1024},
     "usage": {"prompt_tokens": 5, "total_tokens": 5},
-    "errors": {"request_1": "error message"},
-    "results": {
-        "request_0": {
-            "object": "list",
-            "data": [{"object": "embedding","embedding": [0.1, 0.2, ...], "index": 0}],
-            "model": "embedding-2"
-        }
-    }
-    "vectors": {"request_0": [...]}
+    "results": {"request_0": {...}, "request_1": {...}}
+    "errors": {"request_2": "error message"},
+    "vectors": {"request_0": [...]}    # 所有成功请求的 request_id 和嵌入向量映射
 }
 ```
 
@@ -622,11 +612,8 @@ client = CNLLM(..., keep=["vectors"])
 | 静默忽略模式   | `drop_params="ignore"` | 静默丢弃未知参数，不产生任何日志              |
 
 **说明：**
--进行批量调用时，若全局参数中包含未知参数，`drop_params="strict"` 直接抛出异常，不实际启动批量任务；
-若批量任务中的单个请求包含未知参数，`drop_params="strict"` 直接将该请求归入 `errors` 字段，不实际执行该请求，并继续执行后续的批量任务。
-
-- 特别地，当配置`drop_params="strict"` 且 `stop_on_error=True` 时，批量请求中遭遇第一个错误时会立即中断批量任务，同时返回已处理的请求结果，详见 [遇错停止](#253-遇错停止)。
-- `drop_params` 参数支持客户端配置以及所有调用方式（包括 `create` 单条调用方式）。
+- 进行批量调用时，若全局参数中包含未知参数，`drop_params="strict"` 直接抛出异常，不实际启动批量任务；
+- 若批量任务中的单个请求包含未知参数，`drop_params="strict"` 直接将该请求归入 `errors` 字段，不实际执行该请求，并继续执行后续的批量任务。
 
 ## 3. CNLLM 标准响应格式
 
@@ -717,7 +704,7 @@ CNLLM 请求参数与**OpenAI 标准参数**基本一致，覆盖范围基于国
 
 | 参数                  | 类型                              | 默认值                             | 说明                                                     | 
 | ------------------- | ------------------------------- | ------------------------------- | ------------------------------------------------------ | 
-| `model`             | `str`                           | -                               | 模型名称，客户端初始化必填，调用入口可覆盖         | 
+| `model`             | `str`                           | -                               | 模型名称，模型名见[支持的模型](#支持的模型)       | 
 | `api_key`           | `str`                           | -                               | API 密钥                                                 | 
 | `base_url`          | `str`                           | 自动适配                            | 可自定义 API 地址                                            | 
 | `messages`          | `list[dict]`/`list[list[dict]]` | -                               | `chat()` 输入参数，支持上下文管理/图片识别（仅支持调用入口配置）                           | 
@@ -783,7 +770,7 @@ CNLLM 内部定义的参数，控制内部执行的行为或策略，不向 API 
 | `max_retries`     | `int`   | `3`      | 最大重试次数             |
 | `retry_delay`     | `float` | `1.0`    | 重试延迟（秒）            |
 | `fallback_models`¹ | `dict`  | -        | 备用模型（仅支持客户端初始化配置），见下方说明 |
-| `drop_params`     | `str`   | `"warn"` | 见 [未知参数处理策略](#255) |
+| `drop_params`     | `str`   | `"warn"` | 见 [未知参数处理策略](#255-未知参数处理策略) |
 
 ¹`fallback_models` 模型降级策略：
 
@@ -819,7 +806,7 @@ fallback_models = {
 | `stop_on_error`  | `bool`      | `False`                      | 遇错时停止后续请求，返回已处理结果     |
 | `callbacks`      | `list`      | -                            | 进度回调函数列表              |
 | `custom_ids`     | `list[str]` | -                            | 自定义请求 ID 列表           |
-| `keep`           | `set/list`  | 见 [字段存储控制](#254)             | 迭代后保留的数据字段            |
+| `keep`           | `set/list`  | 见 [字段存储控制](#254-字段存储控制)             | 迭代后保留的数据字段            |
 
 ## 5. 框架集成
 

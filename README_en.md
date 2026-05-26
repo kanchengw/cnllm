@@ -124,19 +124,22 @@ Project Documentation:
 
 ### 1.1 Installation
 
-#### 1.1.1 SDK Installation
+#### 1.1.1 Install as Agent Skill (Recommended)
+
+CNLLM now provides a dedicated Agent Skill following the Claude Skills / Agent Skills standard.
+
+**Install the skill**:
+```bash
+npx skills add kanchengw/cnllm-skill
+```
+
+📖 For full documentation and examples, visit the dedicated skill repository:
+https://github.com/kanchengw/cnllm-skill
+
+#### 1.1.2 SDK Installation
 ```bash
 pip install cnllm
 ```
-
-#### 1.1.2 Install as Agent Skill
-
-**One-Click Install**:
-```bash
-npx skills add https://github.com/kanchengw/cnllm
-```
-
-Or manually copy the `SKILL.md` file from the project root to your agent's skill directory. When **calling Chinese LLMs, CNLLM will be used as the preferred option**.
 
 ### 1.2 Client Initialization
 
@@ -266,7 +269,7 @@ In streaming calls, access via `for` loop with **real-time accumulation** for re
 | **raw**: model native response | `resp.raw`   | `Dict`            | `{"id": "...", "choices": [...], ...}`           |
 
 **repr():** 
-During streaming, displays **real-time merged chunks and accumulated field results**, not the real-time streaming chunks list; does not change the streaming response object type, which is an **iterator** containing all standard streaming chunks.
+Displays **real-time field keys aggregation and field value accumulation** in  a non-streaming-like **dictionary format**; which does not change the streaming response object type, which is an **iterator** containing all standard streaming chunks.
 ```python
 for chunk in resp:
     print(resp)
@@ -326,15 +329,12 @@ BatchResponse outer structure, where each response under `results[request_id]` i
 ```python
 {
     "status": {"elapsed": "3.42s", "success_count": 2, "fail_count": 1, "total": 3},  # Statistics
-    "usage": {"prompt_tokens": 5, "total_tokens": 5},  # Batch processing total usage info
-    "errors": {"request_2": "error message"},  # Mapping of all failed requests' request_id and error messages
-    "results": {     # Mapping of all successful requests' request_id and standard responses
-        "request_0": {...},
-        "request_1": {...}
-    },
+    "usage": {"prompt_tokens": 5, "total_tokens": 5},     # Batch processing total usage info
+    "errors": {"request_2": "error message"},             # Mapping of all failed requests' request_id and error messages
+    "results": {"request_0": {...}, "request_1": {...}},  # Mapping of all successful requests' request_id and standard responses
     "think": {"request_0": "...", "request_1": "..."},
     "still": {"request_0": "...", "request_1": "..."},
-    "tools": {"request_0": [...], "request_1": [...]},
+    "tools": {"request_0": {...}, "request_1": {...}},
     "raw": {"request_0": {...}, "request_1": {...}}
 }
 ```
@@ -424,6 +424,21 @@ resp.vectors["doc_002"]          # Get embedding vector for doc_002
 ```python
 resp.to_dict()               # Default: keeps vectors field + metadata (status/usage/batch_info)
 resp.to_dict(results=True)   # Keeps results field + metadata (status/usage/batch_info)
+```
+
+#### 2.3.3 Embeddings Batch Response Structure
+
+BatchEmbeddingResponse outer structure, where each response under `results[request_id]` is in **OpenAI standard Embeddings response structure**:
+
+```python
+{   
+    "status": {"elapsed": "3.35s", "success_count": 1, "fail_count": 1, "total": 2},
+    "batch_info": {"batch_size": 2, "batch_count": 2, "dimension": 1024},
+    "usage": {"prompt_tokens": 5, "total_tokens": 5},
+    "results": {"request_0": {...}, "request_1": {...}}
+    "errors": {"request_2": "error message"},
+    "vectors": {"request_0": [...]}    # Mapping of all successful requests' request_id and embedding vectors
+}
 ```
 
 ### 2.4 Batch Call Control Parameters
@@ -544,10 +559,7 @@ Use `drop_params` to control the handling behavior of **incompatible parameters 
 
 **Notes:**
 - When doing batch calls, if global parameters contain unknown parameters, `drop_params="strict"` directly throws an exception without actually starting the batch task;
-If a single request within the batch task contains unknown parameters, `drop_params="strict"` directly puts that request into the `errors` field without actually executing that request, and continues executing subsequent batch tasks.
-
-- Specifically, when configured with `drop_params="strict"` and `stop_on_error=True`, the first error encountered in batch requests immediately interrupts the batch task while returning already processed request results. See [Stop on Error](#253-stop-on-error).
-- The `drop_params` parameter supports client configuration and all calling methods (including `create` single-call method).
+- If a single request within the batch task contains unknown parameters, `drop_params="strict"` directly puts that request into the `errors` field without actually executing that request, and continues executing subsequent batch tasks.
 
 ## 3. CNLLM Standard Response Format
 
@@ -638,7 +650,7 @@ Note: Not all supported models support all request parameters. Please refer to v
 
 | Parameter | Type | Default | Description |
 | ------------------- | ------------------------------- | ------------------------------- | ------------------------------------------------------ |
-| `model`             | `str`                           | -                               | Model name, required at client initialization, can be overridden at call entry         |
+| `model`             | `str`                           | -                               | Model name, see [Supported Models](#supported-models)|
 | `api_key`           | `str`                           | -                               | API key                                                 |
 | `base_url`          | `str`                           | Auto-adapted                            | Customizable API address                                            |
 | `messages`          | `list[dict]`/`list[list[dict]]` | -                               | `chat()` input parameter, supports context management/image recognition (call entry configuration only)                           |
