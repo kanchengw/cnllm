@@ -111,7 +111,7 @@ class BaseAdapter:
 
         config_path = os.path.join(
             os.path.dirname(__file__),
-            "..", "..", "configs", cls.CONFIG_DIR, f"request_{cls.ADAPTER_NAME}.yaml"
+            "..", "configs", cls.CONFIG_DIR, f"request_{cls.ADAPTER_NAME}.yaml"
         )
         try:
             import yaml

@@ -38,7 +38,7 @@ class Responder:
     def _load_config(self) -> Dict[str, Any]:
         config_path = os.path.join(
             os.path.dirname(__file__),
-            "..", "..", "configs", self.config_dir, f"response_{self.config_dir}.yaml"
+            "..", "configs", self.config_dir, f"response_{self.config_dir}.yaml"
         )
         try:
             import yaml

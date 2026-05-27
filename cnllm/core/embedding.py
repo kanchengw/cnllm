@@ -24,12 +24,12 @@ def _find_config_for_model(model: str) -> tuple:
         config_dir = adapter_name.replace("-embedding", "")
         merged_path = os.path.join(
             os.path.dirname(__file__),
-            "..", "..", "configs", config_dir,
+            "..", "configs", config_dir,
             f"request_{config_dir}.yaml"
         )
         legacy_path = os.path.join(
             os.path.dirname(__file__),
-            "..", "..", "configs", config_dir,
+            "..", "configs", config_dir,
             f"request_embedding_{config_dir}.yaml"
         )
         config_path = merged_path if os.path.exists(merged_path) else legacy_path
@@ -49,12 +49,12 @@ def _find_config_for_model(model: str) -> tuple:
 def _get_config_for_adapter(adapter_name: str) -> tuple:
     merged_path = os.path.join(
         os.path.dirname(__file__),
-        "..", "..", "configs", adapter_name,
+        "..", "configs", adapter_name,
         f"request_{adapter_name}.yaml"
     )
     legacy_path = os.path.join(
         os.path.dirname(__file__),
-        "..", "..", "configs", adapter_name,
+        "..", "configs", adapter_name,
         f"request_embedding_{adapter_name}.yaml"
     )
     config_path = merged_path if os.path.exists(merged_path) else legacy_path
@@ -81,7 +81,7 @@ class EmbeddingResponder:
         import yaml
         config_path = os.path.join(
             os.path.dirname(__file__),
-            "..", "..", "configs", self.config_dir,
+            "..", "configs", self.config_dir,
             f"response_embedding_{self.config_dir}.yaml"
         )
         try:
@@ -176,12 +176,12 @@ class BaseEmbeddingAdapter:
 
         merged_path = os.path.join(
             os.path.dirname(__file__),
-            "..", "..", "configs", cls.CONFIG_DIR,
+            "..", "configs", cls.CONFIG_DIR,
             f"request_{cls.CONFIG_DIR}.yaml"
         )
         legacy_path = os.path.join(
             os.path.dirname(__file__),
-            "..", "..", "configs", cls.CONFIG_DIR,
+            "..", "configs", cls.CONFIG_DIR,
             f"request_embedding_{cls.CONFIG_DIR}.yaml"
         )
         config_path = merged_path if os.path.exists(merged_path) else legacy_path
@@ -229,7 +229,7 @@ class BaseEmbeddingAdapter:
         if config_file is None:
             merged_config = os.path.join(
                 os.path.dirname(__file__),
-                "..", "..", "configs", self.CONFIG_DIR,
+                "..", "configs", self.CONFIG_DIR,
                 f"request_{self.CONFIG_DIR}.yaml"
             )
             legacy_config = f"request_embedding_{self.CONFIG_DIR}.yaml"
