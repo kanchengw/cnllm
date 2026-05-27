@@ -544,21 +544,18 @@ class asyncCNLLM:
 
             else:
                 # === 混合模式 ===
-                from cnllm.utils.scheduler.chat import AsyncMixedBatchScheduler
                 for idx, req in enumerate(batch_requests):
                     if stream_flags.get(idx):
                         req["stream"] = True
-                scheduler = AsyncMixedBatchScheduler(
+                from cnllm.core.accumulators.batch_accumulator import AsyncMixedStreamAccumulator
+                accumulator = AsyncMixedStreamAccumulator(
+                    requests=batch_requests,
                     client=self.parent,
-                    timeout=actual_timeout,
-                    max_retries=actual_max_retries,
-                    retry_delay=actual_retry_delay,
+                    keep=actual_keep,
+                    stop_on_error=actual_stop_on_error,
                     callbacks=actual_callbacks,
                     custom_ids=actual_custom_ids,
                 )
-                batch_response = await scheduler.execute(batch_requests)
-                if actual_keep is not None:
-                    batch_response._keep = actual_keep
-                self._batch_response = batch_response
-                return batch_response
+                self._batch_response = accumulator._batch
+                return accumulator
    

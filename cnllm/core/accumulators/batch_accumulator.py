@@ -16,7 +16,55 @@ import threading
 import warnings
 import asyncio
 from typing import Dict, Any, List, Optional, Iterator, AsyncIterator, Set, Union
-from .single_accumulator import filter_stream_chunk, StreamAccumulator
+from .single_accumulator import filter_stream_chunk, StreamChunk, StreamAccumulator
+from dataclasses import dataclass, field
+
+
+class LiveBatchDict:
+    """批量响应的实时终端视图。
+
+    在 ``for r in resp:`` 或 ``for chunk in resp:`` 循环中，
+    配合 ``resp.repr`` 使用，终端原地刷新关键字段。
+
+    用法::
+
+        with resp.repr as view:
+            for r in resp:
+                view.refresh()
+    """
+
+    def __init__(self, batch_response):
+        self._batch = batch_response
+        self._live = None
+        self._saved_warn_filters = None
+
+    def __enter__(self):
+        import warnings
+        self._saved_warn_filters = warnings.filters.copy()
+        warnings.simplefilter("ignore", ResourceWarning)
+        from rich.live import Live
+        from rich.text import Text
+        self._live = Live(Text(""), refresh_per_second=10)
+        self._live.__enter__()
+        return self
+
+    def __exit__(self, *args):
+        if self._live:
+            self._live.__exit__(*args)
+        import warnings
+        if self._saved_warn_filters is not None:
+            warnings.filters = self._saved_warn_filters
+
+    def refresh(self):
+        from rich.pretty import Pretty
+        b = self._batch
+        d = {
+            "status": b.status if hasattr(b, 'status') else {},
+            "usage": b.usage if hasattr(b, 'usage') else {},
+        }
+        self._live.update(Pretty({k: v for k, v in d.items() if v}))
+
+
 from dataclasses import dataclass, field
 
 
@@ -432,6 +480,11 @@ class BatchResponse:
         return IndexableDict(self._raw)
 
     @property
+    def repr(self) -> LiveBatchDict:
+        """批量响应的实时终端视图。"""
+        return LiveBatchDict(self)
+
+    @property
     def usage(self) -> Dict[str, Any]:
         self._maybe_wait()
         return dict(self._usage)
@@ -624,6 +677,11 @@ class _BatchStreamIterator:
         return self._batch_response.tools
 
     @property
+    def repr(self) -> LiveBatchDict:
+        """批量响应的实时终端视图。"""
+        return LiveBatchDict(self._batch_response)
+
+    @property
     def raw(self) -> IndexableDict:
         return self._batch_response.raw
 
@@ -683,6 +741,11 @@ class _AsyncBatchStreamIterator:
         return self._batch_response.tools
 
     @property
+    def repr(self) -> LiveBatchDict:
+        """批量响应的实时终端视图。"""
+        return LiveBatchDict(self._batch_response)
+
+    @property
     def raw(self) -> IndexableDict:
         return self._batch_response.raw
 
@@ -726,6 +789,11 @@ class BatchStreamAccumulator:
     @property
     def tools(self) -> IndexableDict:
         return self._batch_response.tools
+
+    @property
+    def repr(self) -> LiveBatchDict:
+        """批量响应的实时终端视图。"""
+        return LiveBatchDict(self._batch_response)
 
     @property
     def raw(self) -> IndexableDict:
@@ -874,7 +942,7 @@ class BatchStreamAccumulator:
                     if request_id in self._chunks:
                         del self._chunks[request_id]
                 result["request_id"] = request_id
-                yield result
+                yield StreamChunk(result)
         finally:
             self._end_time = time.time()
             self._batch_response._end_time = self._end_time
@@ -918,6 +986,11 @@ class AsyncBatchStreamAccumulator:
     @property
     def tools(self) -> IndexableDict:
         return self._batch_response.tools
+
+    @property
+    def repr(self) -> LiveBatchDict:
+        """批量响应的实时终端视图。"""
+        return LiveBatchDict(self._batch_response)
 
     @property
     def raw(self) -> IndexableDict:
@@ -1156,4 +1229,342 @@ class AsyncBatchNonStreamAccumulator:
 
         for item_result in self._batch_result.results:
             request_id = item_result.request_id or f"request_{item_result.index}"
-            raw_resp = item_result.respo
+            raw_resp = item_result.response if hasattr(item_result, 'response') else {}
+            self._batch_response.add_result(request_id, item_result)
+
+        self._batch_response.mark_done()
+        return self._batch_response
+
+
+class MixedStreamAccumulator:
+    """混合批量流式累积器：按输入顺序处理流式和非流式请求。
+
+    在 ``for chunk in resp:`` 循环中，仅 stream=True 的请求逐 chunk yield，
+    非流式请求静默处理后存入 BatchResponse。
+    流结束后可通过 ``resp.still`` / ``resp.think`` / ``resp.repr`` 访问累积结果。
+
+    用法::
+
+        with resp.repr as view:
+            for chunk in resp:
+                feed(chunk.still, chunk["request_id"])
+                view.refresh()
+        print(resp.still)
+    """
+
+    def __init__(self, requests, client, keep=None, stop_on_error=False,
+                 callbacks=None, custom_ids=None):
+        from .single_accumulator import StreamAccumulator
+
+        self._requests = list(enumerate(requests))
+        self._client = client
+        self._stop_on_error = stop_on_error
+        self._callbacks = callbacks or []
+        self._custom_ids = custom_ids or []
+
+        self._batch = BatchResponse()
+        if keep is not None:
+            self._batch._keep = keep
+        self._batch._total = len(requests)
+        self._batch._start_time = time.time()
+        self._batch._in_for_loop = True
+
+        self._idx = 0
+        self._current_stream = None
+        self._current_rid = None
+        self._last_stream_result = None
+        self._last_stream_rid = None
+        self._done = False
+
+    def __iter__(self):
+        return self
+
+    def __repr__(self):
+        return repr(self._batch)
+
+    def __next__(self):
+        from .single_accumulator import StreamChunk, StreamAccumulator
+        from cnllm.utils.scheduler.base import _extract_batch_item
+
+        if self._done:
+            raise StopIteration
+
+        if self._current_stream is not None:
+            try:
+                chunk = next(self._current_stream)
+                chunk["request_id"] = self._current_rid
+                return StreamChunk(chunk)
+            except StopIteration:
+                self._finalize_stream()
+                self._current_stream = None
+                self._current_rid = None
+
+        while self._idx < len(self._requests):
+            i, req = self._requests[self._idx]
+            self._idx += 1
+            request_id = self._get_request_id(i)
+            start = time.time()
+
+            try:
+                req_copy = {k: v for k, v in req.items() if k not in ("_input_type", "_orig_idx")}
+                is_stream = req_copy.get("stream", False)
+                result = self._client.chat.create(**req_copy)
+
+                if is_stream and isinstance(result, (StreamAccumulator,)):
+                    self._current_stream = result
+                    self._current_rid = request_id
+                    self._last_stream_result = result
+                    self._last_stream_rid = request_id
+                    try:
+                        chunk = next(result)
+                        chunk["request_id"] = request_id
+                        return StreamChunk(chunk)
+                    except StopIteration:
+                        self._finalize_stream()
+                        self._current_stream = None
+                        self._current_rid = None
+                        continue
+                else:
+                    raw, formatted, extras = _extract_batch_item(result)
+                    self._batch.set_raw(request_id, raw)
+                    self._batch.add_result(request_id, formatted)
+                    if extras.get("_still"):
+                        self._batch.set_still(request_id, extras["_still"])
+                    if extras.get("_thinking"):
+                        self._batch.set_think(request_id, extras["_thinking"])
+                    if extras.get("_tools"):
+                        self._batch.set_tools(request_id, extras["_tools"])
+                    if extras.get("_usage"):
+                        self._batch.set_usage(request_id, extras["_usage"])
+                    # yield marker chunk so caller can call view.refresh()
+                    return StreamChunk({
+                        "request_id": request_id, "choices": [{"delta": {}}],
+                        "_state": "completed",
+                    })
+
+            except Exception as e:
+                self._batch.add_error(request_id, str(e))
+                if self._stop_on_error:
+                    break
+
+        self._done = True
+        self._batch._end_time = time.time()
+        self._batch.mark_done()
+        self._batch._clear_non_kept_fields()
+        raise StopIteration
+
+    def _finalize_stream(self):
+        result = self._last_stream_result
+        rid = self._last_stream_rid
+        if result is None:
+            return
+        self._batch.add_result(rid, dict(result._formatted_chunks) if result._formatted_chunks else {})
+        self._batch.set_still(rid, result.still)
+        self._batch.set_think(rid, result.think)
+        self._batch.set_tools(rid, result.tools)
+        if result.usage:
+            self._batch.set_usage(rid, result.usage)
+        if hasattr(result, '_chunks') and result._chunks:
+            self._batch.set_raw(rid, result._chunks)
+
+    def _get_request_id(self, index):
+        if self._custom_ids and index < len(self._custom_ids):
+            return self._custom_ids[index]
+        return f"request_{index}"
+
+    @property
+    def still(self): return self._batch.still
+    @property
+    def think(self): return self._batch.think
+    @property
+    def tools(self): return self._batch.tools
+    @property
+    def raw(self): return self._batch.raw
+    @property
+    def status(self): return self._batch.status
+    @property
+    def usage(self): return self._batch.usage
+    @property
+    def errors(self): return self._batch.errors
+    @property
+    def results(self): return self._batch.results
+    def to_dict(self, **kwargs):
+        return self._batch.to_dict(**kwargs)
+
+    def wait(self, timeout=None):
+        if hasattr(self._batch, 'wait'):
+            self._batch.wait(timeout)
+
+    @property
+    def elapsed(self) -> float:
+        return self._batch.elapsed if hasattr(self._batch, 'elapsed') else 0.0
+
+    @property
+    def elapsed(self) -> float:
+        return self._batch.elapsed if hasattr(self._batch, 'elapsed') else 0.0
+
+    def to_dict(self, **kwargs):
+        return self._batch.to_dict(**kwargs)
+
+    def wait(self, timeout=None):
+        pass  # 无后台线程，迭代驱动执行
+
+    @property
+    def repr(self):
+        return LiveBatchDict(self._batch)
+
+
+class AsyncMixedStreamAccumulator:
+    """异步混合批量流式累积器。
+
+    与 ``MixedStreamAccumulator`` 行为一致，但使用 ``async for`` 迭代。
+    """
+
+    def __init__(self, requests, client, keep=None, stop_on_error=False,
+                 callbacks=None, custom_ids=None):
+        from .single_accumulator import StreamAccumulator
+
+        self._requests = list(enumerate(requests))
+        self._client = client
+        self._stop_on_error = stop_on_error
+        self._callbacks = callbacks or []
+        self._custom_ids = custom_ids or []
+
+        self._batch = BatchResponse()
+        if keep is not None:
+            self._batch._keep = keep
+        self._batch._total = len(requests)
+        self._batch._start_time = time.time()
+        self._batch._in_for_loop = True
+
+        self._idx = 0
+        self._current_stream = None
+        self._current_rid = None
+        self._last_stream_result = None
+        self._last_stream_rid = None
+        self._done = False
+
+    def __aiter__(self):
+        return self
+
+    def __repr__(self):
+        return repr(self._batch)
+
+    async def __anext__(self):
+        from .single_accumulator import StreamChunk, StreamAccumulator
+        from cnllm.utils.scheduler.base import _extract_batch_item
+
+        if self._done:
+            raise StopAsyncIteration
+
+        if self._current_stream is not None:
+            try:
+                chunk = await self._current_stream.__anext__()
+                chunk["request_id"] = self._current_rid
+                return StreamChunk(chunk)
+            except StopAsyncIteration:
+                self._finalize_stream()
+                self._current_stream = None
+                self._current_rid = None
+
+        while self._idx < len(self._requests):
+            i, req = self._requests[self._idx]
+            self._idx += 1
+            request_id = self._get_request_id(i)
+            start = time.time()
+
+            try:
+                req_copy = {k: v for k, v in req.items() if k not in ("_input_type", "_orig_idx")}
+                is_stream = req_copy.get("stream", False)
+                result = await self._client.chat.create(**req_copy)
+
+                if is_stream:
+                    self._current_stream = result
+                    self._current_rid = request_id
+                    self._last_stream_result = result
+                    self._last_stream_rid = request_id
+                    try:
+                        chunk = await result.__anext__()
+                        chunk["request_id"] = request_id
+                        return StreamChunk(chunk)
+                    except StopAsyncIteration:
+                        self._finalize_stream()
+                        self._current_stream = None
+                        self._current_rid = None
+                        continue
+                else:
+                    raw, formatted, extras = _extract_batch_item(result)
+                    self._batch.set_raw(request_id, raw)
+                    self._batch.add_result(request_id, formatted)
+                    if extras.get("_still"):
+                        self._batch.set_still(request_id, extras["_still"])
+                    if extras.get("_thinking"):
+                        self._batch.set_think(request_id, extras["_thinking"])
+                    if extras.get("_tools"):
+                        self._batch.set_tools(request_id, extras["_tools"])
+                    if extras.get("_usage"):
+                        self._batch.set_usage(request_id, extras["_usage"])
+                    return StreamChunk({
+                        "request_id": request_id, "choices": [{"delta": {}}],
+                        "_state": "completed",
+                    })
+
+            except Exception as e:
+                self._batch.add_error(request_id, str(e))
+                if self._stop_on_error:
+                    break
+
+        self._done = True
+        self._batch._end_time = time.time()
+        self._batch.mark_done()
+        self._batch._clear_non_kept_fields()
+        raise StopAsyncIteration
+
+    def _finalize_stream(self):
+        result = self._last_stream_result
+        rid = self._last_stream_rid
+        if result is None:
+            return
+        self._batch.add_result(rid, dict(result._formatted_chunks) if result._formatted_chunks else {})
+        self._batch.set_still(rid, result.still)
+        self._batch.set_think(rid, result.think)
+        self._batch.set_tools(rid, result.tools)
+        if result.usage:
+            self._batch.set_usage(rid, result.usage)
+        if hasattr(result, '_chunks') and result._chunks:
+            self._batch.set_raw(rid, result._chunks)
+
+    def _get_request_id(self, index):
+        if self._custom_ids and index < len(self._custom_ids):
+            return self._custom_ids[index]
+        return f"request_{index}"
+
+    @property
+    def still(self): return self._batch.still
+    @property
+    def think(self): return self._batch.think
+    @property
+    def tools(self): return self._batch.tools
+    @property
+    def raw(self): return self._batch.raw
+    @property
+    def status(self): return self._batch.status
+    @property
+    def usage(self): return self._batch.usage
+    @property
+    def errors(self): return self._batch.errors
+    @property
+    def results(self): return self._batch.results
+    @property
+    def elapsed(self) -> float:
+        return self._batch.elapsed if hasattr(self._batch, 'elapsed') else 0.0
+
+    def to_dict(self, **kwargs):
+        return self._batch.to_dict(**kwargs)
+
+    def wait(self, timeout=None):
+        pass  # 无后台线程，迭代驱动执行
+
+    @property
+    def repr(self):
+        return LiveBatchDict(self._batch)

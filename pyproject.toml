@@ -4,9 +4,9 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "cnllm"
-version = "0.9.3post1"
-description = "中文大模型通用SDK，系统性优化接口适配、增强响应解析和批量处理等能力，深度适配 OpenAI 生态内 LangChain、LlamaIndex、AutoGen 等大模型应用框架"
-readme = "README.md"
+version = "0.9.3post2"
+description = "Unified Python library for Chinese LLMs, with flexible batch capacity, feedback on vendor-native parameter validation, and structured overview and automated accumulation for streaming."
+readme = "README_en.md"
 license = "Apache-2.0"
 authors = [
     {name = "kanchengw", email = "wangkancheng1122@163.com"}
@@ -31,6 +31,7 @@ dependencies = [
     "python-dotenv>=0.19.0",
     "langchain-core>=0.3.0",
     "pyyaml>=6.0",
+    "rich>=13.0.0",
 ]
 
 [project.optional-dependencies]

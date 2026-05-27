@@ -14,14 +14,14 @@
 
 ## Why CNLLM?
 
-CNLLM 为中文大模型提供了一个**统一的 OpenAI 兼容接口层**与一套**标准化的参数规则和响应格式规范**。
+CNLLM Python SDK 为中文大模型提供了一个**统一的 OpenAI 兼容接口层**与一套**标准化的参数规则和响应格式规范**。
 
 通过 CNLLM，开发者可以无障碍地在 OpenAI 生态内的 langchain、LlamaIndex、AutoGen、Haystack、DeepEval 等主流大模型应用框架中使用中文大模型；尤其在需要多模型协作的开发和应用场景中，使用 CNLLM 可**显著减少适配解析、功能实现及维护工程量，并有效降低 AI agent 开发中的 Token 消耗**。
 
 - **统一接口** - 一套接口和参数调用不同中文大模型，返回 OpenAI API 标准响应
 - **参数验证** - 对所有参数进行验证和明确反馈，尤其是厂商原生参数，并支持参数处理行为控制 (`drop_params`)
 - **流式响应** - 通过 `repr()` 进行流式生命周期监测，以及通过 `.still/.think/.tools` 属性访问增量字段自动累积
-- **批量能力** - 支持批量任务中单个请求的独立配置、实时批量进度统计 (`.status`)，以及可配置的失败策略 (`stop_on_error`) 和内存管理 (`keep`).
+- **批量能力** - 支持批量任务中单个请求的独立配置，并提供实时批量进度统计 (`.status`)，可配置的失败策略 (`stop_on_error`) 和内存管理 (`keep`).
 
 **流式生命周期监控以及模型回复、思考内容、工具调用的自动累积演示：**
 
@@ -62,34 +62,6 @@ CNLLM 为中文大模型提供了一个**统一的 OpenAI 兼容接口层**与�
 - ✨ **LangChain 集成**
   - `LangChainRunnable(BaseChatModel)` 中新增支持 `bind_tools()` / `with_structured_output()` 方法
   - 新增 `LangChainEmbeddings`：适配 `langchain_core.embeddings.Embeddings`，支持 `embed_documents()` / `embed_query()`
-
-### v0.9.2 (2026-05-10)
-
-- 🔧 **框架用例测试**
-  - 新增 `tests/key_needed/framework` 目录，含生产场景中 CNLLM 与 langchain、llamaindex、autogen、haystack、deepeval 框架协作的用例测试
-- 🔧 **修改**
-  - 移除 `StreamChunks`，合并为 `StreamAccumulator`
-  - 移除无感异步支持（`_SyncProxy` 等 5 个类），现在异步客户端必须使用异步语法
-  - `StreamAccumulator._accumulate()` 缓存、`from_chunks()` 类方法等
-
-### v0.9.1 (2026-05-09)
-
-- ✨ **`keep`** **参数 — 存储控制**
-  - `batch()` 新增 `keep` 参数，控制批量响应字段的持久化存储
-  - 批量响应的所有字段在迭代期间可实时访问，结果实时更新和累积；迭代后，访问未在 `keep` 中指定的字段则返回空容器 + 警告
-  - 默认策略（不配置`keep`时）：
-    chat.batch() 响应中默认保留关键字段 `still`/`think`/`tools` 以及批量处理元数据，释放其他冗余字段
-    embeddings.batch() 响应中默认保留关键字段 `vectors` 以及批量处理元数据，释放其他冗余字段
-- ✨ **`drop_params`** **参数 — 未知参数处理策略**
-  - `create()` 和 `batch()` 新增 `drop_params` 参数，支持三档位置参数处理策略：
-    `drop_params="warn"`：警告参数未生效，忽略后继续执行，默认策略
-    `drop_params="ignore"`：静默忽略未知参数并继续执行
-    `drop_params="strict"`：抛出异常，终止请求执行
-- ✨ **`usage`** **字段 — 用量统计**
-  - `batch()` 响应现在包含 `usage` 字段，存储批量处理的全量 Token 消耗统计，通过 `.usage` 访问
-- ✨ **batch embeddings 响应格式**
-  - `embeddings.batch()` 响应现在包含 `vectors` 字段，存储批量请求返回的嵌入向量，通过 `.vectors` 访问
-  - `embeddings.batch()` 响应现在包含 `batch_info` 字段，存储 `batch_size` 等元数据，通过 `.batch_info` 访问
 
 ## 支持的模型
 
@@ -246,35 +218,48 @@ resp = client.chat.create(
 
 #### 2.1.2 流式调用
 
+流式响应提供**两个访问层**，分别面向不同的使用场景：
+
 ```python
 resp = client.chat.create(
     prompt="用一句话介绍自己", 
     stream=True
 )
-for chunk in resp:
-    print(resp.still)  # 实时累积的模型回复文本
-print(resp.raw)  # 完整累积后的模型原生响应
+
+# ── 迭代中：chunk.* 返回逐帧增量，适合前端实时渲染/流式过程监控 ──
+with resp.repr as view:   # 逐 chunk 合并的字典视图 
+    for chunk in resp:
+        frontend_still.append(chunk.still)   # delta.content，逐字增量
+        frontend_think.append(chunk.think)   # delta.reasoning_content，逐字增量
+        view.refresh()   # 实时刷新视图
+
+# ── 流结束后：resp.* 返回完整累积结果，适合取最终值 ──
+print(resp.still)   # 完整的模型回复文本
+print(resp.think)   # 完整的推理过程
+print(resp)         # 字典视图完整累积后的结果
 ```
 
 #### 2.1.3 响应访问
 
-流式调用中，通过 `for` 迭代**实时访问**响应或以下关键字段，返回内容**实时累积**；非流式调用不支持 `for` 迭代，访问结果为完整字段内容：
+非流式和流式调用的响应对象提供**统一的属性接口**，流式额外提供**逐帧增量属性**：
 
-| 响应字段                           | 访问方式         | 返回格式              | 返回示例                                             |
-| ------------------------------ | ------------ | ----------------- | ------------------------------------------------ |
-| **resp**：标准响应              | `resp`        | `Dict`/`List[Dict]` | `{非流式的标准响应}`/`[标准流式 chunks 列表]` |
-| **think**: `reasoning_content` | `resp.think` | `str`             | `"推理内容..."`                                      |
-| **still**: `content`           | `resp.still` | `str`             | `"回复内容..."`                                      |
-| **tools**: `tool_calls`        | `resp.tools` | `Dict[int, Dict]` | `{0: {"id": "...", "function": {...}}, 1: {...}` |
-| **raw**: 模型原生响应            | `resp.raw`   | `List[Dict]`      | `[模型原生流式 chunks 列表]`           |
+**非流式 / 流式通用**（`stream=False` 时可直接访问；`stream=True` 时建议流结束后访问）：
 
-**repr():** 
-以类似非流式响应的**字典结构**展示流式响应的**字段名聚合和字段值累积的实时结果**；不改变流式响应对象类型，即包含所有标准流式 chunks 的**迭代器**。
-```python
-for chunk in resp:
-    print(resp)
-# {'id': '...', 'object': '...', 'created': '...', 'model': '...', 'choices': [{'delta': {'content': '实时累积的模型回复', 'reasoning_content': '实时累积的推理过程'}, 'finish_reason': 'None'}]}
-```
+| 访问方式 | 返回内容 | 返回格式 | 返回示例 |
+|---------|---------|---------|---------|
+| `resp` | OpenAI 标准响应 | `Dict` / `Iterator[Dict]` | 非流式为完整 dict /流式为 chunk 列表 |
+| `resp.still` | 模型回复文本（`content`） | `str` | `"你好，我是..."` |
+| `resp.think` | 推理过程（`reasoning_content`） | `str` | `"推理内容..."` |
+| `resp.tools` | 工具调用（`tool_calls`） | `Dict[int, Dict]` | `{0: {"id": "...", "function": {...}}}` |
+| `resp.raw` | 模型原始响应 | `Dict` / `List[Dict]` | 非流式为完整 dict /流式为 chunks 列表 |
+
+**流式专属**（仅 `stream=True` 时在迭代中访问，返回逐帧增量）：
+
+| 访问方式 | 返回内容 | 返回格式 | 返回示例 |
+|---------|---------|---------|---------|
+| `chunk.still` | 当前 chunk 的 `delta.content` 增量 | `str` | `"你"`, `"好"` |
+| `chunk.think` | 当前 chunk 的 `delta.reasoning_content` 增量 | `str` | `"思考"`, `"过程"` |
+| `resp.repr` | 逐 chunk 合并的字典视图 (实时刷新) | `LiveDict` 上下文管理器 | {实时视图} |
 
 ### 2.2 chat completions 批量调用
 
@@ -340,62 +325,62 @@ BatchResponse 外层结构，其中 `results[request_id]` 字段下的每条响�
 
 #### 2.2.2 chat completions 批量响应访问
 
-支持在 `for` 循环内对**响应结果、元数据、关键字段内容**进行迭代访问，返回内容**实时累积和更新**：
-
-- 流式批量调用中的更新幅度为 chunk by chunk；非流式批量调用和**混合流式策略的批量调用**（见 `requests` 参数）中的更新幅度为 request by request。
-- 在非流式批量调用和混合流式策略的批量调用中，如无需实时访问批量响应中的字段，可直接访问完整结果，省略 `for` 循环。
-- 支持按 `request_id` 或按整数索引访问。
-
-**访问方式**：
+**终端实时观测**：
 
 ```python
 resp = client.chat.batch(
-    prompt=["你好", "今天天气怎么样", "你是谁"]
+    prompt=["你好", "今天天气怎么样", "你是谁"],
 )
 
-for r in resp:
-    print(resp.status)  # 实时统计信息，request by request 实时更新
+with resp.repr as view:   # 实时刷新视图 
+    for r in resp:
+        view.refresh()
+```
 
-print(resp.still)  # 批量任务中所有请求的回复内容
+**迭代中实时增量**（流式批量/混合流式批量可用）：
 
-# 或通过client.chat.batch_result访问：
-for r in client.chat.batch(
-    prompt=["你好", "今天天气怎么样", "你是谁"], stream=True
-):
-    print(client.chat.batch_result.results)  # 批量任务中所有请求的 OpenAI 标准流式响应，chunk by chunk 实时累积
+```python
+resp = client.chat.batch(
+    prompt=["你好", "今天天气怎么样", "你是谁"],
+    stream=True,
+)
 
-print(client.chat.batch_result.think["request_0"])  # 批量任务中第一条请求的推理内容，或用 .think[0] 整数索引访问
+# chunk.* 返回逐帧增量，request_id 自动分流
+for chunk in resp:
+    rid = chunk["request_id"]
+    frontend_still[rid].append(chunk.still)
+    frontend_think[rid].append(chunk.think)
+```
+
+**流结束后取全量**：
+
+```python
+print(resp.still)   # {"request_0": "你好", "request_1": "...", "request_2": "..."}
+print(resp.think)   # {"request_0": "推理...", "request_1": "..."}
+print(resp.tools)   # {"request_0": [{"function": {"name": "get_weather", ...}}]}
+print(resp)   # 视图完整累积后的结果
 ```
 
 **访问字段**：
 
-| 类别          | 字段说明        | 访问方式                                          | 返回格式                         | 返回示例                                                                    |
-| ----------- | ----------- | --------------------------------------------- | ---------------------------- | ----------------------------------------------------------------------- |
-| **元数据**     | 实时统计        | `resp.status` / `batch_result.status`         | `Dict`                       | `{"success_count": 2, "fail_count": 0, "total": 2, "elapsed": "3.42s"}` |
-| <br />      | 实时Token用量   | `resp.usage` / `batch_result.usage`           | `Dict[str, int]`             | `{"prompt_tokens": 50, "completion_tokens": 100, "total_tokens": 150}`  |
-| **errors**  | 失败请求的错误信息     | `resp.errors` / `batch_result.errors`         | `Dict[str, str]`             | `{"request_0": "error message","request_1": "error message"}`                                        |
-| <br />      | 单个请求的错误信息   | `resp.errors[0]` / `batch_result.errors[0]`   | `str`                        | `"error message"`                                                             |
-| **results** | 成功请求的标准响应   | `resp.results` / `batch_result.results`       | `Dict[str, Dict]`            | `{"request_0": {...}, "request_1": {...}}`                              |
-| <br />      | 每个请求的标准响应   | `resp.results[0]` / `batch_result.results[0]` | `Dict`                       | `{"id": "...", "choices": [...], ...}`                                  |
-| **think**   | 推理过程内容      | `resp.think` / `batch_result.think`           | `Dict[str, str]`             | `{"request_0": "...", "request_1": "..."}`                              |
-| <br />      | 单个请求的推理内容   | `resp.think[0]` / `batch_result.think[0]`     | `str`                        | `"推理内容..."`                                                             |
-| **still**   | 回复内容        | `resp.still` / `batch_result.still`           | `Dict[str, str]`             | `{"request_0": "...", "request_1": "..."}`                              |
-| <br />      | 单个请求的回复内容   | `resp.still[0]` / `batch_result.still[0]`     | `str`                        | `"回复内容..."`                                                             |
-| **tools**   | 工具调用        | `resp.tools` / `batch_result.tools`           | `Dict[str, Dict[int, Dict]]` | `{"request_0": {...}, "request_1": {...}}`                              |
-| <br />      | 单个请求的工具调用   | `resp.tools[0]`                               | `Dict[int, Dict]`            | `{0: {"id": "...", "function": {...}}, 1: {...}`                        |
-| **raw**     | 模型原生响应      | `resp.raw` / `batch_result.raw`               | `Dict[str, Dict]`            | `{"request_0": {...}, "request_1": {...}}`                              |
-| <br />      | 单个请求的模型原生响应 | `resp.raw[0]` / `batch_result.raw[0]`         | `Dict`                       | `{"id": "...", "choices": [...], ...}`                                  |
+| 访问方式 | 返回内容 | 返回格式 | 返回示例 |
+|---------|---------|---------|---------|
+| `resp.status` | 实时统计 | `Dict` | `{"success_count":2,"elapsed":"3.42s"}` |
+| `resp.usage` | Token 用量 | `Dict[str, int]` | `{"total_tokens":150}` |
+| `resp.errors` | 失败请求信息 | `Dict[str, str]` | `{"request_0": "error"}` |
+| `resp.results` | 标准响应 | `Dict[str, Dict]` | `{"request_0": {...}}` |
+| `resp.still` | 所有请求的回复 | `Dict[str, str]` | `{"request_0": "你好", "request_1": "..."}` |
+| `resp.think` | 所有请求的推理 | `Dict[str, str]` | `{"request_0": "推理..."}` |
+| `resp.tools` | 所有请求的工具调用 | `Dict[str, List[Dict]]` | `{"request_0": [{"function": {...}}]}` |
+| `resp.repr` | 实时终端视图 | `LiveDict` / `LiveBatchDict` 上下文管理器 | `{"status": {...}, "usage": {...}}` |
 
-**repr():** 展示批量任务的元数据字段或响应结果：
+**流式 / 混合专属**（迭代中可用）：
 
-```python
-print(resp)
-# BatchResponse(status={...}, usage={...})
-
-print(resp.results)
-# print(resp.results[request_id]) 当请求是流式时，会展示 chunks 合并和字段累积的实时结果，不改变迭代器类型
-# {"request_0": {"choices": [{"delta": {"content": "流式回复"}}]}, "request_1": {"choices": [{"message": {"content": "非流式回复"}}]}}
-```
+| 访问方式 | 返回内容 | 返回格式 | 返回示例 |
+|---------|---------|---------|---------|
+| `chunk.still` | 当前 chunk 增量 | `str` | `"你"` |
+| `chunk.think` | 当前 chunk 推理增量 | `str` | `"思考"` |
+| `chunk["request_id"]` | 标识 chunk 所属请求 | `str` | `"request_0"` |
 
 **to\_dict():** 将响应转换为字典，保留指定字段，未在 keep 声明的字段若保留会产生警告：
 
@@ -440,53 +425,30 @@ BatchEmbeddingResponse 外层结构，其中 `results[request_id]` 字段下每�
 
 #### 2.3.4 Embeddings 批量响应访问
 
-支持在 `for` 循环内对**响应结果、元数据、关键字段内容**进行迭代访问，返回内容**实时累积和更新**：
-
-- 在 batch embeddings 调用中，累积幅度为 request by request。
-- 如无需实时访问批量响应中的字段，可直接访问完整结果，省略 `for` 循环。
-- 支持按 `request_id` 或按整数索引访问。
-
-**访问方式**：
-
 ```python
 resp = client.embeddings.batch(
     input=["你好", "今天天气怎么样", "你是谁"]
 )
 
-for r in resp:
-    print(resp.vectors)  # 批量任务中所有请求的嵌入向量，request by request 实时累积
+# 终端实时观测
+with resp.repr as view:
+    for r in resp:
+        view.refresh()
 
-print(resp.vectors)  # 批量任务中所有请求的嵌入向量
-
-# 或通过client.embeddings.batch_result访问：
-for r in client.embeddings.batch(
-    input=["你好", "今天天气怎么样", "你是谁"]
-):
-    print(client.embeddings.batch_result.status)  # 实时统计信息，request by request 实时累积
-
-print(client.embeddings.batch_result.vectors["request_0"])  # 批量任务中第一条请求的嵌入向量，或用 .vectors[0] 整数索引访问
+print(resp)   # 视图完整累积后的结果
 ```
 
 **访问字段**：
 
-| 类别          | 字段说明          | 访问方式                                          | 返回格式                     | 返回示例                                                                    |
-| ----------- | ------------- | --------------------------------------------- | ------------------------ | ----------------------------------------------------------------------- |
-| **元数据**     | 实时统计          | `resp.status` / `batch_result.status`         | `Dict`                   | `{"total": 2, "success_count": 2, "fail_count": 0, "elapsed": "3.42s"}` |
-| <br />      | 实时 Token 用量信息 | `resp.usage` / `batch_result.usage`           | `Dict[str, int]`         | `{"prompt_tokens": 10, "total_tokens": 10}`                             |
-| <br />      | 批量信息          | `resp.batch_info` / `batch_result.batch_info` | `Dict`                   | `{"batch_size": 2, "batch_count": 3, "dimension": 1024}`                |
-| **errors**  | 失败请求的错误信息     | `resp.errors` / `batch_result.errors`         | `Dict[str, str]`             | `{"request_0": "error message","request_1": "error message"}`                                        |
-| <br />      | 单个请求的错误信息   | `resp.errors[0]` / `batch_result.errors[0]`   | `str`                        | `"error message"`                                                             |
-| **results** | 成功请求的标准响应     | `resp.results` / `batch_result.results`       | `Dict[str, Dict]`        | `{"request_0": {...}, "request_1": {...}}`                              |
-| <br />      | 单个请求的标准响应     | `resp.results[0]` / `batch_result.results[0]` | `Dict`                   | `{"object": "list", "data": [...], ...}`                                |
-| **vectors** | 嵌入向量表示        | `resp.vectors` / `batch_result.vectors`       | `Dict[str, List[float]]` | `{"request_0": [0.1, 0.2, 0.3, ...], "request_1": [0.4, 0.5, ...]}`     |
-| <br />      | 单个请求的向量表示     | `resp.vectors[0]` / `batch_result.vectors[0]` | `List[float]`            | `[0.1, 0.2, 0.3, ...]`                                                  |
-
-**repr():** 展示批量任务的元数据字段，不改变响应的类型和实际结果：
-
-```python
-print(resp)
-# BatchResponse(status={...},usage={...},batch_info={...})
-```
+| 访问方式 | 返回内容 | 返回格式 | 返回示例 |
+|---------|---------|---------|---------|
+| `resp.status` | 实时统计 | `Dict` | `{"total":2,"elapsed":"3.42s"}` |
+| `resp.usage` | Token 用量 | `Dict[str, int]` | `{"total_tokens":10}` |
+| `resp.batch_info` | 批量信息 | `Dict` | `{"batch_size":2,"batch_count":3,"dimension":1024}` |
+| `resp.errors` | 失败请求信息 | `Dict[str, str]` | `{"request_0":"error"}` |
+| `resp.results` | 标准响应 | `Dict[str, Dict]` | `{"request_0": {...}}` |
+| `resp.vectors` | 嵌入向量表示 | `Dict[str, List[float]]` | `{"request_0":[0.1,0.2,...]}` |
+| `resp.repr` | 实时终端视图 | `LiveEmbeddingDict` 上下文管理器 | `{"status": {...}, "usage": {...}, "batch_info": {...}}` |
 
 **to\_dict():** 将响应转换为字典，保留指定字段，未在 keep 声明的字段若保留会产生警告：
 
@@ -812,7 +774,7 @@ fallback_models = {
 
 ### 5.1. LangChainRunnable实现
 
-`LangChainRunnable` 继承 `BaseChatModel`，原生支持 `invoke`/`stream`/`batch` 及 `bind_tools`/`with_structured_output`。
+`LangChainRunnable` 继承 `BaseChatModel`，原生支持 `(a)invoke`/`(a)stream`/`(a)batch` 及 `bind_tools`/`with_structured_output` 。
 
 ```python
 from cnllm import CNLLM

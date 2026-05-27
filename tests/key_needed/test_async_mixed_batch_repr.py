@@ -25,7 +25,7 @@ async def _test1():
         ],
         keep=["*"],
     )
-    for _ in resp:
+    async for _ in resp:
         pass
 
     print("  results types:")
@@ -51,7 +51,7 @@ async def _test2():
         ],
         keep=["*"],
     )
-    for _ in resp:
+    async for _ in resp:
         pass
 
     print("  results types:")
@@ -66,7 +66,8 @@ async def _test2():
             if m.get("reasoning_content"):
                 print(f"      think match: {m.get('reasoning_content') == resp.think[rid]}")
         else:
-            print(f"      content: {repr(v['choices'][0]['message'].get('content','')[:80])}")
+            msg = v['choices'][0].get('message', v['choices'][0].get('delta', {}))
+            print(f"      content: {repr(msg.get('content','')[:80])}")
 asyncio.run(_test2())
 
 async def _test3():
@@ -80,7 +81,7 @@ async def _test3():
         ],
         keep=["*"],
     )
-    for _ in resp3:
+    async for _ in resp3:
         pass
 
     for rid in resp3.results.keys():
@@ -96,7 +97,8 @@ async def _test3():
                 print(f"    think: {repr(m['reasoning_content'][:80])}")
             json.dumps(acc)
         else:
-            content = v["choices"][0]["message"].get("content", "")
+            msg = v["choices"][0].get("message", v["choices"][0].get("delta", {}))
+            content = msg.get("content", "")
             print(f"    content: {repr(content[:80])}")
 asyncio.run(_test3())
 

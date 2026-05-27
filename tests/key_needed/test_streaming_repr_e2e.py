@@ -110,7 +110,7 @@ for rid in req_ids:
     if isinstance(v, StreamAccumulator):
         acc_content = v._accumulate()["choices"][0]["delta"]["content"]
     else:
-        acc_content = v["choices"][0]["message"]["content"]
+        acc_content = v["choices"][0].get("message", v["choices"][0].get("delta", {})).get("content", "")
     print(f"  still[{rid}] match: {acc_content == s}, content={repr(s if s else 'NONE')}")
 
 client3.close()

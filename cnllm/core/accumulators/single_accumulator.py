@@ -8,6 +8,34 @@
 4. AsyncNonStreamAccumulator - 单条异步非流式累积
 """
 from typing import Dict, Any, List, Iterator, Set
+class StreamChunk(dict):
+    """流式响应 chunk 包装，同时支持 dict 访问和便捷属性访问。
+
+    继承 dict，完全兼容 OpenAI 标准流式格式：
+    - isinstance(chunk, dict) -> True
+    - chunk["choices"][0]["delta"]["content"] -> 正常工作
+    - json.dumps(chunk) -> 正常工作
+    """
+
+    @property
+    def still(self) -> str:
+        """当前 chunk 的 content 增量（逐帧）。"""
+        return self._get_delta("content", "")
+
+    @property
+    def think(self) -> str:
+        """当前 chunk 的 reasoning_content 增量（逐帧）。"""
+        return self._get_delta("reasoning_content", "")
+
+    def _get_delta(self, key, default=""):
+        choices = self.get("choices")
+        if not choices:
+            return default
+        delta = choices[0].get("delta", {})
+        val = delta.get(key)
+        return val if val is not None else default
+
+
 from .base import NonStreamBaseAccumulator, StreamBaseAccumulator
 
 
@@ -66,10 +94,13 @@ class StreamAccumulator(StreamBaseAccumulator):
         """从已有的 OpenAI 格式 chunks 创建 StreamAccumulator（无 HTTP 流）。"""
         instance = cls.__new__(cls)
         StreamBaseAccumulator.__init__(instance, adapter=None)
-        instance._formatted_chunks = chunks  # 保留引用，调用方追加 chunks 后自动可见
         instance._done = True
         instance._raw_iterator = None
         instance._chunks = []
+        instance._iteration_chunks = chunks
+        # 预构建合并 dict
+        for c in chunks:
+            instance._incremental_merge(c)
 
         instance._buffered_stop = None
         instance._pending_chunk = None
@@ -78,7 +109,7 @@ class StreamAccumulator(StreamBaseAccumulator):
 
     def __iter__(self) -> Iterator[Dict[str, Any]]:
         if self._raw_iterator is None:
-            return iter(self._formatted_chunks)
+            return (StreamChunk(c) for c in self._iteration_chunks)
         return self
 
     def __next__(self) -> Dict[str, Any]:
@@ -93,7 +124,7 @@ class StreamAccumulator(StreamBaseAccumulator):
             if raw is not None:
                 self._chunks.append(raw)
                 self._adapter._accumulate_extra_fields(r)
-            return r
+            return StreamChunk(r)
 
         while True:
             try:
@@ -149,10 +180,10 @@ class StreamAccumulator(StreamBaseAccumulator):
                         self._pending_raw_chunk = chunk
                         if self._usage is not None:
                             result["usage"] = self._usage
-                        self._formatted_chunks.append(old)
-                        return old
+                        self._incremental_merge(old)
+                        return StreamChunk(old)
                         self._buffered_stop = result
-                        continue
+                        continue 
 
                 # 非 stop，有缓存 → flush 缓存
                 if self._buffered_stop is not None:
@@ -162,11 +193,11 @@ class StreamAccumulator(StreamBaseAccumulator):
                     self._pending_raw_chunk = chunk
                     if self._usage is not None:
                         old["usage"] = self._usage
-                    self._formatted_chunks.append(old)
-                    return old
+                    self._incremental_merge(old)
+                    return StreamChunk(old)
 
-                self._formatted_chunks.append(result)
-                return result
+                self._incremental_merge(result)
+                return StreamChunk(result)
             except StopIteration:
                 self._done = True
                 if self._buffered_stop is not None:
@@ -174,25 +205,26 @@ class StreamAccumulator(StreamBaseAccumulator):
                     self._buffered_stop = None
                     if self._usage is not None:
                         c["usage"] = self._usage
-                    self._formatted_chunks.append(c)
-                    return c
+                    self._incremental_merge(c)
+                    return StreamChunk(c)
                 self.finalize()
                 raise
 
 
     def _accumulate(self):
-        if not hasattr(self, '_cached_count'):
-            self._cached_count = 0
-            self._accumulated_cache = {}
-        if self._cached_count != len(self._formatted_chunks):
-            if not self._formatted_chunks:
-                self._accumulated_cache = {}
-                self._cached_count = 0
-            else:
+        """Returns the incrementally merged _formatted_chunks dict.
+
+        When from_chunks was used with a shared list reference,
+        re-merge if _iteration_chunks has more items than merged.
+        """
+        if hasattr(self, '_iteration_chunks') and self._iteration_chunks:
+            # Check if shared list grew since last merge
+            cached = getattr(self, '_merged_count', 0)
+            if cached < len(self._iteration_chunks):
                 from .batch_accumulator import accumulate_openai_stream_chunks
-                self._accumulated_cache = accumulate_openai_stream_chunks(self._formatted_chunks)
-                self._cached_count = len(self._formatted_chunks)
-        return self._accumulated_cache
+                self._formatted_chunks = accumulate_openai_stream_chunks(self._iteration_chunks)
+                self._merged_count = len(self._iteration_chunks)
+        return self._formatted_chunks
 
     def __repr__(self):
         if self._formatted_chunks:
@@ -224,7 +256,7 @@ class AsyncStreamAccumulator(StreamBaseAccumulator):
             if raw is not None:
                 self._chunks.append(raw)
                 self._adapter._accumulate_extra_fields(r)
-            return r
+            return StreamChunk(r)
 
         while True:
             try:
@@ -272,10 +304,10 @@ class AsyncStreamAccumulator(StreamBaseAccumulator):
                         self._pending_raw_chunk = chunk
                         if self._usage is not None:
                             result["usage"] = self._usage
-                        self._formatted_chunks.append(old)
-                        return old
+                        self._incremental_merge(old)
+                        return StreamChunk(old)
                         self._buffered_stop = result
-                        continue
+                        continue 
 
                 if self._buffered_stop is not None:
                     old = self._buffered_stop
@@ -284,11 +316,11 @@ class AsyncStreamAccumulator(StreamBaseAccumulator):
                     self._pending_raw_chunk = chunk
                     if self._usage is not None:
                         old["usage"] = self._usage
-                    self._formatted_chunks.append(old)
-                    return old
+                    self._incremental_merge(old)
+                    return StreamChunk(old)
 
-                self._formatted_chunks.append(result)
-                return result
+                self._incremental_merge(result)
+                return StreamChunk(result)
             except StopAsyncIteration:
                 self._done = True
                 if self._buffered_stop is not None:
@@ -296,25 +328,26 @@ class AsyncStreamAccumulator(StreamBaseAccumulator):
                     self._buffered_stop = None
                     if self._usage is not None:
                         c["usage"] = self._usage
-                    self._formatted_chunks.append(c)
-                    return c
+                    self._incremental_merge(c)
+                    return StreamChunk(c)
                 self.finalize()
                 raise
 
 
     def _accumulate(self):
-        if not hasattr(self, '_cached_count'):
-            self._cached_count = 0
-            self._accumulated_cache = {}
-        if self._cached_count != len(self._formatted_chunks):
-            if not self._formatted_chunks:
-                self._accumulated_cache = {}
-                self._cached_count = 0
-            else:
+        """Returns the incrementally merged _formatted_chunks dict.
+
+        When from_chunks was used with a shared list reference,
+        re-merge if _iteration_chunks has more items than merged.
+        """
+        if hasattr(self, '_iteration_chunks') and self._iteration_chunks:
+            # Check if shared list grew since last merge
+            cached = getattr(self, '_merged_count', 0)
+            if cached < len(self._iteration_chunks):
                 from .batch_accumulator import accumulate_openai_stream_chunks
-                self._accumulated_cache = accumulate_openai_stream_chunks(self._formatted_chunks)
-                self._cached_count = len(self._formatted_chunks)
-        return self._accumulated_cache
+                self._formatted_chunks = accumulate_openai_stream_chunks(self._iteration_chunks)
+                self._merged_count = len(self._iteration_chunks)
+        return self._formatted_chunks
 
     def __repr__(self):
         if self._formatted_chunks:
