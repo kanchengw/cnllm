@@ -104,7 +104,7 @@ class BaiduEmbeddingResponder(EmbeddingResponder):
         import os
         config_path = os.path.join(
             os.path.dirname(__file__),
-            "..", "..", "..", "configs", self.config_dir,
+            "..", "..", "configs", self.config_dir,
             f"response_{self.config_dir}.yaml"
         )
         try:
@@ -141,7 +141,7 @@ class BaiduEmbeddingAdapter(BaseEmbeddingAdapter):
 
         config_path = os.path.join(
             os.path.dirname(__file__),
-            "..", "..", "..", "configs", cls.CONFIG_DIR,
+            "..", "..", "configs", cls.CONFIG_DIR,
             f"request_{cls.CONFIG_DIR}.yaml"
         )
 

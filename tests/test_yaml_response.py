@@ -25,7 +25,7 @@ class TestResponseYAML:
     def response_config(self):
         config_path = os.path.join(
             os.path.dirname(__file__),
-            "..", "configs", "xiaomi", "response_xiaomi.yaml"
+            "..", "cnllm", "configs", "xiaomi", "response_xiaomi.yaml"
         )
         with open(config_path, 'r', encoding='utf-8') as f:
             return yaml.safe_load(f)
