@@ -55,7 +55,6 @@ class ErrorTranslator:
         config_path = os.path.join(
             os.path.dirname(__file__),
             "..",
-            "..",
             "configs",
             self.config_dir,
             f"request_{self.config_dir}.yaml"
