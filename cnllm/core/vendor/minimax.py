@@ -110,7 +110,7 @@ class MiniMaxNativeAdapter(BaseAdapter):
             return cls._class_config
         config_path = os.path.join(
             os.path.dirname(__file__),
-            "..", "..", "..", "configs", cls.CONFIG_DIR, "request_minimax.yaml"
+            "..", "..", "configs", cls.CONFIG_DIR, "request_minimax.yaml"
         )
         try:
             import yaml
