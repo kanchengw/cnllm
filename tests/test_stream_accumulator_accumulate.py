@@ -88,7 +88,7 @@ def _4():
     ]
     sc = StreamAccumulator.from_chunks([])
     for c in chunks:
-        sc._formatted_chunks.append(c)
+        sc._incremental_merge(c)
     last = sc._accumulate()    # last iteration
     after = sc._accumulate()   # after loop
     assert set(last.keys()) == set(after.keys()), "field mismatch"

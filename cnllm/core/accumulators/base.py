@@ -109,7 +109,7 @@ class StreamBaseAccumulator(BaseAccumulator):
         self._buffered_stop: Optional[Dict[str, Any]] = None
         self._pending_chunk: Optional[Dict[str, Any]] = None
         self._pending_raw_chunk: Optional[Dict[str, Any]] = None
-        self._formatted_chunks: List[Dict[str, Any]] = []
+        self._formatted_chunks: Dict[str, Any] = {}
 
     @property
     def usage(self) -> Optional[Dict[str, Any]]:
@@ -119,8 +119,78 @@ class StreamBaseAccumulator(BaseAccumulator):
         return list(self._chunks)
     
 
+    @property
+    def repr(self) -> "LiveDict":
+        """``resp.repr`` 返回一个 Rich Live 上下文管理器，在终端原地刷新累积字典的
+        ``repr()`` 表示。
+
+        用法::
+
+            with resp.repr as view:
+                for chunk in resp:
+                    view.refresh()
+        """
+        from .live import LiveDict
+        return LiveDict(self)
+
+    def _incremental_merge(self, chunk: Dict[str, Any]) -> None:
+        """增量合并单个 chunk 到 _formatted_chunks 合并 dict。"""
+        if not self._formatted_chunks and chunk:
+            self._formatted_chunks = {
+                "id": chunk.get("id", ""),
+                "object": "chat.completion.chunk",
+                "created": chunk.get("created", 0),
+                "model": chunk.get("model", ""),
+                "choices": [],
+            }
+        for choice in chunk.get("choices", []):
+            idx = choice.get("index", 0)
+            while len(self._formatted_chunks.get("choices", [])) <= idx:
+                self._formatted_chunks["choices"].append({
+                    "index": len(self._formatted_chunks["choices"]),
+                    "delta": {"content": "", "reasoning_content": ""},
+                    "finish_reason": None,
+                })
+            acc = self._formatted_chunks["choices"][idx]
+            delta = choice.get("delta", {})
+            acc_delta = acc["delta"]
+            if delta.get("role"):
+                acc_delta["role"] = delta["role"]
+            dcontent = delta.get("content")
+            if dcontent:
+                acc_delta["content"] = acc_delta.get("content", "") + dcontent
+            reasoning = delta.get("reasoning_content")
+            if reasoning:
+                acc_delta["reasoning_content"] = acc_delta.get("reasoning_content", "") + reasoning
+            tc_list = delta.get("tool_calls")
+            if tc_list:
+                if "tool_calls" not in acc_delta:
+                    acc_delta["tool_calls"] = []
+                for tc in tc_list:
+                    tc_idx = tc.get("index", len(acc_delta["tool_calls"]))
+                    while len(acc_delta["tool_calls"]) <= tc_idx:
+                        acc_delta["tool_calls"].append({"index": len(acc_delta["tool_calls"]), "function": {"arguments": ""}})
+                    existing = acc_delta["tool_calls"][tc_idx]
+                    if tc.get("id"):
+                        existing["id"] = tc["id"]
+                    if tc.get("type"):
+                        existing["type"] = tc["type"]
+                    if "function" in tc:
+                        if "function" not in existing:
+                            existing["function"] = {}
+                        if tc["function"].get("name"):
+                            existing["function"]["name"] = tc["function"]["name"]
+                        if tc["function"].get("arguments"):
+                            existing["function"]["arguments"] = existing["function"].get("arguments", "") + tc["function"]["arguments"]
+            fr = choice.get("finish_reason")
+            if fr:
+                acc["finish_reason"] = fr
+        usage = chunk.get("usage")
+        if usage:
+            self._formatted_chunks["usage"] = usage
+
     def finalize(self) -> List[Dict[str, Any]]:
         self._adapter._raw_response = list(self._chunks)
         if self._usage and self._formatted_chunks:
-            self._formatted_chunks[-1]["usage"] = dict(self._usage)
+            self._formatted_chunks["usage"] = dict(self._usage)
         return list(self._chunks)

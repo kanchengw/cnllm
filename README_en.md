@@ -14,14 +14,14 @@
 
 ## Why CNLLM?
 
-CNLLM provides Chinese LLMs with a **unified OpenAI-compatible interface layer** and a set of **standardized parameter rules and response format specifications**. 
+CNLLM Python SDK provides Chinese LLMs with a **unified OpenAI-compatible interface layer** and a set of **standardized parameter rules and response format specifications**. 
 
 Through CNLLM, developers can seamlessly use Chinese LLMs in the OpenAI ecosystem — LangChain, LlamaIndex, AutoGen, Haystack, DeepEval and other mainstream large language model application frameworks. Especially in development and application scenarios requiring multi-model collaboration, using CNLLM can **significantly reduce adaptation, parsing, feature implementation, and maintenance workload, and effectively lower token consumption in AI agent development**.
 
 - **Unified Interface** - One set of interfaces and parameters to call different Chinese LLMs, returns OpenAI API standard format response
 - **Parameter Validation** - Validation and explicit feedback for all parameters, especially vendor native parameters, with support for parameter handling behavior control (`drop_params`)
 - **Streaming Response** - Streaming lifecycle monitoring via `repr()`, and automatic accumulation of incremental fields via `.still`/`.think`/`.tools` property access
-- **Batch Capability** - Independent configuration for single requests in batch tasks, real-time batch progress statistics (`.status`), and configurable failure policy (`stop_on_error`) and memory management (`keep`).
+- **Batch Capability** - Independent configuration for single requests in batch tasks, with real-time batch progress statistics (`.status`), and configurable failure policy (`stop_on_error`) and memory management (`keep`).
 
 **Streaming lifecycle monitoring and automatic accumulation demonstration for model responses, reasoning content, and tool calls:**
 
@@ -62,34 +62,6 @@ Project Documentation:
 - ✨ **LangChain Integration**
   - `LangChainRunnable(BaseChatModel)` adds support for `bind_tools()` / `with_structured_output()` methods
   - New `LangChainEmbeddings`: adapts `langchain_core.embeddings.Embeddings`, supports `embed_documents()` / `embed_query()`
-
-### v0.9.2 (2026-05-10)
-
-- 🔧 **Framework Use Case Tests**
-  - Added `tests/key_needed/framework` directory, containing test cases for CNLLM integration with langchain, llamaindex, autogen, haystack, deepeval frameworks in production scenarios
-- 🔧 **Refactoring**
-  - Removed `StreamChunks`, merged into `StreamAccumulator`
-  - Removed seamless async support (`_SyncProxy` and 5 other classes), now async clients must use async syntax
-  - `StreamAccumulator._accumulate()` caching, `from_chunks()` class method etc.
-
-### v0.9.1 (2026-05-09)
-
-- ✨ **`keep`** **parameter — Storage Control**
-  - `batch()` adds `keep` parameter to control persistent storage of batch response fields
-  - All fields in batch responses can be accessed in real-time during iteration, with results updated and accumulated in real-time; after iteration, accessing fields not specified in `keep` returns empty container + warning
-  - Default strategy (when `keep` is not configured):
-    - `chat.batch()` responses default to keeping key fields `still`/`think`/`tools` and batch metadata, releasing other redundant fields
-    - `embeddings.batch()` responses default to keeping key field `vectors` and batch metadata, releasing other redundant fields
-- ✨ **`drop_params`** **parameter — Unknown Parameter Handling Strategy**
-  - `create()` and `batch()` add `drop_params` parameter, supporting three-tier parameter handling strategies:
-    - `drop_params="warn"`: warns that parameters are not taking effect, ignores and continues, default strategy
-    - `drop_params="ignore"`: silently ignores unknown parameters and continues execution
-    - `drop_params="strict"`: throws exception, terminates request execution
-- ✨ **`usage`** **field — Usage Statistics**
-  - `batch()` response now includes `usage` field, storing full Token consumption statistics for batch processing, accessed via `.usage`
-- ✨ **batch embeddings response format**
-  - `embeddings.batch()` response now includes `vectors` field, storing embedding vectors returned from batch requests, accessed via `.vectors`
-  - `embeddings.batch()` response now includes `batch_info` field, storing batch metadata like `batch_size`, accessed via `.batch_info`
 
 ## Supported Models
 
@@ -246,35 +218,48 @@ resp = client.chat.create(
 
 #### 2.1.2 Streaming Call
 
+Streaming responses provide **two access layers** for different usage scenarios:
+
 ```python
 resp = client.chat.create(
     prompt="Introduce yourself in one sentence",
     stream=True
 )
-for chunk in resp:
-    print(resp.still)  # Real-time accumulated model response text
-print(resp.raw)  # Complete accumulated model native response
+
+# ── During iteration: chunk.* returns per-frame increments, suitable for frontend real-time rendering / streaming process monitoring ──
+with resp.repr as view:   # Dictionary view merged chunk by chunk
+    for chunk in resp:
+        frontend_still.append(chunk.still)   # delta.content, character-level increment
+        frontend_think.append(chunk.think)   # delta.reasoning_content, character-level increment
+        view.refresh()   # Real-time refresh view
+
+# ── After stream ends: resp.* returns complete accumulated results, suitable for getting final values ──
+print(resp.still)   # Complete model response text
+print(resp.think)   # Complete reasoning process
+print(resp)         # Complete dictionary view accumulated result
 ```
 
 #### 2.1.3 Response Access
 
-In streaming calls, access via `for` loop with **real-time accumulation** for responses or the following key fields; non-streaming calls do not support `for` iteration, and access returns complete field content:
+Non-streaming and streaming call response objects provide a **unified property interface**, with streaming additionally providing **per-frame incremental properties**:
 
-| Response Field | Access Method | Return Format | Example |
-| ------------------------------ | ------------ | ----------------- | ------------------------------------------------ |
-| **resp**: standard response | `resp`        | `Dict`/`List[Dict]` | `{non-streaming standard response}`/`[streaming chunks list]` |
-| **think**: `reasoning_content` | `resp.think` | `str`             | `"reasoning content..."`                                      |
-| **still**: `content`           | `resp.still` | `str`             | `"response content..."`                                      |
-| **tools**: `tool_calls`        | `resp.tools` | `Dict[int, Dict]` | `{0: {"id": "...", "function": {...}}, 1: {...}` |
-| **raw**: model native response | `resp.raw`   | `Dict`            | `{"id": "...", "choices": [...], ...}`           |
+**Non-streaming / Streaming common** (can be accessed directly when `stream=False`; recommended to access after stream ends when `stream=True`):
 
-**repr():** 
-Displays **real-time field keys aggregation and field value accumulation** in  a non-streaming-like **dictionary format**; which does not change the streaming response object type, which is an **iterator** containing all standard streaming chunks.
-```python
-for chunk in resp:
-    print(resp)
-# {'id': '...', 'object': '...', 'created': '...', 'model': '...', 'choices': [{'delta': {'content': 'real-time accumulated model response', 'reasoning_content': 'real-time accumulated reasoning process'}, 'finish_reason': 'None'}]}
-```
+| Access Method | Return Content | Return Format | Example |
+|-------------|-------------|-------------|---------|
+| `resp` | OpenAI standard response | `Dict` / `Iterator[Dict]` | Non-streaming returns complete dict / streaming returns chunk list |
+| `resp.still` | Model response text (`content`) | `str` | `"Hello, I'm..."` |
+| `resp.think` | Reasoning process (`reasoning_content`) | `str` | `"reasoning content..."` |
+| `resp.tools` | Tool calls (`tool_calls`) | `Dict[int, Dict]` | `{0: {"id": "...", "function": {...}}}` |
+| `resp.raw` | Model native response | `Dict` / `List[Dict]` | Non-streaming returns complete dict / streaming returns chunks list |
+
+**Streaming-exclusive** (only accessible during iteration when `stream=True`, returns per-frame increments):
+
+| Access Method | Return Content | Return Format | Example |
+|-------------|-------------|-------------|---------|
+| `chunk.still` | Current chunk's `delta.content` increment | `str` | `"Y"`, `"ou"` |
+| `chunk.think` | Current chunk's `delta.reasoning_content` increment | `str` | `"Th"`, `"ink"` |
+| `resp.repr` | Dictionary view merged chunk by chunk (real-time refresh) | `LiveDict` context manager | {real-time view} |
 
 
 ### 2.2 Chat Completions Batch Call
@@ -341,89 +326,85 @@ BatchResponse outer structure, where each response under `results[request_id]` i
 
 #### 2.2.2 Chat Batch Response Access
 
-Supports iterative access to **response results, metadata, and key field contents** within `for` loop, with content **real-time accumulation and updates**:
-
-- In batch streaming calls, updates build chunk by chunk; in batch non-streaming calls and **batch calls with mixed streaming strategies** (see `requests` parameter), updates build request by request.
-- In batch non-streaming calls and batch calls with mixed streaming strategies, if real-time access to batch response fields is not needed, you can access complete results directly, skipping the `for` loop.
-- Supports access by `request_id` or by integer index.
-
-**Access methods:**
+**Terminal real-time observation:**
 
 ```python
 resp = client.chat.batch(
-    prompt=["Hello", "How's the weather today", "Who are you"]
+    prompt=["Hello", "How's the weather today", "Who are you"],
 )
 
-for r in resp:
-    print(resp.status)  # Real-time statistics, request by request real-time update
+with resp.repr as view:   # Real-time refresh view
+    for r in resp:
+        view.refresh()
+```
 
-print(resp.still)  # Response content for all requests in batch task
+**Real-time increment during iteration** (streaming batch / mixed streaming batch available):
 
-# Or access via client.chat.batch_result:
-for r in client.chat.batch(
-    prompt=["Hello", "How's the weather today", "Who are you"], stream=True
-):
-    print(client.chat.batch_result.results)  # OpenAI standard streaming responses for all requests in batch task, chunk by chunk real-time accumulation
+```python
+resp = client.chat.batch(
+    prompt=["Hello", "How's the weather today", "Who are you"],
+    stream=True,
+)
 
-print(client.chat.batch_result.think["request_0"])  # Reasoning content for first request in batch task, or use .think[0] integer index access
+# chunk.* returns per-frame increments, request_id auto-routes
+for chunk in resp:
+    rid = chunk["request_id"]
+    frontend_still[rid].append(chunk.still)
+    frontend_think[rid].append(chunk.think)
+```
+
+**Get full content after stream ends:**
+
+```python
+print(resp.still)   # {"request_0": "Hello", "request_1": "...", "request_2": "..."}
+print(resp.think)   # {"request_0": "reasoning...", "request_1": "..."}
+print(resp.tools)   # {"request_0": [{"function": {"name": "get_weather", ...}}]}
+print(resp)   # Complete view accumulated result
 ```
 
 **Access fields:**
 
-| Category | Field Description | Access Method | Return Format | Example |
-| ----------- | ----------- | --------------------------------------------- | ---------------------------- | ----------------------------------------------------------------------- |
-| **Metadata** | Real-time statistics | `resp.status` / `batch_result.status`         | `Dict`                       | `{"success_count": 2, "fail_count": 0, "total": 2, "elapsed": "3.42s"}` |
-| <br />      | Real-time Token usage | `resp.usage` / `batch_result.usage`           | `Dict[str, int]`             | `{"prompt_tokens": 50, "completion_tokens": 100, "total_tokens": 150}`  |
-| **errors**  | Error information for failed requests | `resp.errors` / `batch_result.errors`         | `Dict[str, str]`             | `{"request_0": "error message","request_1": "error message"}`                                        |
-| <br />      | Error information for single request   | `resp.errors[0]` / `batch_result.errors[0]`   | `str`                        | `"error message"`                                                             |
-| **results** | Standard response for successful requests | `resp.results` / `batch_result.results`       | `Dict[str, Dict]`            | `{"request_0": {...}, "request_1": {...}}`                              |
-| <br />      | Standard response for each request   | `resp.results[0]` / `batch_result.results[0]` | `Dict`                       | `{"id": "...", "choices": [...], ...}`                                  |
-| **think**   | Reasoning process content      | `resp.think` / `batch_result.think`           | `Dict[str, str]`             | `{"request_0": "...", "request_1": "..."}`                              |
-| <br />      | Reasoning content for single request   | `resp.think[0]` / `batch_result.think[0]`     | `str`                        | `"reasoning content..."`                                                             |
-| **still**   | Response content        | `resp.still` / `batch_result.still`           | `Dict[str, str]`             | `{"request_0": "...", "request_1": "..."}`                              |
-| <br />      | Response content for single request   | `resp.still[0]` / `batch_result.still[0]`     | `str`                        | `"response content..."`                                                             |
-| **tools**   | Tool calls        | `resp.tools` / `batch_result.tools`           | `Dict[str, Dict[int, Dict]]` | `{"request_0": {...}, "request_1": {...}}`                              |
-| <br />      | Tool calls for single request   | `resp.tools[0]`                               | `Dict[int, Dict]`            | `{0: {"id": "...", "function": {...}}, 1: {...}`                        |
-| **raw**     | Model native response      | `resp.raw` / `batch_result.raw`               | `Dict[str, Dict]`            | `{"request_0": {...}, "request_1": {...}}`                              |
-| <br />      | Model native response for single request | `resp.raw[0]` / `batch_result.raw[0]`         | `Dict`                       | `{"id": "...", "choices": [...], ...}`                                  |
+| Access Method | Return Content | Return Format | Example |
+|-------------|-------------|-------------|---------|
+| `resp.status` | Real-time statistics | `Dict` | `{"success_count":2,"elapsed":"3.42s"}` |
+| `resp.usage` | Token usage | `Dict[str, int]` | `{"total_tokens":150}` |
+| `resp.errors` | Failed request info | `Dict[str, str]` | `{"request_0": "error"}` |
+| `resp.results` | Standard response | `Dict[str, Dict]` | `{"request_0": {...}}` |
+| `resp.still` | All requests' responses | `Dict[str, str]` | `{"request_0": "Hello", "request_1": "..."}` |
+| `resp.think` | All requests' reasoning | `Dict[str, str]` | `{"request_0": "reasoning..."}` |
+| `resp.tools` | All requests' tool calls | `Dict[str, List[Dict]]` | `{"request_0": [{"function": {...}}]}` |
+| `resp.repr` | Real-time terminal view | `LiveDict` / `LiveBatchDict` context manager | `{"status": {...}, "usage": {...}}` |
 
-**repr():** Displays batch processing metadata fields or response content:
+**Streaming / Mixed exclusive** (available during iteration):
+
+| Access Method | Return Content | Return Format | Example |
+|-------------|-------------|-------------|---------|
+| `chunk.still` | Current chunk increment | `str` | `"Y"` |
+| `chunk.think` | Current chunk reasoning increment | `str` | `"Th"` |
+| `chunk["request_id"]` | Identifies which request the chunk belongs to | `str` | `"request_0"` |
+
+**to_dict():** Converts response to dictionary, preserving specified fields; fields not declared in keep will generate warnings if retained:
 
 ```python
-print(resp)
-# BatchResponse(status={...}, usage={...})
-
-print(resp.results)
+resp.to_dict()  # Default: keeps still/think/tools fields + metadata (status/usage)
+resp.to_dict(errors=True, results=True)  # Keeps results/errors fields + metadata (status/usage)
 ```
 
-### 2.3 Embeddings Batch Call
+### 2.3 Embeddings Call
 
-**prompt parameter:**
+### 2.3.1 Single Call
+
+```python
+resp = client.embeddings.create(input="Hello world")
+print(resp.vectors)  # Embedding vector result
+```
+
+### 2.3.2 Embeddings Batch Call
+
 ```python
 resp = client.embeddings.batch(
-    input=["Hello", "World", "你好"],
+    input=["Hello", "world", "你好"]
 )
-print(resp.vectors)   # Embedding vectors for all requests
-print(resp.status)    # Statistics
-print(resp.usage)     # Token usage statistics
-```
-
-**custom_ids parameter:**
-```python
-resp = client.embeddings.batch(
-    input=["Text 1", "Text 2", "Text 3"],
-    custom_ids=["doc_001", "doc_002", "doc_003"]
-)
-
-resp.results["doc_001"]          # Get response for doc_001
-resp.vectors["doc_002"]          # Get embedding vector for doc_002
-```
-
-**to_dict():** Converts response to dictionary:
-
-```python
-resp.to_dict()               # Default: keeps vectors field + metadata (status/usage/batch_info)
-resp.to_dict(results=True)   # Keeps results field + metadata (status/usage/batch_info)
 ```
 
 #### 2.3.3 Embeddings Batch Response Structure
@@ -439,6 +420,40 @@ BatchEmbeddingResponse outer structure, where each response under `results[reque
     "errors": {"request_2": "error message"},
     "vectors": {"request_0": [...]}    # Mapping of all successful requests' request_id and embedding vectors
 }
+```
+
+#### 2.3.4 Embeddings Batch Response Access
+
+```python
+resp = client.embeddings.batch(
+    input=["Hello", "How's the weather today", "Who are you"]
+)
+
+# Terminal real-time observation
+with resp.repr as view:
+    for r in resp:
+        view.refresh()
+
+print(resp)   # Complete view accumulated result
+```
+
+**Access fields:**
+
+| Access Method | Return Content | Return Format | Example |
+|-------------|-------------|-------------|---------|
+| `resp.status` | Real-time statistics | `Dict` | `{"total":2,"elapsed":"3.42s"}` |
+| `resp.usage` | Token usage | `Dict[str, int]` | `{"total_tokens":10}` |
+| `resp.batch_info` | Batch info | `Dict` | `{"batch_size":2,"batch_count":3,"dimension":1024}` |
+| `resp.errors` | Failed request info | `Dict[str, str]` | `{"request_0":"error"}` |
+| `resp.results` | Standard response | `Dict[str, Dict]` | `{"request_0": {...}}` |
+| `resp.vectors` | Embedding vector representation | `Dict[str, List[float]]` | `{"request_0":[0.1,0.2,...]}` |
+| `resp.repr` | Real-time terminal view | `LiveEmbeddingDict` context manager | `{"status": {...}, "usage": {...}, "batch_info": {...}}` |
+
+**to_dict():** Converts response to dictionary, preserving specified fields; fields not declared in keep will generate warnings if retained:
+
+```python
+resp.to_dict()               # Default: keeps vectors field + metadata (status/usage/batch_info)
+resp.to_dict(results=True)   # Keeps results field + metadata (status/usage/batch_info)
 ```
 
 ### 2.4 Batch Call Control Parameters
@@ -758,7 +773,7 @@ Only effective for `chat.batch()` and `embeddings.batch()` calls:
 
 ### 5.1. LangChainRunnable Implementation
 
-`LangChainRunnable` inherits `BaseChatModel`, natively supports `invoke`/`stream`/`batch` as well as `bind_tools`/`with_structured_output`.
+`LangChainRunnable` inherits `BaseChatModel`, natively supports `(a)invoke`/`(a)stream`/`(a)batch` as well as `bind_tools`/`with_structured_output`.
 
 ```python
 from cnllm import CNLLM
@@ -887,9 +902,9 @@ msg = ChatMessage.from_assistant(resp.still)
 print(msg.text)
 ```
 
-### 5.5. DeepEval — Evaluation Test Cases
+### 5.5. DeepEval — Evaluation Testing
 
-CNLLM output feeds into DeepEval evaluation:
+CNLLM output used for DeepEval evaluation:
 
 ```python
 from cnllm import CNLLM
@@ -906,7 +921,7 @@ print(test_case.actual_output)
 
 ### License
 
-Apache License 2.0 - See [LICENSE](LICENSE) file
+Apache License 2.0 - See [LICENSE](LICENSE) file for details
 
 ### Contact
 

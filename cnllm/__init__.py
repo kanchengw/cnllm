@@ -1,3 +1,6 @@
+import warnings
+warnings.simplefilter("ignore", ResourceWarning)
+
 from .entry.client import CNLLM
 from .entry.async_client import asyncCNLLM
 from .utils.exceptions import (
@@ -20,7 +23,7 @@ from .core.accumulators.embedding_accumulator import EmbeddingResponse
 
 from .core import vendor
 
-__version__ = "0.9.3post1"
+__version__ = "0.9.3post2"
 
 __all__ = [
     "CNLLM",

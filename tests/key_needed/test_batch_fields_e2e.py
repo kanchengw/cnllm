@@ -371,7 +371,7 @@ def test_12_async_mixed_stream():
         saved_errors = dict(resp.errors)
         print(f"  迭代前 errors: {saved_errors}")
         print(f"  迭代前 success_count: {resp.status['success_count']}")
-        for _ in resp:
+        async for _ in resp:
             pass
 
         # ---- 迭代后 ----

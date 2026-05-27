@@ -84,6 +84,41 @@ def _format_elapsed(seconds: float) -> str:
     return f"{minutes}m{secs}s"
 
 
+class LiveEmbeddingDict:
+    """Embedding 批量响应的实时终端视图。"""
+
+    def __init__(self, response):
+        self._resp = response
+        self._live = None
+        self._saved_warn_filters = None
+
+    def __enter__(self):
+        import warnings
+        self._saved_warn_filters = warnings.filters.copy()
+        warnings.simplefilter("ignore", ResourceWarning)
+        from rich.live import Live
+        from rich.text import Text
+        self._live = Live(Text(""), refresh_per_second=10)
+        self._live.__enter__()
+        return self
+
+    def __exit__(self, *args):
+        if self._live:
+            self._live.__exit__(*args)
+        import warnings
+        if self._saved_warn_filters is not None:
+            warnings.filters = self._saved_warn_filters
+
+    def refresh(self):
+        from rich.pretty import Pretty
+        d = {
+            "status": self._resp.status,
+            "usage": self._resp.usage,
+            "batch_info": self._resp.batch_info,
+        }
+        self._live.update(Pretty(d))
+
+
 @dataclass
 class EmbeddingResponse:
     """Embedding 批量响应封装"""
@@ -204,6 +239,11 @@ class EmbeddingResponse:
                 f"status={self.status}, "
                 f"usage={self.usage}, "
                 f"batch_info={self.batch_info})")
+
+    @property
+    def repr(self) -> LiveEmbeddingDict:
+        """Embedding 批量响应的实时终端视图。"""
+        return LiveEmbeddingDict(self)
 
     def add_result(self, request_id: str, result: Dict[str, Any]):
         self._results[request_id] = result
