@@ -147,6 +147,43 @@ class TestBatchStreamChunk(unittest.TestCase):
         for chunk in resp:
             self.assertIsInstance(chunk.think, str)
 
+    def test_batch_stream_chunk_tools(self):
+        # batch 流式中 chunk.tools 逐帧增量 + 按 request_id 分流
+        prompts = ["北京的天气？用工具", "上海的天气？用工具"]
+        resp = self.client.chat.batch(
+            prompt=prompts,
+            stream=True,
+            tools=[WEATHER_TOOL],
+        )
+        print()
+        print("  --- batch per-chunk chunk.tools (with request_id routing) ---")
+        accumulated = {}
+        for chunk in resp:
+            self.assertIsInstance(chunk.tools, list)
+            rid = chunk.get("request_id", "?")
+            if chunk.tools:
+                for tc in chunk.tools:
+                    self.assertIsInstance(tc, dict)
+                    self.assertIn("index", tc)
+                    idx = tc["index"]
+                    key = (rid, idx)
+                    entry = accumulated.setdefault(key, {"rid": rid, "args": ""})
+                    if "id" in tc:
+                        entry["id"] = tc["id"]
+                    if "function" in tc:
+                        if "name" in tc["function"]:
+                            entry["name"] = tc["function"]["name"]
+                        if "arguments" in tc["function"]:
+                            entry["args"] += tc["function"]["arguments"]
+            print(f"    [{rid}] tools={chunk.tools}")
+        print()
+        print("  --- accumulated by (request_id, index) ---")
+        for key in sorted(accumulated.keys()):
+            e = accumulated[key]
+            print(f"    [{e['rid']}][{key[1]}] id={e.get('id','?')}  name={e.get('name','?')}  args={e['args']}")
+        print()
+        print("  resp.tools:", dict(resp.tools))
+
     def test_batch_stream_with_tools(self):
         """batch 流式 + 工具调用：chunk.still 路由 + resp.tools"""
         prompts = ["北京的天气怎么样？用工具", "上海的天气怎么样？用工具"]
@@ -308,6 +345,43 @@ class TestMixedBatchStreamChunk(unittest.TestCase):
         self.assertIn("request_1", resp.still)
         self.assertIn("request_2", resp.still)
 
+    def test_mixed_stream_chunk_tools(self):
+        # 混合 batch 中 stream=True 请求的 chunk.tools 逐帧输出
+        resp = self.client.chat.batch(
+            requests=[
+                {"prompt": "北京的天气", "stream": True, "tools": [WEATHER_TOOL]},
+                {"prompt": "上海的天气", "stream": True, "tools": [WEATHER_TOOL]},
+                {"prompt": "回答一个字：好", "stream": True},
+            ],
+        )
+        print()
+        print("  --- mixed batch per-chunk chunk.tools ---")
+        accumulated = {}
+        for chunk in resp:
+            self.assertIsInstance(chunk.tools, list)
+            rid = chunk.get("request_id", "?")
+            if chunk.tools:
+                for tc in chunk.tools:
+                    idx = tc["index"]
+                    key = (rid, idx)
+                    entry = accumulated.setdefault(key, {"rid": rid, "args": ""})
+                    if "id" in tc:
+                        entry["id"] = tc["id"]
+                    if "function" in tc:
+                        if "name" in tc["function"]:
+                            entry["name"] = tc["function"]["name"]
+                        if "arguments" in tc["function"]:
+                            entry["args"] += tc["function"]["arguments"]
+            still_bit = f" still='{chunk.still}'" if chunk.still else ""
+            print(f"    [{rid}] tools={chunk.tools}{still_bit}")
+        print()
+        print("  --- accumulated ---")
+        for key in sorted(accumulated.keys()):
+            e = accumulated[key]
+            print(f"    [{e['rid']}][{key[1]}] id={e.get('id','?')}  name={e.get('name','?')}  args={e['args']}")
+        print()
+        print("  resp.tools:", dict(resp.tools))
+
     def test_mixed_stream_tools(self):
         """混合 batch + 工具：流式和非流式请求的工具调用都能取到"""
         resp = self.client.chat.batch(
@@ -330,7 +404,66 @@ class TestMixedBatchStreamChunk(unittest.TestCase):
                 self.assertIn(rid, resp.tools, f"工具请求 {rid} 应在 tools 中")
 
 
-        import asyncio
+@unittest.skipUnless(API_KEY, "需要 API Key")
+class TestBatchToolsFormatE2E(unittest.TestCase):
+    """验证批量 resp.tools 格式为 List[Dict]"""
 
-        async def run():
-            re
+    @classmethod
+    def setUpClass(cls):
+        from cnllm import CNLLM
+        cls.client = CNLLM(api_key=API_KEY, base_url=BASE_URL, model=MODEL)
+
+    def test_non_stream_batch_tools_format(self):
+        """非流式批量 resp.tools[rid] 是 List[Dict]，无 index"""
+        resp = self.client.chat.batch(
+            prompt=["北京的天气？", "上海的天气？"],
+            tools=[WEATHER_TOOL],
+        )
+        for _ in resp:
+            pass
+        tools = dict(resp.tools) if resp.tools else {}
+        print(f"\n  tools: {tools}")
+        for rid in ("request_0", "request_1"):
+            tc_list = tools.get(rid, [])
+            self.assertIsInstance(tc_list, list)
+            for tc in tc_list:
+                self.assertIsInstance(tc, dict)
+                self.assertNotIn("index", tc)
+
+    def test_stream_batch_tools_format(self):
+        """流式批量 resp.tools[rid] 是 List[Dict]，无 index"""
+        resp = self.client.chat.batch(
+            prompt=["北京的天气？", "上海的天气？"],
+            stream=True,
+            tools=[WEATHER_TOOL],
+        )
+        for _ in resp:
+            pass
+        tools = dict(resp.tools) if resp.tools else {}
+        print(f"\n  tools: {tools}")
+        for rid in ("request_0", "request_1"):
+            tc_list = tools.get(rid, [])
+            self.assertIsInstance(tc_list, list)
+            for tc in tc_list:
+                self.assertIsInstance(tc, dict)
+                self.assertNotIn("index", tc)
+
+    def test_mixed_batch_tools_format(self):
+        """混合批量 resp.tools[rid] 是 List[Dict]，无 index"""
+        resp = self.client.chat.batch(
+            requests=[
+                {"prompt": "北京的天气", "stream": True, "tools": [WEATHER_TOOL]},
+                {"prompt": "上海的天气", "tools": [WEATHER_TOOL]},
+            ],
+        )
+        for _ in resp:
+            pass
+        tools = dict(resp.tools) if resp.tools else {}
+        print(f"\n  tools: {tools}")
+        for rid in ("request_0", "request_1"):
+            tc_list = tools.get(rid, [])
+            self.assertIsInstance(tc_list, list)
+            for tc in tc_list:
+                self.assertIsInstance(tc, dict)
+                self.assertNotIn("index", tc)
+

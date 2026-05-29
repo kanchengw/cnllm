@@ -29,6 +29,14 @@ class LiveDict:
     def __exit__(self, *args):
         if self._live:
             self._live.__exit__(*args)
+        # Drain HTTP stream if not fully consumed
+        # prevents httpx connection pool pollution on next test/request
+        if hasattr(self._acc, '_done') and not self._acc._done:
+            try:
+                for _ in self._acc:
+                    pass
+            except Exception:
+                pass
         import warnings
         if self._saved_warn_filters is not None:
             warnings.filters = self._saved_warn_filters

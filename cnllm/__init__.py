@@ -20,15 +20,19 @@ from .utils.exceptions import (
     ErrorCode
 )
 from .core.accumulators.embedding_accumulator import EmbeddingResponse
+from .core.accumulators.single_accumulator import ToolCollector
+from .utils.context import ContextBox
 
 from .core import vendor
 
-__version__ = "0.9.3post2"
+__version__ = "0.9.3post3"
 
 __all__ = [
     "CNLLM",
     "asyncCNLLM",
     "EmbeddingResponse",
+    "ToolCollector",
+    "ContextBox",
     "CNLLMError",
     "AuthenticationError",
     "RateLimitError",

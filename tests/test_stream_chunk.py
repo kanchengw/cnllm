@@ -1,9 +1,22 @@
 """
 StreamChunk 单元测试（使用 unittest）
 """
-import json
-import unittest
-from cnllm.core.accumulators.single_accumulator import StreamChunk
+import sys, types, json, unittest
+
+# mock httpx（避免 cnllm 包导入时触发）
+httpx = types.ModuleType('httpx')
+httpx.Client = type('C', (), {'__init__': lambda s, **kw: None, '__enter__': lambda s: s, '__exit__': lambda s, *a: None, 'post': lambda s, **kw: type('R', (), {'status_code': 200, 'raise_for_status': lambda s: None, 'json': lambda s: {}})()})
+httpx.AsyncClient = type('A', (), {'__init__': lambda s, **kw: None, 'post': lambda s, **kw: type('R', (), {'status_code': 200})()})
+httpx.Timeout = lambda *a, **kw: None
+httpx.Limits = lambda *a, **kw: None
+httpx.Response = type('R', (), {'status_code': 200, 'text': ''})
+sys.modules['httpx'] = httpx
+
+# mock dotenv
+sys.modules['dotenv'] = types.ModuleType('dotenv')
+sys.modules['dotenv'].load_dotenv = lambda *a, **kw: None
+
+from cnllm.core.accumulators.single_accumulator import StreamChunk, ToolCollector
 
 
 class TestStreamChunkDictCompatibility(unittest.TestCase):
@@ -117,6 +130,85 @@ class TestStreamChunkConcurrentFields(unittest.TestCase):
         self.assertEqual(chunk.think, "")
 
 
+class TestStreamChunkTools(unittest.TestCase):
+    """chunk.tools 返回 delta.tool_calls 列表"""
+
+    def test_tools_basic(self):
+        chunk = StreamChunk({"choices": [{"delta": {"tool_calls": [
+            {"index": 0, "id": "call_1", "type": "function",
+             "function": {"name": "get_weather", "arguments": ""}}
+        ]}}]})
+        tools = chunk.tools
+        self.assertIsInstance(tools, list)
+        self.assertEqual(len(tools), 1)
+        self.assertEqual(tools[0]["index"], 0)
+        self.assertEqual(tools[0]["id"], "call_1")
+        self.assertEqual(tools[0]["function"]["name"], "get_weather")
+
+    def test_tools_no_key(self):
+        chunk = StreamChunk({"choices": [{"delta": {"content": "你好"}}]})
+        self.assertEqual(chunk.tools, [])
+
+    def test_tools_empty_list(self):
+        chunk = StreamChunk({"choices": [{"delta": {"tool_calls": []}}]})
+        self.assertEqual(chunk.tools, [])
+
+    def test_tools_missing_choices(self):
+        chunk = StreamChunk({"id": "x"})
+        self.assertEqual(chunk.tools, [])
+
+    def test_tools_empty_choices(self):
+        chunk = StreamChunk({"choices": []})
+        self.assertEqual(chunk.tools, [])
+
+    def test_tools_none_value(self):
+        chunk = StreamChunk({"choices": [{"delta": {"tool_calls": None}}]})
+        self.assertEqual(chunk.tools, [])
+
+    def test_tools_multiple_indices(self):
+        chunk = StreamChunk({"choices": [{"delta": {"tool_calls": [
+            {"index": 0, "id": "call_1",
+             "function": {"name": "get_weather", "arguments": "{\"city\":\"北京\"}"}},
+            {"index": 1, "id": "call_2",
+             "function": {"name": "get_air_quality", "arguments": "{\"city\":\"北京\"}"}},
+        ]}}]})
+        self.assertEqual(len(chunk.tools), 2)
+        self.assertEqual(chunk.tools[0]["id"], "call_1")
+        self.assertEqual(chunk.tools[1]["id"], "call_2")
+
+    def test_tools_partial_args(self):
+        """逐帧增量：仅携带 arguments，无 id/name"""
+        chunk = StreamChunk({"choices": [{"delta": {"tool_calls": [
+            {"index": 0, "function": {"arguments": "{\"city\":"}}
+        ]}}]})
+        self.assertEqual(len(chunk.tools), 1)
+        self.assertNotIn("id", chunk.tools[0])
+        self.assertEqual(chunk.tools[0]["function"]["arguments"], "{\"city\":")
+
+    def test_tools_with_content_and_think(self):
+        """与 content / reasoning_content 共存于同一 chunk"""
+        chunk = StreamChunk({"choices": [{"delta": {
+            "content": "北京",
+            "reasoning_content": "好的",
+            "tool_calls": [{"index": 0, "function": {"arguments": "{\"city\":"}}]
+        }}]})
+        self.assertEqual(chunk.still, "北京")
+        self.assertEqual(chunk.think, "好的")
+        self.assertEqual(len(chunk.tools), 1)
+        self.assertEqual(chunk.tools[0]["function"]["arguments"], "{\"city\":")
+
+    def test_tools_dict_access_preserved(self):
+        """dict 接口与 .tools 属性一致"""
+        data = {"choices": [{"delta": {"tool_calls": [
+            {"index": 0, "id": "call_1", "function": {"name": "get_weather"}}
+        ]}}]}
+        chunk = StreamChunk(data)
+        self.assertEqual(len(chunk.tools), 1)
+        self.assertEqual(chunk.tools[0]["id"], "call_1")
+        # dict 全等对比
+        self.assertIs(chunk["choices"][0]["delta"]["tool_calls"], chunk.tools)
+
+
 class TestStreamChunkEdgeCases(unittest.TestCase):
     """边界情况"""
 
@@ -155,5 +247,65 @@ class TestStreamChunkEdgeCases(unittest.TestCase):
         self.assertEqual(data["choices"][0]["delta"]["content"], "世界")
 
 
-if __name__ == "__main__":
-    unittest.main()
+
+
+class TestToolCollector(unittest.TestCase):
+    """ToolCollector: incremental tool_calls merge"""
+
+    def test_single_tool_full(self):
+        col = ToolCollector()
+        col.update([{"index": 0, "id": "call_1",
+                      "function": {"name": "get_weather", "arguments": ""}}])
+        self.assertEqual(col.all, {0: {"args": "", "id": "call_1", "name": "get_weather"}})
+        self.assertEqual(col[0]["id"], "call_1")
+        print("  single full: OK")
+
+    def test_multi_chunk_same_index(self):
+        col = ToolCollector()
+        col.update([{"index": 0, "id": "call_1",
+                      "function": {"name": "get_weather", "arguments": ""}}])
+        col.update([{"index": 0, "function": {"arguments": '{"city":'}}])
+        col.update([{"index": 0, "function": {"arguments": '"Beijing"'}}])
+        col.update([{"index": 0, "function": {"arguments": "}"}}])
+        self.assertEqual(col[0]["args"], '{"city":"Beijing"}')
+        self.assertEqual(col[0]["id"], "call_1")
+        print("  same index merge: OK")
+
+    def test_two_indices_same_chunk(self):
+        col = ToolCollector()
+        col.update([
+            {"index": 0, "id": "call_1",
+             "function": {"name": "get_weather", "arguments": ""}},
+            {"index": 1, "id": "call_2",
+             "function": {"name": "get_air_quality", "arguments": ""}},
+        ])
+        self.assertEqual(len(col.all), 2)
+        self.assertEqual(col[0]["name"], "get_weather")
+        self.assertEqual(col[1]["name"], "get_air_quality")
+        print("  two indices: OK")
+
+    def test_empty_update(self):
+        col = ToolCollector()
+        col.update([])
+        self.assertEqual(col.all, {})
+        col.update([])
+        self.assertEqual(col.all, {})
+        print("  empty: OK")
+
+    def test_minimal_fields(self):
+        col = ToolCollector()
+        col.update([{"index": 0, "function": {"arguments": "test"}}])
+        self.assertNotIn("id", col[0])
+        self.assertEqual(col[0]["args"], "test")
+        print("  min fields: OK")
+
+    def test_all_returns_latest_state(self):
+        col = ToolCollector()
+        col.update([{"index": 0, "id": "call_1",
+                      "function": {"name": "get_weather", "arguments": ""}}])
+        self.assertEqual(col[0]["args"], "")
+        col.update([{"index": 0, "function": {"arguments": "data"}}])
+        self.assertEqual(col[0]["args"], "data")
+        print("  state accumulation: OK")
+
+

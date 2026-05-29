@@ -23,11 +23,11 @@ CNLLM Python SDK 为中文大模型提供了一个**统一的 OpenAI 兼容接�
 - **流式响应** - 通过 `repr()` 进行流式生命周期监测，以及通过 `.still/.think/.tools` 属性访问增量字段自动累积
 - **批量能力** - 支持批量任务中单个请求的独立配置，并提供实时批量进度统计 (`.status`)，可配置的失败策略 (`stop_on_error`) 和内存管理 (`keep`).
 
-**流式生命周期监控以及模型回复、思考内容、工具调用的自动累积演示：**
+**演示：流式生命周期视图与增量提取/自动累积：**
 
 ![Figure 2][repr]
 
-[repr]: pics/repr.gif
+[repr]: pics/repr_demo.gif
 
 ### 开发者招募
 
@@ -53,12 +53,11 @@ CNLLM Python SDK 为中文大模型提供了一个**统一的 OpenAI 兼容接�
 
 ## 更新日志
 
-### v0.9.3 (2026-05-14)
+### v0.9.3 (2026-05-29)
 
-- ✨ **新厂商接入**
-  - 通义千问 Qwen：qwen3.6/qwen3.5 系列 9 个模型 + Embedding 模型
-  - 百度千帆 Baidu：ernie-5.1/ernie-4.5/ernie-speed/ernie-lite/ernie-x1 等 13 个模型 + Embeddings 模型
-  - 腾讯混元 Hunyuan：hy3-preview/hunyuan-2.0-thinking/hunyuan-2.0-instruct
+- ✨ **上下文构建工具**
+  - 新增 `ContextBox` 类，一行代码自动格式化模型回复、推理过程、工具调用消息，并加入`messages` 上下文列表。
+  - 支持`executor`参数，用于自定义工具执行器函数。
 - ✨ **LangChain 集成**
   - `LangChainRunnable(BaseChatModel)` 中新增支持 `bind_tools()` / `with_structured_output()` 方法
   - 新增 `LangChainEmbeddings`：适配 `langchain_core.embeddings.Embeddings`，支持 `embed_documents()` / `embed_query()`
@@ -221,27 +220,31 @@ resp = client.chat.create(
 流式响应提供**两个访问层**，分别面向不同的使用场景：
 
 ```python
+from cnllm import ToolCollector
+
 resp = client.chat.create(
     prompt="用一句话介绍自己", 
-    stream=True
+    stream=True,
+    thinking=True,
+    tools=tools,
 )
 
 # ── 迭代中：chunk.* 返回逐帧增量，适合前端实时渲染/流式过程监控 ──
-with resp.repr as view:   # 逐 chunk 合并的字典视图 
+with resp as view:   # 逐 chunk 合并的完整视图 
     for chunk in resp:
-        frontend_still.append(chunk.still)   # delta.content，逐字增量
-        frontend_think.append(chunk.think)   # delta.reasoning_content，逐字增量
-        view.refresh()   # 实时刷新视图
+        frontend_content.append(chunk.still)    # delta.content，逐字增量
+        frontend_reasoning.append(chunk.think)  # delta.reasoning_content，逐字增量 
+        frontend_tools.update(chunk.tools)      # delta.tool_calls，逐 index 归并 
+        view.refresh()                          # 实时刷新视图
 
 # ── 流结束后：resp.* 返回完整累积结果，适合取最终值 ──
 print(resp.still)   # 完整的模型回复文本
 print(resp.think)   # 完整的推理过程
-print(resp)         # 字典视图完整累积后的结果
+print(resp.tools)   # 完整的工具调用
+print(resp)         # 完整合并的 OpenAI dict
 ```
 
 #### 2.1.3 响应访问
-
-非流式和流式调用的响应对象提供**统一的属性接口**，流式额外提供**逐帧增量属性**：
 
 **非流式 / 流式通用**（`stream=False` 时可直接访问；`stream=True` 时建议流结束后访问）：
 
@@ -250,16 +253,40 @@ print(resp)         # 字典视图完整累积后的结果
 | `resp` | OpenAI 标准响应 | `Dict` / `Iterator[Dict]` | 非流式为完整 dict /流式为 chunk 列表 |
 | `resp.still` | 模型回复文本（`content`） | `str` | `"你好，我是..."` |
 | `resp.think` | 推理过程（`reasoning_content`） | `str` | `"推理内容..."` |
-| `resp.tools` | 工具调用（`tool_calls`） | `Dict[int, Dict]` | `{0: {"id": "...", "function": {...}}}` |
+| `resp.tools` | 工具调用（`tool_calls`） | `List[Dict]` | `[]` |
 | `resp.raw` | 模型原始响应 | `Dict` / `List[Dict]` | 非流式为完整 dict /流式为 chunks 列表 |
 
-**流式专属**（仅 `stream=True` 时在迭代中访问，返回逐帧增量）：
+**流式专属**（仅 `stream=True` 时在迭代中访问，返回逐 chunk 增量）：
 
 | 访问方式 | 返回内容 | 返回格式 | 返回示例 |
 |---------|---------|---------|---------|
 | `chunk.still` | 当前 chunk 的 `delta.content` 增量 | `str` | `"你"`, `"好"` |
 | `chunk.think` | 当前 chunk 的 `delta.reasoning_content` 增量 | `str` | `"思考"`, `"过程"` |
-| `resp.repr` | 逐 chunk 合并的字典视图 (实时刷新) | `LiveDict` 上下文管理器 | {实时视图} |
+| `chunk.tools` | 当前 chunk 的 `delta.tool_calls` 增量 | `List[Dict]` | `[]` |
+| `with resp as view` | 逐 chunk 合并的完整视图 (实时刷新) | `LiveDict` 上下文管理器 | `{实时视图}` |
+
+#### 2.1.4 对话上下文构建
+
+`ContextBox` 将包含了完整上下文内容的 `resp.still` / `resp.think` / `resp.tools` 自动格式化为下一轮对话的 `messages` 列表。
+，
+```python
+from cnllm import ContextBox
+
+# 构建 assistant 消息（think + still 自动拼接，tool_calls 自动附着）
+messages += ContextBox(resp.still, resp.think)
+
+# 或在工具调用场景下，传入 executor 自动执行并追加 tool 结果
+def execute_weather_tool(tc):
+    """tc: {"id": "call_xxx", "function": {"name": "get_weather", "arguments": "..."}}"""
+    args = json.loads(tc["function"]["arguments"])
+    return json.dumps(get_weather(args["location"]))
+
+messages += ContextBox(resp.still, resp.think, resp.tools,
+                       executor=execute_weather_tool)
+# → 自动产出：
+#   {"role": "assistant", "content": "think...\n\nstill...", "tool_calls": resp.tools}
+#   {"role": "tool", "tool_call_id": "call_xxx", "content": "工具执行结果"}
+```
 
 ### 2.2 chat completions 批量调用
 
@@ -330,9 +357,10 @@ BatchResponse 外层结构，其中 `results[request_id]` 字段下的每条响�
 ```python
 resp = client.chat.batch(
     prompt=["你好", "今天天气怎么样", "你是谁"],
+    stream=True,
 )
 
-with resp.repr as view:   # 实时刷新视图 
+with resp as view:   # 实时刷新的元数据视图 
     for r in resp:
         view.refresh()
 ```
@@ -340,11 +368,6 @@ with resp.repr as view:   # 实时刷新视图
 **迭代中实时增量**（流式批量/混合流式批量可用）：
 
 ```python
-resp = client.chat.batch(
-    prompt=["你好", "今天天气怎么样", "你是谁"],
-    stream=True,
-)
-
 # chunk.* 返回逐帧增量，request_id 自动分流
 for chunk in resp:
     rid = chunk["request_id"]
@@ -358,10 +381,10 @@ for chunk in resp:
 print(resp.still)   # {"request_0": "你好", "request_1": "...", "request_2": "..."}
 print(resp.think)   # {"request_0": "推理...", "request_1": "..."}
 print(resp.tools)   # {"request_0": [{"function": {"name": "get_weather", ...}}]}
-print(resp)   # 视图完整累积后的结果
+print(resp)   # 元数据视图完整迭代后的结果
 ```
 
-**访问字段**：
+**通用访问字段**：
 
 | 访问方式 | 返回内容 | 返回格式 | 返回示例 |
 |---------|---------|---------|---------|
@@ -372,15 +395,15 @@ print(resp)   # 视图完整累积后的结果
 | `resp.still` | 所有请求的回复 | `Dict[str, str]` | `{"request_0": "你好", "request_1": "..."}` |
 | `resp.think` | 所有请求的推理 | `Dict[str, str]` | `{"request_0": "推理..."}` |
 | `resp.tools` | 所有请求的工具调用 | `Dict[str, List[Dict]]` | `{"request_0": [{"function": {...}}]}` |
-| `resp.repr` | 实时终端视图 | `LiveDict` / `LiveBatchDict` 上下文管理器 | `{"status": {...}, "usage": {...}}` |
+| `with resp as view` | 元数据视图（实时刷新） | `LiveBatchDict` 上下文管理器 | `{"status": {...}, "usage": {...}}` |
 
-**流式 / 混合专属**（迭代中可用）：
+**流式 / 混合流式批量**（在迭代中访问，返回批量任务中流式请求的逐 chunk 增量）：
 
 | 访问方式 | 返回内容 | 返回格式 | 返回示例 |
 |---------|---------|---------|---------|
 | `chunk.still` | 当前 chunk 增量 | `str` | `"你"` |
 | `chunk.think` | 当前 chunk 推理增量 | `str` | `"思考"` |
-| `chunk["request_id"]` | 标识 chunk 所属请求 | `str` | `"request_0"` |
+| `chunk.tools` | 当前 chunk 的 `delta.tool_calls` 增量 | `List[Dict]` | `[]` |
 
 **to\_dict():** 将响应转换为字典，保留指定字段，未在 keep 声明的字段若保留会产生警告：
 
@@ -429,13 +452,6 @@ BatchEmbeddingResponse 外层结构，其中 `results[request_id]` 字段下每�
 resp = client.embeddings.batch(
     input=["你好", "今天天气怎么样", "你是谁"]
 )
-
-# 终端实时观测
-with resp.repr as view:
-    for r in resp:
-        view.refresh()
-
-print(resp)   # 视图完整累积后的结果
 ```
 
 **访问字段**：
@@ -448,7 +464,7 @@ print(resp)   # 视图完整累积后的结果
 | `resp.errors` | 失败请求信息 | `Dict[str, str]` | `{"request_0":"error"}` |
 | `resp.results` | 标准响应 | `Dict[str, Dict]` | `{"request_0": {...}}` |
 | `resp.vectors` | 嵌入向量表示 | `Dict[str, List[float]]` | `{"request_0":[0.1,0.2,...]}` |
-| `resp.repr` | 实时终端视图 | `LiveEmbeddingDict` 上下文管理器 | `{"status": {...}, "usage": {...}, "batch_info": {...}}` |
+| `with resp as view` |  元数据视图（实时刷新）  | `LiveEmbeddingDict` 上下文管理器 | `{"status": {...}, "usage": {...}, "batch_info": {...}}` |
 
 **to\_dict():** 将响应转换为字典，保留指定字段，未在 keep 声明的字段若保留会产生警告：
 

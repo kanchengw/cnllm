@@ -51,6 +51,16 @@ class LiveBatchDict:
     def __exit__(self, *args):
         if self._live:
             self._live.__exit__(*args)
+        # Drain batch iterator if not fully consumed
+        if hasattr(self._batch, '_done') and not self._batch._done:
+            try:
+                if isinstance(self._batch, (list, dict)):
+                    pass
+                elif hasattr(self._batch, '__iter__'):
+                    for _ in self._batch:
+                        pass
+            except Exception:
+                pass
         import warnings
         if self._saved_warn_filters is not None:
             warnings.filters = self._saved_warn_filters
@@ -471,7 +481,11 @@ class BatchResponse:
     def tools(self) -> IndexableDict:
         self._maybe_wait()
         self._check_non_keep_warn("tools")
-        return IndexableDict(self._tools)
+        # Dict[str, Dict[int, Dict]] → Dict[str, List[Dict]], strip index
+        converted = {}
+        for rid, tc_list in self._tools.items():
+            converted[rid] = [{k: v for k, v in tc.items() if k != "index"} for tc in tc_list]
+        return IndexableDict(converted)
 
     @property
     def raw(self) -> IndexableDict:
@@ -483,6 +497,12 @@ class BatchResponse:
     def repr(self) -> LiveBatchDict:
         """批量响应的实时终端视图。"""
         return LiveBatchDict(self)
+
+    def __enter__(self):
+        return self.repr.__enter__()
+
+    def __exit__(self, *args):
+        return self.repr.__exit__(*args)
 
     @property
     def usage(self) -> Dict[str, Any]:
@@ -496,6 +516,7 @@ class BatchResponse:
         self._still[request_id] = value
 
     def set_tools(self, request_id: str, value: Dict[int, Dict[str, Any]]) -> None:
+        # value is internal Dict[int, Dict]; exposed via .tools as List[Dict]
         self._tools[request_id] = value
 
     def set_raw(self, request_id: str, value: Dict[str, Any]) -> None:
@@ -882,15 +903,22 @@ class BatchStreamAccumulator:
             if "_still" in extra_fields:
                 self._batch_response.update_still(request_id, extra_fields["_still"])
             if "_tools" in extra_fields:
-                existing_tools = self._batch_response._tools.get(request_id, {})
+                existing_tools = self._batch_response._tools.get(request_id, [])
                 if isinstance(extra_fields["_tools"], list):
                     for tc in extra_fields["_tools"]:
                         if isinstance(tc, dict):
-                            idx = tc.get("index", len(existing_tools))
-                            if idx in existing_tools:
-                                existing_tools[idx] = self._merge_dicts(existing_tools[idx], tc)
+                            idx = tc.get("index")
+                            if idx is not None:
+                                found = False
+                                for i, et in enumerate(existing_tools):
+                                    if et.get("index") == idx:
+                                        existing_tools[i] = self._merge_dicts(et, tc)
+                                        found = True
+                                        break
+                                if not found:
+                                    existing_tools.append(dict(tc))
                             else:
-                                existing_tools[idx] = tc
+                                existing_tools.append(dict(tc))
                 self._batch_response.set_tools(request_id, existing_tools)
 
     def _finalize(self) -> None:
@@ -1079,15 +1107,22 @@ class AsyncBatchStreamAccumulator:
             if "_still" in extra_fields:
                 self._batch_response.update_still(request_id, extra_fields["_still"])
             if "_tools" in extra_fields:
-                existing_tools = self._batch_response._tools.get(request_id, {})
+                existing_tools = self._batch_response._tools.get(request_id, [])
                 if isinstance(extra_fields["_tools"], list):
                     for tc in extra_fields["_tools"]:
                         if isinstance(tc, dict):
-                            idx = tc.get("index", len(existing_tools))
-                            if idx in existing_tools:
-                                existing_tools[idx] = self._merge_dicts(existing_tools[idx], tc)
+                            idx = tc.get("index")
+                            if idx is not None:
+                                found = False
+                                for i, et in enumerate(existing_tools):
+                                    if et.get("index") == idx:
+                                        existing_tools[i] = self._merge_dicts(et, tc)
+                                        found = True
+                                        break
+                                if not found:
+                                    existing_tools.append(dict(tc))
                             else:
-                                existing_tools[idx] = tc
+                                existing_tools.append(dict(tc))
                 self._batch_response.set_tools(request_id, existing_tools)
 
     async def _finalize(self) -> None:
@@ -1293,7 +1328,7 @@ class MixedStreamAccumulator:
             try:
                 chunk = next(self._current_stream)
                 chunk["request_id"] = self._current_rid
-                return StreamChunk(chunk)
+                return chunk
             except StopIteration:
                 self._finalize_stream()
                 self._current_stream = None
@@ -1318,7 +1353,7 @@ class MixedStreamAccumulator:
                     try:
                         chunk = next(result)
                         chunk["request_id"] = request_id
-                        return StreamChunk(chunk)
+                        return chunk
                     except StopIteration:
                         self._finalize_stream()
                         self._current_stream = None
@@ -1461,7 +1496,7 @@ class AsyncMixedStreamAccumulator:
             try:
                 chunk = await self._current_stream.__anext__()
                 chunk["request_id"] = self._current_rid
-                return StreamChunk(chunk)
+                return chunk
             except StopAsyncIteration:
                 self._finalize_stream()
                 self._current_stream = None
@@ -1486,7 +1521,7 @@ class AsyncMixedStreamAccumulator:
                     try:
                         chunk = await result.__anext__()
                         chunk["request_id"] = request_id
-                        return StreamChunk(chunk)
+                        return chunk
                     except StopAsyncIteration:
                         self._finalize_stream()
                         self._current_stream = None

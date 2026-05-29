@@ -245,6 +245,12 @@ class EmbeddingResponse:
         """Embedding 批量响应的实时终端视图。"""
         return LiveEmbeddingDict(self)
 
+    def __enter__(self):
+        return self.repr.__enter__()
+
+    def __exit__(self, *args):
+        return self.repr.__exit__(*args)
+
     def add_result(self, request_id: str, result: Dict[str, Any]):
         self._results[request_id] = result
         self._success_count += 1
