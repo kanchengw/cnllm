@@ -23,11 +23,11 @@ Through CNLLM, developers can seamlessly use Chinese LLMs in the OpenAI ecosyste
 - **Streaming Response** - Streaming lifecycle monitoring via `repr()`, and automatic accumulation of incremental fields via `.still`/`.think`/`.tools` property access
 - **Batch Capability** - Independent configuration for single requests in batch tasks, with real-time batch progress statistics (`.status`), and configurable failure policy (`stop_on_error`) and memory management (`keep`).
 
-**Streaming lifecycle monitoring and automatic accumulation demonstration for model responses, reasoning content, and tool calls:**
+**Example:Streaming Lifecycle View and Incremental Extraction/Automatic Accumulation**
 
 ![Figure 2][repr]
 
-[repr]: docs/pics/repr.gif
+[repr]: pics/repr_demo.gif
 
 ### Collaboration Opportunities
 
@@ -53,12 +53,11 @@ Project Documentation:
 
 ## Changelog
 
-### v0.9.3 (2026-05-14)
+### v0.9.3 (2026-05-29)
 
-- ✨ **New Vendors**
-  - Qwen: qwen3.6/qwen3.5/qwen-plus/qwen-turbo/qwen-max and 9 models total + Embedding models
-  - Baidu: ernie-5.1/ernie-4.5/ernie-speed/ernie-lite/ernie-x1 and 13 models total + Embeddings models
-  - Hunyuan: hy3-preview/hunyuan-2.0-thinking/hunyuan-2.0-instruct
+- ✨ **Context Building Tool**
+  - New `ContextBox` class: one line of code to automatically format model responses, reasoning process, and tool call messages, and add them to the `messages` context list.
+  - Supports `executor` parameter for custom tool executor function.
 - ✨ **LangChain Integration**
   - `LangChainRunnable(BaseChatModel)` adds support for `bind_tools()` / `with_structured_output()` methods
   - New `LangChainEmbeddings`: adapts `langchain_core.embeddings.Embeddings`, supports `embed_documents()` / `embed_query()`
@@ -221,27 +220,31 @@ resp = client.chat.create(
 Streaming responses provide **two access layers** for different usage scenarios:
 
 ```python
+from cnllm import ToolCollector
+
 resp = client.chat.create(
     prompt="Introduce yourself in one sentence",
-    stream=True
+    stream=True,
+    thinking=True,
+    tools=tools,
 )
 
 # ── During iteration: chunk.* returns per-frame increments, suitable for frontend real-time rendering / streaming process monitoring ──
-with resp.repr as view:   # Dictionary view merged chunk by chunk
+with resp as view:   # Complete view merged chunk by chunk
     for chunk in resp:
-        frontend_still.append(chunk.still)   # delta.content, character-level increment
-        frontend_think.append(chunk.think)   # delta.reasoning_content, character-level increment
-        view.refresh()   # Real-time refresh view
+        frontend_content.append(chunk.still)    # delta.content, character-level increment
+        frontend_reasoning.append(chunk.think)  # delta.reasoning_content, character-level increment
+        frontend_tools.update(chunk.tools)      # delta.tool_calls, per index merge
+        view.refresh()                          # Real-time refresh view
 
 # ── After stream ends: resp.* returns complete accumulated results, suitable for getting final values ──
 print(resp.still)   # Complete model response text
 print(resp.think)   # Complete reasoning process
-print(resp)         # Complete dictionary view accumulated result
+print(resp.tools)   # Complete tool calls
+print(resp)         # Complete merged OpenAI dict
 ```
 
 #### 2.1.3 Response Access
-
-Non-streaming and streaming call response objects provide a **unified property interface**, with streaming additionally providing **per-frame incremental properties**:
 
 **Non-streaming / Streaming common** (can be accessed directly when `stream=False`; recommended to access after stream ends when `stream=True`):
 
@@ -250,16 +253,39 @@ Non-streaming and streaming call response objects provide a **unified property i
 | `resp` | OpenAI standard response | `Dict` / `Iterator[Dict]` | Non-streaming returns complete dict / streaming returns chunk list |
 | `resp.still` | Model response text (`content`) | `str` | `"Hello, I'm..."` |
 | `resp.think` | Reasoning process (`reasoning_content`) | `str` | `"reasoning content..."` |
-| `resp.tools` | Tool calls (`tool_calls`) | `Dict[int, Dict]` | `{0: {"id": "...", "function": {...}}}` |
+| `resp.tools` | Tool calls (`tool_calls`) | `List[Dict]` | `[]` |
 | `resp.raw` | Model native response | `Dict` / `List[Dict]` | Non-streaming returns complete dict / streaming returns chunks list |
 
-**Streaming-exclusive** (only accessible during iteration when `stream=True`, returns per-frame increments):
+**Streaming-exclusive** (only accessible during iteration when `stream=True`, returns per-chunk increments):
 
 | Access Method | Return Content | Return Format | Example |
 |-------------|-------------|-------------|---------|
 | `chunk.still` | Current chunk's `delta.content` increment | `str` | `"Y"`, `"ou"` |
 | `chunk.think` | Current chunk's `delta.reasoning_content` increment | `str` | `"Th"`, `"ink"` |
-| `resp.repr` | Dictionary view merged chunk by chunk (real-time refresh) | `LiveDict` context manager | {real-time view} |
+| `chunk.tools` | Current chunk's `delta.tool_calls` increment | `List[Dict]` | `[]` |
+| `with resp as view` | Complete view merged chunk by chunk (real-time refresh) | `LiveDict` context manager | `{real-time view}` |
+
+#### 2.1.4 Context Building for Multi-turn Conversation
+
+`ContextBox` automatically formats `resp.still` / `resp.think` / `resp.tools` containing complete context content into the `messages` list for the next round of conversation.
+
+```python
+from cnllm import ContextBox
+
+# Build assistant message (think + still auto-concatenated, tool_calls auto-attached)
+messages += ContextBox(resp.still, resp.think)
+
+# Or in tool calling scenario, pass executor to auto-execute and append tool result
+def execute_weather_tool(tc):
+    """tc: {"id": "call_xxx", "function": {"name": "get_weather", "arguments": "..."}}"""
+    args = json.loads(tc["function"]["arguments"])
+    return json.dumps(get_weather(args["location"]))
+
+messages += ContextBox(resp.still, resp.think, resp.tools,
+                       executor=execute_weather_tool)
+# → Auto produces:
+#   {"role": "assistant", "content": "think...\n\nstill...", "tool_calls": resp.tools}
+#   {"role": "tool", "tool_call_id": "call_xxx", "content": "Tool execution result"}
 
 
 ### 2.2 Chat Completions Batch Call
@@ -331,9 +357,10 @@ BatchResponse outer structure, where each response under `results[request_id]` i
 ```python
 resp = client.chat.batch(
     prompt=["Hello", "How's the weather today", "Who are you"],
+    stream=True,
 )
 
-with resp.repr as view:   # Real-time refresh view
+with resp as view:   # Real-time refresh metadata view
     for r in resp:
         view.refresh()
 ```
@@ -341,11 +368,6 @@ with resp.repr as view:   # Real-time refresh view
 **Real-time increment during iteration** (streaming batch / mixed streaming batch available):
 
 ```python
-resp = client.chat.batch(
-    prompt=["Hello", "How's the weather today", "Who are you"],
-    stream=True,
-)
-
 # chunk.* returns per-frame increments, request_id auto-routes
 for chunk in resp:
     rid = chunk["request_id"]
@@ -359,10 +381,10 @@ for chunk in resp:
 print(resp.still)   # {"request_0": "Hello", "request_1": "...", "request_2": "..."}
 print(resp.think)   # {"request_0": "reasoning...", "request_1": "..."}
 print(resp.tools)   # {"request_0": [{"function": {"name": "get_weather", ...}}]}
-print(resp)   # Complete view accumulated result
+print(resp)   # Complete metadata view accumulated result
 ```
 
-**Access fields:**
+**Common access fields:**
 
 | Access Method | Return Content | Return Format | Example |
 |-------------|-------------|-------------|---------|
@@ -373,15 +395,15 @@ print(resp)   # Complete view accumulated result
 | `resp.still` | All requests' responses | `Dict[str, str]` | `{"request_0": "Hello", "request_1": "..."}` |
 | `resp.think` | All requests' reasoning | `Dict[str, str]` | `{"request_0": "reasoning..."}` |
 | `resp.tools` | All requests' tool calls | `Dict[str, List[Dict]]` | `{"request_0": [{"function": {...}}]}` |
-| `resp.repr` | Real-time terminal view | `LiveDict` / `LiveBatchDict` context manager | `{"status": {...}, "usage": {...}}` |
+| `with resp as view` | Metadata view (real-time refresh) | `LiveBatchDict` context manager | `{"status": {...}, "usage": {...}}` |
 
-**Streaming / Mixed exclusive** (available during iteration):
+**Streaming / Mixed streaming batch** (accessible during iteration, returns per-chunk increments for streaming requests in batch):
 
 | Access Method | Return Content | Return Format | Example |
 |-------------|-------------|-------------|---------|
 | `chunk.still` | Current chunk increment | `str` | `"Y"` |
 | `chunk.think` | Current chunk reasoning increment | `str` | `"Th"` |
-| `chunk["request_id"]` | Identifies which request the chunk belongs to | `str` | `"request_0"` |
+| `chunk.tools` | Current chunk's `delta.tool_calls` increment | `List[Dict]` | `[]` |
 
 **to_dict():** Converts response to dictionary, preserving specified fields; fields not declared in keep will generate warnings if retained:
 
@@ -428,13 +450,6 @@ BatchEmbeddingResponse outer structure, where each response under `results[reque
 resp = client.embeddings.batch(
     input=["Hello", "How's the weather today", "Who are you"]
 )
-
-# Terminal real-time observation
-with resp.repr as view:
-    for r in resp:
-        view.refresh()
-
-print(resp)   # Complete view accumulated result
 ```
 
 **Access fields:**
@@ -447,7 +462,7 @@ print(resp)   # Complete view accumulated result
 | `resp.errors` | Failed request info | `Dict[str, str]` | `{"request_0":"error"}` |
 | `resp.results` | Standard response | `Dict[str, Dict]` | `{"request_0": {...}}` |
 | `resp.vectors` | Embedding vector representation | `Dict[str, List[float]]` | `{"request_0":[0.1,0.2,...]}` |
-| `resp.repr` | Real-time terminal view | `LiveEmbeddingDict` context manager | `{"status": {...}, "usage": {...}, "batch_info": {...}}` |
+| `with resp as view` | Metadata view (real-time refresh) | `LiveEmbeddingDict` context manager | `{"status": {...}, "usage": {...}, "batch_info": {...}}` |
 
 **to_dict():** Converts response to dictionary, preserving specified fields; fields not declared in keep will generate warnings if retained:
 

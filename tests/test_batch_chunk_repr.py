@@ -134,6 +134,154 @@ class TestBatchStreamChunk(unittest.TestCase):
         self.assertIn("request_id", sc)
 
 
+class TestBatchStreamChunkTools(unittest.TestCase):
+    """batch 流式 + 混合流式 chunk.tools 兼容"""
+
+    def test_batch_stream_chunk_tools(self):
+        """batch 流式：含 request_id 的 StreamChunk 上 .tools 正常"""
+        from cnllm.core.accumulators.single_accumulator import StreamChunk
+        chunk = StreamChunk({
+            "request_id": "request_0",
+            "choices": [{"index": 0, "delta": {"tool_calls": [
+                {"index": 0, "id": "call_1",
+                 "function": {"name": "get_weather", "arguments": ""}}
+            ]}}]
+        })
+        self.assertEqual(chunk["request_id"], "request_0")
+        self.assertEqual(len(chunk.tools), 1)
+        self.assertEqual(chunk.tools[0]["id"], "call_1")
+
+    def test_batch_from_chunks_tools(self):
+        """StreamAccumulator.from_chunks() 批量工具调用"""
+        from cnllm.core.accumulators.single_accumulator import StreamAccumulator
+        chunks = [
+            {"choices": [{"index": 0, "delta": {"tool_calls": [
+                {"index": 0, "id": "call_1", "type": "function",
+                 "function": {"name": "get_weather", "arguments": ""}}
+            ]}}]},
+            {"choices": [{"index": 0, "delta": {"tool_calls": [
+                {"index": 0, "function": {"arguments": "{\"city\":\"北京\"}"}}
+            ]}}]},
+            {"choices": [{"index": 0, "delta": {"content": "正在查询"}}]},
+        ]
+        acc = StreamAccumulator.from_chunks(chunks)
+        results = []
+        for chunk in acc:
+            results.append({
+                "still": chunk.still,
+                "tools": chunk.tools,
+            })
+        self.assertEqual(len(results), 3)
+        # 首帧：完整工具元数据
+        self.assertEqual(len(results[0]["tools"]), 1)
+        self.assertEqual(results[0]["tools"][0]["id"], "call_1")
+        self.assertEqual(results[0]["tools"][0]["function"]["name"], "get_weather")
+        # 第二帧：仅 arguments 增量
+        self.assertEqual(len(results[1]["tools"]), 1)
+        self.assertNotIn("id", results[1]["tools"][0])
+        # 第三帧：无工具调用
+        self.assertEqual(results[2]["tools"], [])
+        self.assertEqual(results[2]["still"], "正在查询")
+
+    def test_mixed_batch_chunk_tools(self):
+        """混合 batch 中，stream=True 的请求 yield 的 chunk 含 .tools"""
+        from cnllm.core.accumulators.single_accumulator import StreamChunk
+
+        # 模拟 MixedStreamAccumulator yield 的两种 chunk 形态
+        # 形态 A：流式请求的 tool_calls chunk
+        stream_chunk = StreamChunk({
+            "request_id": "request_0",
+            "choices": [{"index": 0, "delta": {"tool_calls": [
+                {"index": 0, "id": "call_1",
+                 "function": {"name": "get_weather", "arguments": ""}}
+            ]}}]
+        })
+
+        # 形态 B：非流式请求的 marker chunk（空 delta）
+        marker_chunk = StreamChunk({
+            "request_id": "request_1",
+            "choices": [{"delta": {}}],
+            "_state": "completed",
+        })
+
+        self.assertEqual(len(stream_chunk.tools), 1)
+        self.assertEqual(stream_chunk.tools[0]["id"], "call_1")
+        self.assertEqual(marker_chunk.tools, [])
+
+
+
+
+class TestBatchToolsFormat(unittest.TestCase):
+    """验证批量路径下 _tools[rid] 统一为 List[Dict]"""
+
+    def test_set_tools_list(self):
+        """set_tools 存储 List[Dict] 后 .tools 保持 List[Dict]"""
+        br = BatchResponse()
+        br.set_tools("request_0", [
+            {"id": "call_1", "function": {"name": "get_weather"}},
+        ])
+        # 内部存储应该是 List[Dict]
+        self.assertIsInstance(br._tools["request_0"], list)
+        self.assertEqual(len(br._tools["request_0"]), 1)
+        # 外部读取也应保持 List[Dict]
+        tools = br.tools
+        self.assertIn("request_0", tools)
+        self.assertIsInstance(tools["request_0"], list)
+        self.assertEqual(tools["request_0"][0]["id"], "call_1")
+
+    def test_set_tools_empty(self):
+        """空工具列表"""
+        br = BatchResponse()
+        br.set_tools("request_0", [])
+        self.assertEqual(br._tools["request_0"], [])
+        self.assertEqual(br.tools["request_0"], [])
+
+    def test_multiple_requests(self):
+        """多条请求各自独立"""
+        br = BatchResponse()
+        br.set_tools("r0", [{"id": "c1"}])
+        br.set_tools("r1", [{"id": "c2"}, {"id": "c3"}])
+        self.assertEqual(len(br.tools), 2)
+        self.assertEqual(br.tools["r0"][0]["id"], "c1")
+        self.assertEqual(len(br.tools["r1"]), 2)
+
+    def test_merge_tools_into_list(self):
+        """模拟流式 batch 的场景：增量 chunk 在 list 中按 index 归并"""
+        from cnllm.core.accumulators.single_accumulator import ToolCollector
+
+        # 模拟 BatchStreamAccumulator 的合并逻辑（现在存储为 List[Dict]）
+        existing = []
+        chunks = [
+            [{"index": 0, "id": "call_1", "function": {"name": "get_weather"}}],
+            [{"index": 0, "function": {"arguments": '{"city":'}}],
+            [{"index": 0, "function": {"arguments": '"Beijing"'}}],
+        ]
+        for chunk_tools in chunks:
+            for tc in chunk_tools:
+                idx = tc.get("index")
+                found = False
+                for i, et in enumerate(existing):
+                    if et.get("index") == idx:
+                        from unittest.mock import MagicMock
+                        # Simplified merge: just update
+                        existing[i].update(tc)
+                        if "function" in tc and "function" in existing[i]:
+                            existing[i]["function"].update(tc["function"])
+                        found = True
+                        break
+                if not found:
+                    existing.append(dict(tc))
+
+        br = BatchResponse()
+        br.set_tools("request_0", existing)
+
+        self.assertIsInstance(br._tools["request_0"], list)
+        tools = br.tools["request_0"]
+        self.assertEqual(len(tools), 1)
+        self.assertEqual(tools[0]["id"], "call_1")
+        self.assertIn("Beijing", tools[0].get("function", {}).get("arguments", ""))
+        print("  merge test: OK")
+
 class TestIndexableDict(unittest.TestCase):
     """IndexableDict 的 dict() 转换"""
 

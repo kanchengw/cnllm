@@ -765,9 +765,9 @@ class TestDeepSeekFieldAccumulation:
         print("\n=== 核心逻辑核查点 ===")
         checks = []
 
-        is_dict = isinstance(final_tools, dict)
-        checks.append(("1. .tools 类型是 dict", is_dict, f"类型={type(final_tools).__name__}"))
-        print(f"\n  核查 1: .tools 类型 - {'✓ PASS' if is_dict else '✗ FAIL'}")
+        is_list = isinstance(final_tools, list)
+        checks.append(("1. .tools 类型是 list", is_list, f"类型={type(final_tools).__name__}"))
+        print(f"\n  核查 1: .tools 类型 - {'✓ PASS' if is_list else '✗ FAIL'}")
 
         has_tools = final_tools is not None and len(final_tools) > 0
         checks.append(("2. .tools 不为空 (有工具调用)", has_tools, f"长度={len(final_tools) if final_tools else 0}"))

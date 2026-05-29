@@ -24,13 +24,16 @@ class BaseAccumulator:
         return self._adapter._cnllm_extra.get("_still", "") if self._adapter else ""
 
     @property
-    def tools(self) -> Dict[int, Dict[str, Any]]:
-        val = self._adapter._cnllm_extra.get("_tools", {}) if self._adapter else {}
+    def tools(self) -> List[Dict[str, Any]]:
+        """工具调用列表，OpenAI 标准 message.tool_calls 格式。"""
+        val = self._adapter._cnllm_extra.get("_tools", []) if self._adapter else {}
         if isinstance(val, dict):
-            return val
+            # Dict[int, Dict] (internal merge) → List[Dict], strip index
+            return [dict(tc) for tc in val.values()]
         if isinstance(val, list):
-            return {i: tc for i, tc in enumerate(val)}
-        return {}
+            # List[Dict] (non-stream raw) → strip stray index
+            return [{k: v for k, v in tc.items() if k != "index"} for tc in val]
+        return []
 
     @property
     def usage(self) -> Dict[str, Any]:
@@ -132,6 +135,12 @@ class StreamBaseAccumulator(BaseAccumulator):
         """
         from .live import LiveDict
         return LiveDict(self)
+
+    def __enter__(self):
+        return self.repr.__enter__()
+
+    def __exit__(self, *args):
+        return self.repr.__exit__(*args)
 
     def _incremental_merge(self, chunk: Dict[str, Any]) -> None:
         """增量合并单个 chunk 到 _formatted_chunks 合并 dict。"""

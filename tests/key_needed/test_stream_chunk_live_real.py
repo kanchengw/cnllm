@@ -141,6 +141,63 @@ class TestLiveDictRealAPI(unittest.TestCase):
         # 流结束后正常访问属性
         self.assertGreater(len(resp.still), 0)
 
+    def test_repr_with_chunk_tools(self):
+        # resp.repr + chunk.tools incremental observation
+        tools = [
+            {
+                "type": "function",
+                "function": {
+                    "name": "get_weather",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "location": {"type": "string"}
+                        },
+                        "required": ["location"]
+                    }
+                }
+            }
+        ]
+        messages = [{"role": "user", "content": "\u7528\u5de5\u5177\u67e5\u5317\u4eac\u7684\u5929\u6c14"}]
+        resp = self.client.chat.create(
+            messages=messages,
+            model=MODEL,
+            stream=True,
+            tools=tools,
+        )
+        print()
+        print("  --- repr live + chunk.tools per frame ---")
+        accumulated = {}
+        with resp.repr as view:
+            for i, chunk in enumerate(resp):
+                view.refresh()
+                if chunk.tools:
+                    for tc in chunk.tools:
+                        idx = tc["index"]
+                        entry = accumulated.setdefault(idx, {"args": ""})
+                        if "id" in tc:
+                            entry["id"] = tc["id"]
+                        if "function" in tc:
+                            if "name" in tc["function"]:
+                                entry["name"] = tc["function"]["name"]
+                            if "arguments" in tc["function"]:
+                                entry["args"] += tc["function"]["arguments"]
+                parts = []
+                if chunk.still:
+                    parts.append("still='" + chunk.still + "'")
+                if chunk.think:
+                    parts.append("think='" + chunk.think + "'")
+                if chunk.tools:
+                    parts.append("tools=" + str(chunk.tools))
+                if parts:
+                    print("    chunk[" + str(i).zfill(2) + "]: " + ", ".join(parts))
+        print()
+        print("  --- accumulated from chunk.tools ---")
+        for idx, entry in accumulated.items():
+            print("    [" + str(idx) + "] id=" + str(entry.get('id','?')) + "  name=" + str(entry.get('name','?')) + "  args=" + entry['args'])
+        print("  resp.still:", resp.still)
+        print("  resp.tools:", resp.tools)
+
     def test_live_dict_multiple_requests(self):
         """连续多次 live dict 调用"""
         for i in range(3):
@@ -253,9 +310,108 @@ class TestStreamChunkWithTools(unittest.TestCase):
         full_tools = resp.tools
         if full_tools:
             print(f"  resp.tools has {len(full_tools)} tool call(s)")
-            for idx, tc in full_tools.items():
+            for idx, tc in enumerate(full_tools):
                 print(f"    [{idx}] name={tc.get('function', {}).get('name', '?')}, "
                       f"args={tc.get('function', {}).get('arguments', '')[:80]}")
+
+    def test_chunk_tools_property(self):
+        # chunk.tools returns per-chunk incremental tool_calls
+        tools = [
+            {
+                "type": "function",
+                "function": {
+                    "name": "get_weather",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "location": {"type": "string"}
+                        },
+                        "required": ["location"]
+                    }
+                }
+            }
+        ]
+        messages = [{"role": "user", "content": "北京的天气？用工具"}]
+        resp = self.client.chat.create(
+            messages=messages,
+            model=MODEL,
+            stream=True,
+            tools=tools,
+        )
+        print()
+        print("  --- per-chunk chunk.tools incremental ---")
+        chunk_index = 0
+        accumulated = {}
+        for chunk in resp:
+            chunk_index += 1
+            self.assertIsInstance(chunk.tools, list)
+            if chunk.tools:
+                for tc in chunk.tools:
+                    self.assertIsInstance(tc, dict)
+                    self.assertIn("index", tc)
+                    idx = tc["index"]
+                    entry = accumulated.setdefault(idx, {"args": ""})
+                    if "id" in tc:
+                        entry["id"] = tc["id"]
+                    if "function" in tc:
+                        if "name" in tc["function"]:
+                            entry["name"] = tc["function"]["name"]
+                        if "arguments" in tc["function"]:
+                            entry["args"] += tc["function"]["arguments"]
+            line = f"    chunk[{chunk_index:02d}] tools={chunk.tools}"
+            if chunk.still:
+                line += f"  still='{chunk.still}'"
+            print(line)
+        print()
+        print("  --- accumulated by index ---")
+        for idx, entry in accumulated.items():
+            print(f"    [{idx}] id={entry.get('id','?')}  name={entry.get('name','?')}  args={entry['args']}")
+        print()
+        print("  resp.tools (final):", resp.tools)
+
+    def test_chunk_tools_type_with_still_think(self):
+        # chunk.tools / chunk.still / chunk.think type compatibility with output
+        tools = [
+            {
+                "type": "function",
+                "function": {
+                    "name": "get_weather",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "location": {"type": "string"}
+                        },
+                        "required": ["location"]
+                    }
+                }
+            }
+        ]
+        messages = [{"role": "user", "content": "用工具查北京天气"}]
+        resp = self.client.chat.create(
+            messages=messages,
+            model=MODEL,
+            stream=True,
+            tools=tools,
+        )
+        print()
+        print("  --- chunk.still / chunk.think / chunk.tools per chunk ---")
+        for i, chunk in enumerate(resp):
+            self.assertIsInstance(chunk.still, str)
+            self.assertIsInstance(chunk.think, str)
+            self.assertIsInstance(chunk.tools, list)
+            if chunk.tools:
+                self.assertIsInstance(chunk.tools[0], dict)
+            parts = []
+            if chunk.still:
+                parts.append(f"still='{chunk.still}'")
+            if chunk.think:
+                parts.append(f"think='{chunk.think}'")
+            if chunk.tools:
+                parts.append(f"tools={chunk.tools}")
+            if parts:
+                print(f"    chunk[{i:02d}]: " + ", ".join(parts))
+        print()
+        print("  resp.tools:", resp.tools)
 
     def test_repr_with_tools(self):
         """resp.repr 在工具调用场景下不报错"""

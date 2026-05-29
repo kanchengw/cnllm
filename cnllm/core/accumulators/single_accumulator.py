@@ -27,6 +27,16 @@ class StreamChunk(dict):
         """当前 chunk 的 reasoning_content 增量（逐帧）。"""
         return self._get_delta("reasoning_content", "")
 
+    @property
+    def tools(self) -> List[Dict]:
+        """当前 chunk 的 tool_calls 增量（逐帧），返回 List[Dict]。"""
+        choices = self.get("choices")
+        if not choices:
+            return []
+        delta = choices[0].get("delta", {})
+        val = delta.get("tool_calls")
+        return val if val is not None else []
+
     def _get_delta(self, key, default=""):
         choices = self.get("choices")
         if not choices:
@@ -379,3 +389,36 @@ class AsyncNonStreamAccumulator(NonStreamBaseAccumulator):
 
     async def process(self) -> Dict[str, Any]:
         return super().process(self._response, self._responder)
+
+
+class ToolCollector:
+    """累积流式 chunk 中的 tool_calls 增量，按 index 归并为完整结构。"""
+
+    def __init__(self):
+        self._tools: Dict[int, Dict[str, Any]] = {}
+
+    def update(self, tool_calls: List[Dict]) -> None:
+        if not tool_calls:
+            return
+        for tc in tool_calls:
+            idx = tc.get("index")
+            if idx is None:
+                continue
+            entry = self._tools.setdefault(idx, {"args": ""})
+            if "id" in tc:
+                entry["id"] = tc["id"]
+            if "function" in tc:
+                if "name" in tc["function"]:
+                    entry["name"] = tc["function"]["name"]
+                if "arguments" in tc["function"]:
+                    entry["args"] += tc["function"]["arguments"]
+
+    def __getitem__(self, idx: int) -> Dict[str, Any]:
+        return self._tools[idx]
+
+    @property
+    def all(self) -> Dict[int, Dict[str, Any]]:
+        return dict(self._tools)
+
+    def __repr__(self) -> str:
+        return repr(self._tools)
