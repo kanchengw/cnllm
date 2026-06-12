@@ -1,7 +1,7 @@
 import os
 import asyncio
 import logging
-from typing import Dict, Any, Optional, Iterator, AsyncIterator, List, Type, Set
+from typing import Union, Any, AsyncIterator, Dict, Iterator, List, Optional, Set, Type
 from ..entry.http import BaseHttpClient
 from ..utils.exceptions import (
     ModelNotSupportedError,
@@ -433,7 +433,7 @@ class BaseAdapter:
         max_tokens: Optional[int] = None,
         stream: bool = False,
         **kwargs
-    ) -> Dict[str, Any]:
+    ) -> Union[Dict[str, Any], "AsyncStreamAccumulator"]:
         if messages is None and prompt is not None:
             messages = [{"role": "user", "content": prompt}]
 
@@ -572,7 +572,7 @@ class BaseAdapter:
         max_tokens: Optional[int] = None,
         stream: bool = False,
         **kwargs
-    ) -> Dict[str, Any]:
+    ) -> Union[Dict[str, Any], "AsyncStreamAccumulator"]:
         if messages is None and prompt is not None:
             messages = [{"role": "user", "content": prompt}]
 
@@ -625,7 +625,7 @@ class BaseAdapter:
 
         try:
             if stream:
-                return self._ahandle_stream(client, api_path, payload, extra_headers)
+                return await self._ahandle_stream(client, api_path, payload, extra_headers)
             else:
                 raw_resp = await client.apost(api_path, payload, extra_headers)
                 self._raw_response = raw_resp

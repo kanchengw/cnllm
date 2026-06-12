@@ -1,4 +1,4 @@
-from typing import Optional, Dict, Any, Iterator, List, Callable, Union, Union
+from typing import Optional, Dict, Any, Iterator, List, Callable, Union
 import logging
 import os
 import threading
@@ -309,11 +309,27 @@ class CNLLM:
             api_key: Optional[str] = None,
             temperature: float = None,
             max_tokens: Optional[int] = None,
+            max_completion_tokens: Optional[int] = None,
             stream: bool = None,
             timeout: int = None,
             max_retries: int = None,
             retry_delay: float = None,
             base_url: str = None,
+            top_p: Optional[float] = None,
+            stop: Optional[Union[str, List[str]]] = None,
+            tools: Optional[List[Dict[str, Any]]] = None,
+            tool_choice: Optional[Union[str, Dict[str, Any]]] = None,
+            thinking: Optional[Union[bool, Dict[str, Any]]] = None,
+            reasoning_effort: Optional[str] = None,
+            response_format: Optional[Dict[str, Any]] = None,
+            n: Optional[int] = None,
+            presence_penalty: Optional[float] = None,
+            frequency_penalty: Optional[float] = None,
+            seed: Optional[int] = None,
+            stream_options: Optional[Dict[str, Any]] = None,
+            logprobs: Optional[bool] = None,
+            top_logprobs: Optional[int] = None,
+            user: Optional[str] = None,
             **kwargs
         ):
             if "fallback_models" in kwargs:
@@ -344,7 +360,15 @@ class CNLLM:
                 "model": model, "api_key": api_key,
                 "timeout": timeout, "max_retries": max_retries, "retry_delay": retry_delay,
                 "base_url": base_url, "temperature": temperature, "max_tokens": max_tokens,
+                "max_completion_tokens": max_completion_tokens,
                 "stream": stream,
+                "top_p": top_p, "stop": stop,
+                "tools": tools, "tool_choice": tool_choice,
+                "thinking": thinking, "reasoning_effort": reasoning_effort,
+                "response_format": response_format, "n": n,
+                "presence_penalty": presence_penalty, "frequency_penalty": frequency_penalty,
+                "seed": seed, "stream_options": stream_options,
+                "logprobs": logprobs, "top_logprobs": top_logprobs, "user": user,
             }.items() if v is not None}
             merged = resolve_scope_params(
                 self.parent._init_params, "chat",
@@ -416,6 +440,22 @@ class CNLLM:
             custom_ids: Optional[List[str]] = None,
             keep: Optional[set] = None,
             performance: bool = False,
+            max_completion_tokens: Optional[int] = None,
+            top_p: Optional[float] = None,
+            stop: Optional[Union[str, List[str]]] = None,
+            tools: Optional[List[Dict[str, Any]]] = None,
+            tool_choice: Optional[Union[str, Dict[str, Any]]] = None,
+            thinking: Optional[Union[bool, Dict[str, Any]]] = None,
+            reasoning_effort: Optional[str] = None,
+            response_format: Optional[Dict[str, Any]] = None,
+            n: Optional[int] = None,
+            presence_penalty: Optional[float] = None,
+            frequency_penalty: Optional[float] = None,
+            seed: Optional[int] = None,
+            stream_options: Optional[Dict[str, Any]] = None,
+            logprobs: Optional[bool] = None,
+            top_logprobs: Optional[int] = None,
+            user: Optional[str] = None,
             **kwargs,
         ):
             """
@@ -485,6 +525,19 @@ class CNLLM:
                         prompt = client_prompt
                     elif isinstance(client_messages, list) and client_messages and isinstance(client_messages[0], list):
                         messages = client_messages
+
+            # ??????? OpenAI ??? per_request_defaults
+            _batch_chat_params = {k: v for k, v in {
+                "max_completion_tokens": max_completion_tokens,
+                "top_p": top_p, "stop": stop,
+                "tools": tools, "tool_choice": tool_choice,
+                "thinking": thinking, "reasoning_effort": reasoning_effort,
+                "response_format": response_format, "n": n,
+                "presence_penalty": presence_penalty, "frequency_penalty": frequency_penalty,
+                "seed": seed, "stream_options": stream_options,
+                "logprobs": logprobs, "top_logprobs": top_logprobs, "user": user,
+            }.items() if v is not None}
+            kwargs.update(_batch_chat_params)
 
             actual_drop_params = kwargs.pop("drop_params", None)
             batch_level_kwargs, per_request_defaults = split_batch_params(kwargs)
