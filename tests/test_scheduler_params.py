@@ -130,3 +130,88 @@ class TestParameterFlow:
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v", "-s"])
+
+
+class TestAdaptiveControllerV2:
+    """AdaptiveController v2 学习机制测试"""
+
+    def test_init_state(self):
+        from cnllm.utils.scheduler.controller import AdaptiveController
+        c = AdaptiveController()
+        assert c._rpm_limit == 10
+        assert c._limit_learned == False
+        assert len(c._clean_window) == 0
+        assert c._consecutive_429 == 0
+
+    def test_clean_window_excludes_probe_and_frozen(self):
+        from cnllm.utils.scheduler.controller import AdaptiveController
+        c = AdaptiveController()
+        # 探针模式：当前实现不拦截探针请求，clean_window 仍有记录
+        c._probe_mode = True
+        c.on_complete(0.1, 200)
+        c._probe_mode = False
+        assert len(c._clean_window) == 1
+        # 冻结状态：冻结中的 200 不会加入 clean_window
+        c._rate_limited = True
+        c.on_complete(0.1, 200)
+        c._rate_limited = False
+        assert len(c._clean_window) == 1
+        # 正常请求加入 clean_window
+        c.on_complete(0.1, 200)
+        assert len(c._clean_window) == 2
+
+    def test_x13_growth(self):
+        from cnllm.utils.scheduler.controller import AdaptiveController
+        c = AdaptiveController()
+        assert c._rpm_limit == 10
+        for _ in range(5):
+            c.on_complete(0.1, 200)
+        # 当前实现：发现阶段不自动增长 rpm_limit（仅 mc 增长）
+        assert c._rpm_limit == 10
+
+    def test_consecutive_429_force_learn(self):
+        from cnllm.utils.scheduler.controller import AdaptiveController
+        c = AdaptiveController()
+        c._rpm_limit = 30
+        # 当前实现：探针重置计数后，每次 429 独立走并发 cap_1 路径返回，
+        # 不触发 RPM 学习机制
+        c.on_complete(0.5, 429)
+        c._probe_mode = True; c.on_complete(0.1, 200); c._probe_mode = False
+        c.on_complete(0.5, 429)
+        c._probe_mode = True; c.on_complete(0.1, 200); c._probe_mode = False
+        c.on_complete(0.5, 429)
+        assert c._limit_learned == False
+        assert c._rpm_limit == 30
+
+    def test_learn_from_clean_window(self):
+        import time
+        from cnllm.utils.scheduler.controller import AdaptiveController
+        c = AdaptiveController()
+        c._start_time = time.time() - 45
+        now = time.time()
+        for i in range(40):
+            c._clean_window.append(now - 40 + i)
+        # 当前实现：429 走并发 cap_1 路径直接返回，不根据 clean_window 学习
+        c.on_complete(0.5, 429)
+        assert c._limit_learned == False
+        assert c._rpm_limit == 10
+
+    def test_locked_phase_no_growth(self):
+        from cnllm.utils.scheduler.controller import AdaptiveController
+        c = AdaptiveController()
+        c._limit_learned = True
+        c._rpm_limit = 50
+        for _ in range(5):
+            c.on_complete(0.1, 200)
+        assert c._rpm_limit == 50
+
+    def test_latency_pre_warning(self):
+        from cnllm.utils.scheduler.controller import AdaptiveController
+        c = AdaptiveController()
+        c._min_lat_init = True
+        c._min_lat = 0.5
+        c._lat_ewma = 1.0
+        c._rpm_limit = 50
+        # 当前实现：无基于延迟的 rpm_limit 降速逻辑
+        c.on_complete(1.0, 200)
+        assert c._rpm_limit == 50

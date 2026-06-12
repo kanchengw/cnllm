@@ -118,7 +118,6 @@ class TestStreamAccumulator:
 
         resp = client.chat.create(
             messages=[{"role": "user", "content": "1+1等于几？"}],
-            thinking=True,
         )
 
         chunks = []

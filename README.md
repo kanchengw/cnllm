@@ -53,14 +53,19 @@ CNLLM Python SDK 为中文大模型提供了一个**统一的 OpenAI 兼容接�
 
 ## 更新日志
 
-### v0.9.3 (2026-05-29)
+### v0.9.10 (2026-06-12)
 
-- ✨ **上下文构建工具**
-  - 新增 `ContextBox` 类，一行代码自动格式化模型回复、推理过程、工具调用消息，并加入`messages` 上下文列表。
-  - 支持`executor`参数，用于自定义工具执行器函数。
-- ✨ **LangChain 集成**
-  - `LangChainRunnable(BaseChatModel)` 中新增支持 `bind_tools()` / `with_structured_output()` 方法
-  - 新增 `LangChainEmbeddings`：适配 `langchain_core.embeddings.Embeddings`，支持 `embed_documents()` / `embed_query()`
+- ⚡ **自适应调度算法 + 池化算法**
+  - `chat.batch(stream=False)` 路径支持自适应调度器：动态调整并发度、RPS 限速、RPM 学习、429 冻结/解冻
+  - 流式/混合批量调用依然需要手动配置 `max_concurrent` 和 `rps` 或使用默认值，非流式批量也可通过指定覆盖自适应调度
+  - 配置 `fallback_models` + `performance=True` 按模型吞吐量加权分发，快慢模型互不阻塞，不支持配置 `max_concurrent` 和 `rps`
+  - 配置 `performance=False` 或不配置 `performance` 时，默认主模型优先，失败请求自动重试 fallback 模型
+- ✨ **阶跃星辰 Step** 新厂商接入
+  - 支持 `step-3-5-flash`、`step-3-7-flash` 模型
+  - 支持非流式/流式 Chat Completions、Tools、推理强度 (`reasoning_effort`)
+- ✨ **MiniMax** 新增 `minimax-m3`（`MiniMax-M3`）模型
+  - `thinking` 参数支持 `True`/`False` 控制思考模式（M3 专用）
+- ✨ **千问 Qwen** 新增 `qwen3.7-max`、`qwen3.7-plus` 模型
 
 ## 支持的模型
 
@@ -77,11 +82,13 @@ CNLLM Python SDK 为中文大模型提供了一个**统一的 OpenAI 兼容接�
 - **小米 mimo**
   - `mimo-v2-pro`、`mimo-v2-omni`、`mimo-v2-flash`、`mimo-v2.5-pro`、`mimo-v2.5`
 - **MiniMax**
-  - `MiniMax-M2`、`MiniMax-M2.1`、`MiniMax-M2.5`、`MiniMax-M2.5-highspeed`、`MiniMax-M2.7`、`MiniMax-M2.7-highspeed`
+  - `MiniMax-M3`、`MiniMax-M2`、`MiniMax-M2.1`、`MiniMax-M2.5`、`MiniMax-M2.5-highspeed`、`MiniMax-M2.7`、`MiniMax-M2.7-highspeed`
 - **千问 Qwen**
-  - `qwen3.6-max-preview`、`qwen3.6-plus`、`qwen3.6-flash`、`qwen3.5-plus`、`qwen3.5-flash`、`qwen3.5-397b-a17b`、`qwen3.5-122b-a10b`、`qwen3.5-27b`、`qwen3.5-35b-a3b`
+  - `qwen3.7-max`、`qwen3.7-plus`、`qwen3.6-max-preview`、`qwen3.6-plus`、`qwen3.6-flash`、`qwen3.5-plus`、`qwen3.5-flash`、`qwen3.5-397b-a17b`、`qwen3.5-122b-a10b`、`qwen3.5-27b`、`qwen3.5-35b-a3b`
 - **百度千帆 Baidu**
   - `ernie-5.1`、`ernie-5.0`、`ernie-5.0-thinking-perview`、`ernie-4.5-8k-preview`、`ernie-4.5-turbo-128k`（`ernie-4.5-turbo`）、`ernie-4.5-turbo-32k`、`ernie-4.5-turbo-vl`、`ernie-4.5-turbo-vl-32k`、`ernie-4.5-0.3b`、`ernie-speed-pro-128k`（`ernie-speed-pro`）、`ernie-lite-pro-128k`（`ernie-lite-pro`）、`ernie-x1.1`、`ernie-x1-turbo-32k`（`ernie-x1-turbo`）
+- **阶跃星辰 Step**
+  - `step-3-5-flash`、`step-3-7-flash`
 - **腾讯混元 Hunyuan**
   - `hy3-preview`、`hunyuan-2.0-thinking-20251109`（`hunyuan-2.0-thinking`）、`hunyuan-2.0-instruct-20251111`（`hunyuan-2.0-instruct`）
 
@@ -174,7 +181,7 @@ with CNLLM(
 |   | 流式单条 | `chat.create(stream=True)`          | `Iterator[Dict]`      | 
 |   | 非流式批量 | `chat.batch()`         | `BatchResponse`       | 
 |   | 流式批量 | `chat.batch(stream=True)`          | `Iterator[Dict]`      | 
-|   | 混合流式批量 | `chat.batch(requests=[{"stream": True}, {"stream": False}])` | `BatchResponse`       | 
+|   | 混合流式批量 | `chat.batch(requests=[{"stream": True}, {"stream": False}])` | `Iterator[Dict]`       | 
 | **embeddings** | Embeddings 单条 | `embeddings.create()` | `Dict`                | 
 |   | Embeddings 批量 | `embeddings.batch()` | `EmbeddingResponse`   | 
 
@@ -485,9 +492,14 @@ resp.to_dict(results=True)   # 保留 results 字段 + 元数据 (status/usage/b
 | `timeout`        | `int`   | 30       | 单请求超时（秒）                                   |
 | `max_retries`    | `int`   | 3        | 最大重试次数                                     |
 | `retry_delay`    | `float` | 1.0      | 重试延迟（秒）                                    |
+| `performance`    | `bool`  | `False`  | 池化分发，按模型吞吐量加权分发，快慢模型互不阻塞   |
 
 **batch\_size**：
 仅支持批量 Embeddings 调用时配置，默认根据请求数量自适应计算，不建议手动配置。
+
+**max\_concurrent, rps, performance**:
+非流式批量调用（`chat.batch(stream=False)`）时，默认使用自适应调度器，不建议手动配置 `max_concurrent` 和 `rps`。
+配置 `performance=True` 开启池化分发（需配置 `fallback_models` 参数）时，按模型吞吐量加权分发，不支持手动配置 `max_concurrent` 和 `rps`。
 
 ### 2.5 批量调用高级功能
 
@@ -697,6 +709,7 @@ CNLLM 请求参数与**OpenAI 标准参数**基本一致，覆盖范围基于国
    - GLM、DeepSeek、Baidu、Hunyuan、Xiaomi、Kimi：`True` → `{"type": "enabled"}`，`False` → `{"type": "disabled"}`
    - Doubao：`True` → `"enabled"`，`False` → `"disabled"`，`"auto"` → `"auto"`
    - Qwen：`True` → `enable_thinking: true`，`False` → `enable_thinking: false`
+   - Minimax（M3）：`True` → `{"type": "adaptive"}`，`False` → `{"type": "disabled"}`
 
 #### 4.1.2 高级参数
 

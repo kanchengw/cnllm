@@ -1,0 +1,87 @@
+request:
+  method: "POST"
+  headers:
+    Content-Type: "application/json"
+    Authorization: "Bearer ${api_key}"
+
+required_fields:
+  api_key:
+    skip: true
+  model: ~
+
+one_of:
+  messages_or_prompt:
+    messages: ~
+    prompt: ~
+
+optional_fields:
+  base_url:
+    skip: true
+    chat:
+      default: "https://api.stepfun.com"
+      path: "v1/chat/completions"
+  fallback_models:
+    skip: true
+  timeout:
+    skip: true
+    default: 60.0
+  max_retries:
+    skip: true
+    default: 3
+  retry_delay:
+    skip: true
+    default: 1.0
+  temperature: ~
+  top_p: ~
+  max_tokens: ~
+  stream: ~
+  stop: ~
+  tools: ~
+  tool_choice: ~
+  n: ~
+  frequency_penalty: ~
+  response_format: ~
+  reasoning_format: ~
+  reasoning_effort: ~
+  modalities: ~
+  audio:
+    map: "audio"
+  user: ~
+
+model_mapping:
+  chat:
+    step-3-5-flash: "step-3.5-flash"
+    step-3-7-flash: "step-3.7-flash"
+
+error_check:
+  code_path: "error.code"
+  success_code: 0
+  message_path: "error.message"
+  error_codes:
+    invalid_request_error:
+      type: "invalid_request_error"
+      suggestion: "请检查请求参数是否正确"
+    authentication_error:
+      type: "authentication_error"
+      suggestion: "认证失败，请检查 API Key 是否正确"
+    permission_denied_error:
+      type: "permission_denied_error"
+      suggestion: "权限不足，请检查账户权限配置"
+    not_found_error:
+      type: "not_found_error"
+      suggestion: "请求的资源不存在"
+    rate_limit_error:
+      type: "rate_limit"
+      suggestion: "请求频率超限，请稍后重试"
+    server_error:
+      type: "server_error"
+      suggestion: "服务器内部错误，请稍后再试"
+    context_length_exceeded:
+      type: "token_limit"
+      suggestion: "输入内容过长，超过模型上下文限制"
+    content_filter:
+      type: "content_filter"
+      suggestion: "输入或输出包含敏感信息"
+    service_unavailable_error:
+      type: "server_error"
+      suggestion: "服务暂不可用，请稍后重试"

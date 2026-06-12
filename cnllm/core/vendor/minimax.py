@@ -276,6 +276,14 @@ class MiniMaxAdapter(BaseAdapter):
     """MiniMax OpenAI 兼容接口 Adapter"""
     ADAPTER_NAME = "minimax"
     CONFIG_DIR = "minimax"
+    _model_params = {
+        "MiniMax-M2": {"thinking"},
+        "MiniMax-M2.1": {"thinking"},
+        "MiniMax-M2.5": {"thinking"},
+        "MiniMax-M2.7": {"thinking"},
+        "MiniMax-M2.5-highspeed": {"thinking"},
+        "MiniMax-M2.7-highspeed": {"thinking"},
+    }
     def __init__(self, api_key, model, timeout=None, max_retries=None, retry_delay=None, base_url=None, fallback_models=None, protocol=None, **kwargs):
         super().__init__(api_key=api_key, model=model, timeout=timeout, max_retries=max_retries, retry_delay=retry_delay, base_url=base_url, fallback_models=fallback_models, protocol=protocol, **kwargs)
         self.responder = MiniMaxResponder()

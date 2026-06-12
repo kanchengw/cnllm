@@ -80,6 +80,60 @@ class BaseHttpClient:
         self._sync_client: Optional[httpx.Client] = None
         self._async_client: Optional[httpx.AsyncClient] = None
 
+    @staticmethod
+    def _parse_retry_after(response) -> float:
+        import re, datetime as dt_mod
+        try:
+            val = response.headers.get("Retry-After")
+            if val:
+                try:
+                    return float(val)
+                except ValueError:
+                    try:
+                        from email.utils import parsedate_to_datetime
+                        parsed = parsedate_to_datetime(val)
+                        if parsed:
+                            now = dt_mod.datetime.now(parsed.tzinfo)
+                            return max(0.0, (parsed - now).total_seconds())
+                    except Exception:
+                        pass
+            reset = response.headers.get("X-RateLimit-Reset")
+            if reset:
+                try:
+                    return max(0.0, float(reset) - time.time())
+                except ValueError:
+                    pass
+            try:
+                body = response.json() if response.text else None
+            except Exception:
+                body = None
+            if isinstance(body, dict):
+                for path in (
+                    ["error", "retry_after"],
+                    ["error", "retry-after"],
+                    ["error", "retryAfter"],
+                    ["retry_after"],
+                    ["retry-after"],
+                    ["retryAfter"],
+                ):
+                    try:
+                        val = body
+                        for key in path:
+                            val = val[key]
+                        return float(val)
+                    except (KeyError, TypeError, ValueError):
+                        continue
+            msg = str(response.text or "")
+            m = re.search(r"retry\s*after\s*(\d+(?:\.\d+)?)\s*second", msg, re.IGNORECASE)
+            if m:
+                return float(m.group(1))
+            m = re.search(r"please\s*retry\s*in\s*(\d+(?:\.\d+)?)\s*second", msg, re.IGNORECASE)
+            if m:
+                return float(m.group(1))
+        except Exception:
+            pass
+        return 0.0
+
     def _build_url(self, path: str) -> str:
         from cnllm.entry.http import build_url
         return build_url(self.base_url, path, yaml_default=self.yaml_default)
@@ -130,6 +184,12 @@ class BaseHttpClient:
     def _raise_for_status(self, response: httpx.Response, attempt: int) -> None:
         status_code = response.status_code
 
+        # 流式响应：先读取错误体，避免 ResponseNotRead
+        try:
+            response.read()
+        except Exception:
+            pass
+
         try:
             error_detail = response.json() if response.text else {}
         except (json.JSONDecodeError, Exception):
@@ -144,7 +204,11 @@ class BaseHttpClient:
         elif status_code == 413:
             raise TokenLimitError(provider=self.provider)
         elif status_code == 429:
-            raise RateLimitError(provider=self.provider)
+            ra = self._parse_retry_after(response)
+            body_text = response.text or ""
+            from cnllm.utils.rate_type import detect_rate_type
+            rt = detect_rate_type(body_text, dict(response.headers))
+            raise RateLimitError(provider=self.provider, retry_after=ra, rate_type=rt)
         elif status_code == 400:
             msg = error_detail.get("error", {}).get("message") or str(response.text)[:200] if response.text else "\u8bf7\u6c42\u53c2\u6570\u9519\u8bef"
             raise InvalidRequestError(message=msg, provider=self.provider)
@@ -171,10 +235,8 @@ class BaseHttpClient:
                 )
 
                 if response.status_code == 429:
-                    if attempt < self.max_retries - 1:
-                        time.sleep(self.retry_delay * (2 ** attempt))
-                        continue
-                    raise RateLimitError(provider=self.provider)
+                    ra = self._parse_retry_after(response)
+                    raise RateLimitError(provider=self.provider, retry_after=ra)
 
                 if response.status_code >= 400:
                     self._raise_for_status(response, attempt)
@@ -228,7 +290,8 @@ class BaseHttpClient:
                         if attempt < self.max_retries - 1:
                             time.sleep(self.retry_delay * (2 ** attempt))
                             continue
-                        raise RateLimitError(provider=self.provider)
+                        ra = self._parse_retry_after(response)
+                        raise RateLimitError(provider=self.provider, retry_after=ra)
 
                     if response.status_code >= 400:
                         self._raise_for_status(response, attempt)
@@ -281,10 +344,8 @@ class BaseHttpClient:
                 )
 
                 if response.status_code == 429:
-                    if attempt < self.max_retries - 1:
-                        await asyncio.sleep(self.retry_delay * (2 ** attempt))
-                        continue
-                    raise RateLimitError(provider=self.provider)
+                    ra = self._parse_retry_after(response)
+                    raise RateLimitError(provider=self.provider, retry_after=ra)
 
                 if response.status_code >= 400:
                     self._raise_for_status(response, attempt)
@@ -364,7 +425,8 @@ class BaseHttpClient:
                         if attempt < self.max_retries - 1:
                             await asyncio.sleep(self.retry_delay * (2 ** attempt))
                             continue
-                        raise RateLimitError(provider=self.provider)
+                        ra = self._parse_retry_after(response)
+                        raise RateLimitError(provider=self.provider, retry_after=ra)
 
                     if response.status_code >= 400:
                         self._raise_for_status(response, attempt)

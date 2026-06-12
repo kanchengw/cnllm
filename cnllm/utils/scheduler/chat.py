@@ -1,46 +1,21 @@
-"""
-Chat 批量调度器 — 流式批量 + 混合批量
-"""
+import time, asyncio, logging, threading, queue as qmod
 from typing import Any, List, Optional, Iterator, Dict
-import time
-import asyncio
-import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed, wait, FIRST_COMPLETED
 from concurrent.futures import TimeoutError
-from cnllm.utils.exceptions import CNLLMError
-from cnllm.core.accumulators.batch_accumulator import (
-    BatchResponse,
-    BatchStreamAccumulator,
-    AsyncBatchStreamAccumulator,
-)
+from cnllm.utils.exceptions import CNLLMError, RateLimitError
+from cnllm.core.accumulators.batch_accumulator import BatchResponse, BatchStreamAccumulator, AsyncBatchStreamAccumulator
 from cnllm.core.accumulators.single_accumulator import StreamAccumulator
-from cnllm.utils.scheduler.base import (
-    BatchScheduler,
-    BatchItem,
-    BatchItemResult,
-    BatchItemStreamResult,
-    _extract_batch_item,
-)
-import logging
-
+from cnllm.utils.scheduler.base import BatchScheduler, BatchItem, BatchItemResult, BatchItemStreamResult, _extract_batch_item
 logger = logging.getLogger(__name__)
 
 
-class AsyncBatchScheduler:
-    """异步批量调度器"""
+class AsyncBatchScheduler(BatchScheduler):
+    """异步批量调度器（自适应）"""
 
-    def __init__(
-        self,
-        client: Any,
-        max_concurrent: int = 3,
-        rps: float = 0,
-        timeout: Optional[float] = None,
-        stop_on_error: bool = False,
-        callbacks: Optional[List] = None,
-        max_retries: int = None,
-        retry_delay: float = None,
-        custom_ids: Optional[List[str]] = None,
-    ):
+    def __init__(self, client, max_concurrent=3, rps=0, timeout=None,
+                 stop_on_error=False, callbacks=None, max_retries=None,
+                 retry_delay=None, custom_ids=None, controllers=None,
+                 fallback_config=None, performance=False):
         self.client = client
         self.max_concurrent = max_concurrent
         self.rps = rps
@@ -51,6 +26,10 @@ class AsyncBatchScheduler:
         self.custom_ids = custom_ids
         self.max_retries = max_retries
         self.retry_delay = retry_delay
+        self.controllers = controllers if controllers is not None else {}
+        self.performance = performance
+        self.fallback_config = fallback_config or {}
+        self._adapter_cache: Dict = {}
         self._adapter = None
 
     def _get_adapter(self):
@@ -60,148 +39,130 @@ class AsyncBatchScheduler:
         return self._adapter
 
     def _init_adapter_defaults(self):
-        adapter = self._get_adapter()
-        if adapter:
-            if self.timeout is None:
-                self.timeout = adapter.timeout
-            if self.max_retries is None:
-                self.max_retries = adapter.max_retries
-            if self.retry_delay is None:
-                self.retry_delay = adapter.retry_delay
+        a = self._get_adapter()
+        if a:
+            for k in ('timeout', 'max_retries', 'retry_delay'):
+                if getattr(self, k) is None:
+                    setattr(self, k, getattr(a, k, None))
 
-    def _get_request_id(self, index: int) -> str:
-        if self.custom_ids and index < len(self.custom_ids):
-            return self.custom_ids[index]
-        return f"request_{index}"
+    def _ctrl_key(self):
+        a = self._get_adapter()
+        return (a.api_key, a.model)
+
+    def _get_request_id(self, i):
+        return self.custom_ids[i] if self.custom_ids and i < len(self.custom_ids) else f"request_{i}"
 
     async def execute(self, requests, priorities=None):
         from cnllm.core.accumulators.batch_accumulator import BatchResponse
-
-        batch_response = BatchResponse()
-        start_time = time.time()
-        batch_response._start_time = start_time
-
+        br = BatchResponse()
+        br._start_time = time.time()
         if not requests:
-            batch_response.set_total(0)
-            batch_response._end_time = time.time()
-            batch_response.mark_done()
-            return batch_response
+            br.set_total(0); br._end_time = time.time(); br.mark_done(); return br
+        items = []
+        for i, r in enumerate(requests):
+            if r is None: continue
+            p = priorities[i] if priorities and i < len(priorities) else 0
+            items.append(BatchItem(request=r, index=i, priority=p, request_id=self._get_request_id(i)))
+        items.sort(key=lambda x: -x.priority)
+        nxt = 0; pending = set(); stopped = False; err_info = None
 
-        batch_items = []
-        for i, request in enumerate(requests):
-            if request is None:
-                continue
-            priority = priorities[i] if priorities and i < len(priorities) else 0
-            batch_items.append(BatchItem(request=request, index=i, priority=priority, request_id=self._get_request_id(i)))
+        async def run_one_chain(item):
+            req_dict = item.request if isinstance(item.request, dict) else {"prompt": item.request}
+            chain = self.resolve_chain(req_dict)
+            for tier_idx, tier in enumerate(chain):
+                self._ensure_ctrl(tier.key)
+                tc = self.controllers[tier.key]
+                if tc._rate_limited and tier_idx < len(chain) - 1:
+                    continue
+                res = await self._execute_async_tier(req_dict, tier)
+                res.index = item.index
+                if res.status == "success":
+                    return res, item
+                if res.status == "rate_limited":
+                    tc.on_complete(res.elapsed, 429, retry_after=0)
+                    continue
+            return BatchItemResult(index=item.index, request=item.request, status="error",
+                                    error=Exception("All tiers exhausted"), elapsed=0), item
 
-        batch_items.sort(key=lambda x: -x.priority)
+        for _ in range(min(self.max_concurrent, len(items))):
+            pending.add(asyncio.create_task(run_one_chain(items[nxt]))); nxt += 1
 
-        sem = asyncio.Semaphore(self.max_concurrent)
-        last_submit_time = 0
-        next_idx = 0
-        pending = set()
-        stopped = False
-        first_error_info = None
-
-        async def run_single(item):
-            async with sem:
-                if self._min_interval > 0:
-                    nonlocal last_submit_time
-                    elapsed_since_last = time.time() - last_submit_time
-                    if elapsed_since_last < self._min_interval:
-                        await asyncio.sleep(self._min_interval - elapsed_since_last)
-                    last_submit_time = time.time()
-                return await self._execute_single(item.index, item.request), item
-
-        for _ in range(min(self.max_concurrent, len(batch_items))):
-            task = asyncio.create_task(run_single(batch_items[next_idx]))
-            pending.add(task)
-            next_idx += 1
-
-        while pending:
-            done, pending = await asyncio.wait(pending, return_when=asyncio.FIRST_COMPLETED)
-            for task in done:
+        while pending or stopped:
+            done, pending = await asyncio.wait(pending, return_when=FIRST_COMPLETED) if pending else (set(), pending)
+            for t in done:
                 try:
-                    result, item = task.result()
+                    res, item = t.result()
                 except Exception:
                     continue
-                result.request_id = item.request_id
-                if result.status == "success":
-                    raw_resp, formatted_resp, extras = _extract_batch_item(result.response)
-                    batch_response.set_raw(item.request_id, raw_resp)
-                    batch_response.add_result(item.request_id, formatted_resp)
-                    if "_thinking" in extras:
-                        batch_response.set_think(item.request_id, extras["_thinking"])
-                    if "_still" in extras:
-                        batch_response.set_still(item.request_id, extras["_still"])
-                    if "_tools" in extras:
-                        batch_response.set_tools(item.request_id, extras["_tools"])
-                    if "_usage" in extras:
-                        batch_response.set_usage(item.request_id, extras["_usage"])
+                res.request_id = item.request_id
+                if res.status == "success":
+                    raw, fmt, ext = _extract_batch_item(res.response)
+                    br.set_raw(item.request_id, raw)
+                    br.add_result(item.request_id, fmt)
+                    for k, m in {"_thinking":"set_think","_still":"set_still","_tools":"set_tools","_usage":"set_usage"}.items():
+                        if k in ext:
+                            getattr(br, m)(item.request_id, ext[k])
+                    if res.tier_key:
+                        result_ctrl = self.controllers.get(res.tier_key)
+                        if result_ctrl:
+                            result_ctrl.on_complete(res.elapsed, 200)
+                elif res.status == "rate_limited":
+                    if res.tier_key:
+                        rc = self.controllers.get(res.tier_key)
+                        if rc:
+                            ra = getattr(res.error, 'retry_after', 0.0) if res.error else 0.0
+                            rc.on_complete(res.elapsed, 429, retry_after=ra)
+                    # re-queue for retry
+                    pending.add(asyncio.create_task(run_one_chain(item)))
                 else:
-                    error_data = {"error": str(result.error) if result.error else "unknown error"}
-                    batch_response.add_result(item.request_id, error_data)
-                    if self.stop_on_error and first_error_info is None:
-                        first_error_info = item.request_id
-                        stopped = True
-                        break
+                    br.add_result(item.request_id, {"error": str(res.error or "unknown")})
+                    if self.stop_on_error and err_info is None:
+                        err_info = item.request_id; stopped = True; break
+            if stopped: break
 
-            if not stopped and next_idx < len(batch_items):
-                task = asyncio.create_task(run_single(batch_items[next_idx]))
-                pending.add(task)
-                next_idx += 1
+            # unfreeze frozen controllers (window-monitoring based)
+            for ck, cc in list(self.controllers.items()):
+                cc._unfreeze()
 
-        batch_response.set_total(len(requests))
-        batch_response._end_time = time.time()
-        batch_response.mark_done()
-        return batch_response
+            if not stopped and nxt < len(items):
+                while nxt < len(items) and len(pending) < min(self.max_concurrent, 20):
+                    pending.add(asyncio.create_task(run_one_chain(items[nxt]))); nxt += 1
 
-    async def _execute_single(self, index, request):
+        br.set_total(len(requests))
+        br._end_time = time.time()
+        br.mark_done()
+        return br
+
+    async def _execute_async_tier(self, request, tier):
+        """async direct adapter call for a single tier"""
+        api_params, _ = self._split_params(request)
+        adapter = self._get_tier_adapter(tier.api_key, tier.model)
+        t0 = time.time()
         try:
-            if isinstance(request, str):
-                kwargs = {}
-                if self.timeout is not None:
-                    kwargs['timeout'] = self.timeout
-                if self.max_retries is not None:
-                    kwargs['max_retries'] = self.max_retries
-                if self.retry_delay is not None:
-                    kwargs['retry_delay'] = self.retry_delay
-                result = await self.client.chat.create(prompt=request, **kwargs)
-            elif isinstance(request, dict):
-                req_copy = {k: v for k, v in request.items() if k not in ("_input_type", "_orig_idx")}
-                if 'timeout' not in req_copy and self.timeout is not None:
-                    req_copy['timeout'] = self.timeout
-                if 'max_retries' not in req_copy and self.max_retries is not None:
-                    req_copy['max_retries'] = self.max_retries
-                if 'retry_delay' not in req_copy and self.retry_delay is not None:
-                    req_copy['retry_delay'] = self.retry_delay
-                result = await self.client.chat.create(**req_copy)
-            elif hasattr(request, 'to_dict'):
-                req_dict = request.to_dict()
-                req_dict.pop("_input_type", None)
-                if 'timeout' not in req_dict and self.timeout is not None:
-                    req_dict['timeout'] = self.timeout
-                if 'max_retries' not in req_dict and self.max_retries is not None:
-                    req_dict['max_retries'] = self.max_retries
-                if 'retry_delay' not in req_dict and self.retry_delay is not None:
-                    req_dict['retry_delay'] = self.retry_delay
-                result = await self.client.chat.create(**req_dict)
+            if hasattr(adapter, 'async_create_completion'):
+                result = await adapter.async_create_completion(**api_params)
             else:
-                raise ValueError(f"Invalid request type: {type(request).__name__}")
-            return BatchItemResult(index=index, request=request, response=result, status="success", elapsed=0.0)
-        except Exception as e:
-            return BatchItemResult(index=index, request=request, error=e, status="error", elapsed=0.0)
-
-    def _notify_callback(self, result):
-        for callback in self.callbacks:
-            try:
-                if asyncio.iscoroutinefunction(callback):
-                    asyncio.create_task(callback(result))
-                else:
-                    callback(result)
-            except Exception as e:
-                logging.error(f"Callback error: {e}")
-
+                result = adapter.create_completion(**api_params)
+            return BatchItemResult(
+                index=-1, request=request, response=result,
+                status="success", elapsed=time.time() - t0,
+                tier_key=tier.key,
+            )
+        except RateLimitError as e:
+            return BatchItemResult(
+                index=-1, request=request, error=e,
+                status="rate_limited", elapsed=time.time() - t0,
+                tier_key=tier.key,
+            )
+        except (Exception,) as e:
+            from cnllm.utils.exceptions import ServerError, TimeoutError, NetworkError, AuthenticationError
+            if isinstance(e, (ServerError, TimeoutError, NetworkError, AuthenticationError)):
+                return BatchItemResult(
+                    index=-1, request=request, error=e,
+                    status="rate_limited", elapsed=time.time() - t0,
+                    tier_key=tier.key,
+                )
+            raise
 
 class StreamBatchScheduler(BatchScheduler):
     """同步流式批量调度器（实时流式）"""
@@ -220,56 +181,44 @@ class StreamBatchScheduler(BatchScheduler):
         chunk_queue = queue_mod.Queue(maxsize=200)
 
         def process_stream(item):
-            """生产端：将 chunks 逐条入队"""
             try:
-                if isinstance(item.request, str):
-                    kwargs = {'stream': True}
-                    if self.timeout is not None:
-                        kwargs['timeout'] = self.timeout
-                    if self.max_retries is not None:
-                        kwargs['max_retries'] = self.max_retries
-                    if self.retry_delay is not None:
-                        kwargs['retry_delay'] = self.retry_delay
-                    result = self.client.chat.create(prompt=item.request, **kwargs)
-                elif isinstance(item.request, dict):
-                    req_copy = {k: v for k, v in item.request.items() if k not in ("_input_type", "_orig_idx")}
-                    if 'timeout' not in req_copy and self.timeout is not None:
-                        req_copy['timeout'] = self.timeout
-                    if 'max_retries' not in req_copy and self.max_retries is not None:
-                        req_copy['max_retries'] = self.max_retries
-                    if 'retry_delay' not in req_copy and self.retry_delay is not None:
-                        req_copy['retry_delay'] = self.retry_delay
-                    result = self.client.chat.create(**{**req_copy, "stream": True})
-                elif hasattr(item.request, 'to_dict'):
+                req_dict = item.request if isinstance(item.request, dict) else {"prompt": item.request}
+                if hasattr(item.request, 'to_dict'):
                     req_dict = item.request.to_dict()
-                    req_dict.pop("_input_type", None)
-                    if 'timeout' not in req_dict and self.timeout is not None:
-                        req_dict['timeout'] = self.timeout
-                    if 'max_retries' not in req_dict and self.max_retries is not None:
-                        req_dict['max_retries'] = self.max_retries
-                    if 'retry_delay' not in req_dict and self.retry_delay is not None:
-                        req_dict['retry_delay'] = self.retry_delay
-                    result = self.client.chat.create(**{**req_dict, "stream": True})
-                else:
-                    raise ValueError(f"Invalid request type: {type(item.request).__name__}")
-
+                chain = self.resolve_chain(req_dict)
+                result = None
+                for tier_idx, tier in enumerate(chain):
+                    self._ensure_ctrl(tier.key)
+                    tc = self.controllers[tier.key]
+                    if tc._rate_limited and tier_idx < len(chain) - 1:
+                        continue
+                    api_params, _ = self._split_params(req_dict)
+                    adapter = self._get_tier_adapter(tier.api_key, tier.model)
+                    try:
+                        result = adapter.create_completion(stream=True, **api_params)
+                        break
+                    except RateLimitError:
+                        tc.on_complete(0, 429)
+                        continue
+                    except (ServerError, TimeoutError, NetworkError):
+                        continue
+                if result is None:
+                    raise Exception("All tiers exhausted")
                 for chunk in result:
                     if chunk is None:
                         continue
                     chunk_queue.put((item.index, chunk, False))
-                # 消费完后从 result.usage 提取最终 usage
                 try:
                     final_usage = result.usage if hasattr(result, 'usage') else None
                 except Exception:
                     final_usage = None
                 if final_usage:
                     chunk_queue.put((item.index, {"__usage__": dict(final_usage)}, False))
-                chunk_queue.put((item.index, None, False))  # sentinel
+                chunk_queue.put((item.index, None, False))
             except Exception as e:
                 error_chunk = {"error": str(e), "status": "error"}
                 chunk_queue.put((item.index, error_chunk, True))
-                chunk_queue.put((item.index, None, False))  # sentinel
-
+                chunk_queue.put((item.index, None, False))
         # 提交所有任务（受 RPS 限速）
         from concurrent.futures import ThreadPoolExecutor
         with ThreadPoolExecutor(max_workers=self.max_concurrent) as executor:
@@ -316,19 +265,6 @@ class AsyncStreamBatchScheduler(AsyncBatchScheduler):
 
         batch_items.sort(key=lambda x: -x.priority)
 
-        async def _usage_wrapper(ait):
-            """包装 async iterator，在结束时注入 usage chunk"""
-            try:
-                async for chunk in ait:
-                    yield chunk
-            finally:
-                try:
-                    usage = getattr(ait, '_usage', None) or getattr(ait, 'usage', None)
-                    if usage:
-                        yield {"__usage__": dict(usage) if hasattr(usage, 'items') else usage}
-                except Exception:
-                    pass
-
         # Phase 1: 创建所有流（并发受 sem 控制）
         sem = asyncio.Semaphore(self.max_concurrent)
         streams = {}   # index -> async_iterator
@@ -339,59 +275,59 @@ class AsyncStreamBatchScheduler(AsyncBatchScheduler):
             async with sem:
                 if self._min_interval > 0:
                     nonlocal last_submit_time
-                    elapsed_since_last = time.time() - last_submit_time
-                    if elapsed_since_last < self._min_interval:
-                        await asyncio.sleep(self._min_interval - elapsed_since_last)
+                    esl = time.time() - last_submit_time
+                    if esl < self._min_interval:
+                        await asyncio.sleep(self._min_interval - esl)
                     last_submit_time = time.time()
                 try:
-                    if isinstance(item.request, str):
-                        kwargs = {'stream': True}
-                        if self.timeout is not None:
-                            kwargs['timeout'] = self.timeout
-                        if self.max_retries is not None:
-                            kwargs['max_retries'] = self.max_retries
-                        if self.retry_delay is not None:
-                            kwargs['retry_delay'] = self.retry_delay
-                        result = await self.client.chat.create(prompt=item.request, **kwargs)
-                    elif isinstance(item.request, dict):
-                        req_copy = {k: v for k, v in item.request.items() if k not in ("_input_type", "_orig_idx")}
-                        if 'timeout' not in req_copy and self.timeout is not None:
-                            req_copy['timeout'] = self.timeout
-                        if 'max_retries' not in req_copy and self.max_retries is not None:
-                            req_copy['max_retries'] = self.max_retries
-                        if 'retry_delay' not in req_copy and self.retry_delay is not None:
-                            req_copy['retry_delay'] = self.retry_delay
-                        result = await self.client.chat.create(**{**req_copy, "stream": True})
-                    else:
-                        raise ValueError(f"Invalid request type: {type(item.request).__name__}")
-                    return item.index, result.__aiter__(), None
+                    req_dict = item.request if isinstance(item.request, dict) else {"prompt": item.request}
+                    chain = self.resolve_chain(req_dict)
+                    for tier_idx, tier in enumerate(chain):
+                        self._ensure_ctrl(tier.key)
+                        tc = self.controllers[tier.key]
+                        if tc._rate_limited and tier_idx < len(chain) - 1:
+                            continue
+                        api_params, _ = self._split_params(req_dict)
+                        api_params.pop('drop_params', None)
+                        api_params.pop('keep', None)
+                        adapter = self._get_tier_adapter(tier.api_key, tier.model)
+                        try:
+                            if hasattr(adapter, "async_create_completion"):
+                                acc = await adapter.async_create_completion(stream=True, **api_params)
+                                return item.index, acc, None
+                            else:
+                                _sync_iter = adapter.create_completion(stream=True, **api_params)
+                                async def _async_wrap():
+                                    for _chunk in _sync_iter:
+                                        yield _chunk
+                                return item.index, _async_wrap(), None
+                        except RateLimitError:
+                            tc.on_complete(0, 429)
+                            continue
+                        except (ServerError, TimeoutError, NetworkError):
+                            continue
+                    return item.index, None, "All tiers exhausted"
                 except Exception as e:
                     return item.index, None, str(e)
 
         tasks = [create_stream(item) for item in batch_items]
         for coro in asyncio.as_completed(tasks):
             index, ait, error = await coro
-            if ait:
-                streams[index] = _usage_wrapper(ait)
+            if ait is not None:
+                streams[index] = ait
             else:
                 errors[index] = error
 
         request_ids = {item.index: self._get_request_id(item.index) for item in batch_items}
 
-        # 先 yield 失败的流
-        first_error = None
         for idx, error in errors.items():
             yield {"request_id": request_ids[idx], "chunk": {"error": error, "status": "error"}}
-            if self.stop_on_error and first_error is None:
-                first_error = error
-                break  # 不再创建正常流
+            if self.stop_on_error:
+                return
 
-        if first_error:
-            return
-
-        # Phase 2: 实时 yield chunks
+        # Phase 2: 实时 yield chunks（真异步流式）
         stopped = False
-        pending = {}  # task -> (index, async_iterator)
+        pending = {}
         for idx, ait in streams.items():
             try:
                 task = asyncio.create_task(ait.__anext__())
@@ -414,23 +350,12 @@ class AsyncStreamBatchScheduler(AsyncBatchScheduler):
                     if self.stop_on_error:
                         stopped = True
                     continue
-
-                if chunk is None:
-                    try:
-                        pending[asyncio.create_task(ait.__anext__())] = (idx, ait)
-                    except StopAsyncIteration:
-                        pass
-                    continue
-
                 yield {"request_id": request_ids[idx], "chunk": chunk}
-
-                # 调度下一个
                 try:
                     pending[asyncio.create_task(ait.__anext__())] = (idx, ait)
                 except StopAsyncIteration:
                     pass
 
-        # stop_on_error 或结束时，取消残留任务
         for task in pending:
             task.cancel()
 
@@ -541,6 +466,10 @@ class MixedBatchScheduler:
                 else:
                     callback(result)
             except Exception as e:
+                logging.error(f"Callback error: {e}")
+            except Exception as e:
+                logging.error(f"Callback error: {e}")
+        
                 logging.error(f"Callback error: {e}")
 
 

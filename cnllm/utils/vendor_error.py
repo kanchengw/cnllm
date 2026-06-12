@@ -94,9 +94,12 @@ class ErrorTranslator:
             suggestion = error_info.get("suggestion", "")
 
             if error_type == "rate_limit":
+                msg = vendor_error.message or ""
+                rt = "concurrency" if ("并发" in msg or "concurrent" in msg.lower()) else "rpm"
                 raise RateLimitError(
-                    message=f"{vendor_error.vendor} 请求频率超限: {vendor_error.message}",
+                    message=f"{vendor_error.vendor} {msg}",
                     provider=vendor_error.vendor,
+                    rate_type=rt,
                     suggestion=suggestion
                 )
             elif error_type == "timeout":
