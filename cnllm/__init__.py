@@ -25,7 +25,7 @@ from .utils.context import ContextBox
 
 from .core import vendor
 
-__version__ = "0.9.10"
+__version__ = "0.9.10.post1"
 
 __all__ = [
     "CNLLM",
