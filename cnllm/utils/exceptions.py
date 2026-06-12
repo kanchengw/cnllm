@@ -1,5 +1,6 @@
 from enum import Enum
 from typing import Optional, Dict, Any
+import re
 
 
 class ErrorCode(Enum):
@@ -99,7 +100,9 @@ class RateLimitError(CNLLMError):
         provider: str = "unknown",
         details: Optional[Dict[str, Any]] = None,
         suggestion: str = None,
-        original_exc: Optional[Exception] = None
+        original_exc: Optional[Exception] = None,
+        retry_after: float = 0.0,
+        rate_type: str = "rpm",
     ):
         super().__init__(
             message=message,
@@ -110,6 +113,16 @@ class RateLimitError(CNLLMError):
             suggestion=suggestion or "请降低请求频率，或联系厂商提升配额",
             original_exc=original_exc
         )
+        self.retry_after = retry_after
+        self.rate_type = rate_type
+        if self.rate_type == "rpm" and (message or retry_after):
+            import importlib.util as _iu, importlib as _il, os as _os
+            _il.invalidate_caches()
+            _p = _os.path.join(_os.path.dirname(__file__), "rate_type.py")
+            _s = _iu.spec_from_file_location("rate_type", _p)
+            _m = _iu.module_from_spec(_s)
+            _s.loader.exec_module(_m)
+            self.rate_type = _m.detect_rate_type(message, retry_after=retry_after)
 
 
 class TimeoutError(CNLLMError):

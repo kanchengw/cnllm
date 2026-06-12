@@ -415,6 +415,7 @@ class CNLLM:
             callbacks: Optional[List[Callable]] = None,
             custom_ids: Optional[List[str]] = None,
             keep: Optional[set] = None,
+            performance: bool = False,
             **kwargs,
         ):
             """
@@ -532,6 +533,7 @@ class CNLLM:
             actual_stop_on_error = batch_defaults.get("stop_on_error")
             actual_callbacks = batch_defaults.get("callbacks")
             actual_custom_ids = batch_defaults.get("custom_ids")
+            actual_performance = performance
             actual_keep = batch_defaults.get("keep")
             # timeout/max_retries/retry_delay 在 PARAM_REGISTRY 中非 batch_level，但 batch 也需此值
             actual_timeout = timeout if timeout is not None else (self.parent.timeout or resolve_default("chat", "timeout"))
@@ -550,10 +552,24 @@ class CNLLM:
                 else:
                     non_stream_requests.append(req)
 
+            # performance=True 与 max_concurrent/rps 互斥
+            if actual_performance and (max_concurrent is not None or rps is not None):
+                raise TypeError(
+                    "performance=True 时不允许设置 max_concurrent 或 rps，"
+                    "自适应调度/池化模式下并发和速率由系统自动管理"
+                )
+
+            _controllers: Dict = {}
+            self.parent._last_controllers = _controllers
             _scheduler_kwargs = dict(
                 client=self.parent,
+                controllers=_controllers,
+                fallback_config=self.parent.fallback_models,
+                performance=actual_performance,
                 max_concurrent=actual_max_concurrent,
                 rps=actual_rps,
+                _user_max_concurrent=max_concurrent is not None,
+                _user_rps=rps is not None,
                 timeout=actual_timeout,
                 max_retries=actual_max_retries,
                 retry_delay=actual_retry_delay,
@@ -565,6 +581,7 @@ class CNLLM:
             if not stream_requests:
                 # === 全部非流式 ===
                 scheduler = BatchScheduler(**_scheduler_kwargs)
+                self.parent._last_scheduler = scheduler
                 adapter = scheduler._get_adapter()
 
                 import time as _time
@@ -578,10 +595,10 @@ class CNLLM:
 
                 def _bg_run():
                     try:
-                        for _ in scheduler.execute(non_stream_requests):
-                            pass
-                    except Exception:
-                        pass
+                        scheduler.execute(non_stream_requests)
+                    except Exception as _bg_ex:
+                        logger.error("batch background thread crashed: %s", _bg_ex, exc_info=True)
+                        batch_response.add_error("__batch_crash__", f"background thread: {_bg_ex}")
                     finally:
                         batch_response.mark_done()
 
@@ -617,4 +634,3 @@ class CNLLM:
                 )
                 self._batch_response = accumulator._batch
                 return accumulator
-

@@ -515,8 +515,11 @@ class asyncCNLLM:
                 else:
                     non_stream_requests.append(req)
 
+            _controllers: Dict = {}
+            self.parent._last_controllers = _controllers
             _scheduler_kwargs = dict(
                 client=self.parent,
+                controllers=_controllers,
                 max_concurrent=actual_max_concurrent,
                 rps=actual_rps,
                 timeout=actual_timeout,

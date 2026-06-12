@@ -7,5 +7,6 @@ from .deepseek import DeepSeekAdapter, DeepSeekResponder
 from .qwen import QwenAdapter, QwenResponder
 from .baidu import BaiduAdapter, BaiduResponder
 from .hunyuan import HunyuanAdapter, HunyuanResponder
+from .step import StepAdapter, StepResponder
 
-__all__ = ["MiniMaxAdapter", "MiniMaxResponder", "XiaomiAdapter", "XiaomiResponder", "GLMAdapter", "GLMResponder", "DoubaoAdapter", "DoubaoResponder", "KimiAdapter", "KimiResponder", "DeepSeekAdapter", "DeepSeekResponder", "QwenAdapter", "QwenResponder", "BaiduAdapter", "BaiduResponder", "HunyuanAdapter", "HunyuanResponder"]
+__all__ = ["MiniMaxAdapter", "MiniMaxResponder", "XiaomiAdapter", "XiaomiResponder", "GLMAdapter", "GLMResponder", "DoubaoAdapter", "DoubaoResponder", "KimiAdapter", "KimiResponder", "DeepSeekAdapter", "DeepSeekResponder", "QwenAdapter", "QwenResponder", "BaiduAdapter", "BaiduResponder", "HunyuanAdapter", "HunyuanResponder", "StepAdapter", "StepResponder"]

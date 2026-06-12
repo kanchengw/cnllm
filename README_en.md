@@ -23,7 +23,7 @@ Through CNLLM, developers can seamlessly use Chinese LLMs in the OpenAI ecosyste
 - **Streaming Response** - Streaming lifecycle monitoring via `repr()`, and automatic accumulation of incremental fields via `.still`/`.think`/`.tools` property access
 - **Batch Capability** - Independent configuration for single requests in batch tasks, with real-time batch progress statistics (`.status`), and configurable failure policy (`stop_on_error`) and memory management (`keep`).
 
-**Example:Streaming Lifecycle View and Incremental Extraction/Automatic Accumulation**
+**Example: Streaming Lifecycle View and Incremental Extraction/Automatic Accumulation**
 
 ![Figure 2][repr]
 
@@ -53,6 +53,20 @@ Project Documentation:
 
 ## Changelog
 
+### v0.9.10 (2026-06-12)
+
+- ⚡ **Adaptive Scheduling + Pooling Algorithm**
+  - `chat.batch(stream=False)` supports adaptive controller: dynamic concurrency, RPS limiting, RPM learning, 429 freeze/thaw
+  - Streaming/mixed batch still requires manual `max_concurrent` and `rps` or defaults; non-streaming batch can override adaptive scheduling by specifying these params
+  - With `fallback_models` + `performance=True`: weighted distribution by model throughput, fast/slow models don't block each other; `max_concurrent` and `rps` cannot be configured
+  - With `performance=False` or default: primary model priority, failed requests auto-retry fallback models
+- ✨ **Step (阶跃星辰)** new vendor
+  - Models: `step-3-5-flash`, `step-3-7-flash`
+  - Supports streaming/non-streaming Chat Completions, Tools, reasoning effort (`reasoning_effort`)
+- ✨ **MiniMax** adds `minimax-m3` (`MiniMax-M3`) model
+  - `thinking` parameter supports `True`/`False` for thinking mode (M3 only)
+- ✨ **Qwen** adds `qwen3.7-max`, `qwen3.7-plus` models
+
 ### v0.9.3 (2026-05-29)
 
 - ✨ **Context Building Tool**
@@ -77,11 +91,13 @@ Project Documentation:
 - **Xiaomi mimo**
   - `mimo-v2-pro`, `mimo-v2-omni`, `mimo-v2-flash`, `mimo-v2.5-pro`, `mimo-v2.5`
 - **MiniMax**
-  - `MiniMax-M2`, `MiniMax-M2.1`, `MiniMax-M2.5`, `MiniMax-M2.5-highspeed`, `MiniMax-M2.7`, `MiniMax-M2.7-highspeed`
+  - `MiniMax-M3`, `MiniMax-M2`, `MiniMax-M2.1`, `MiniMax-M2.5`, `MiniMax-M2.5-highspeed`, `MiniMax-M2.7`, `MiniMax-M2.7-highspeed`
 - **Qwen**
-  - `qwen3.6-max-preview`, `qwen3.6-plus`, `qwen3.6-flash`, `qwen3.5-plus`, `qwen3.5-flash`, `qwen3.5-397b-a17b`, `qwen3.5-122b-a10b`, `qwen3.5-27b`, `qwen3.5-35b-a3b`
+  - `qwen3.7-max`, `qwen3.7-plus`, `qwen3.6-max-preview`, `qwen3.6-plus`, `qwen3.6-flash`, `qwen3.5-plus`, `qwen3.5-flash`, `qwen3.5-397b-a17b`, `qwen3.5-122b-a10b`, `qwen3.5-27b`, `qwen3.5-35b-a3b`
 - **Baidu**
   - `ernie-5.1`, `ernie-5.0`, `ernie-5.0-thinking-perview`, `ernie-4.5-8k-preview`, `ernie-4.5-turbo-128k` (`ernie-4.5-turbo`), `ernie-4.5-turbo-32k`, `ernie-4.5-turbo-vl`, `ernie-4.5-turbo-vl-32k`, `ernie-4.5-0.3b`, `ernie-speed-pro-128k` (`ernie-speed-pro`), `ernie-lite-pro-128k` (`ernie-lite-pro`), `ernie-x1.1`, `ernie-x1-turbo-32k` (`ernie-x1-turbo`)
+- **Step (阶跃星辰)**
+  - `step-3-5-flash`, `step-3-7-flash`
 - **Hunyuan**
   - `hy3-preview`, `hunyuan-2.0-thinking-20251109` (`hunyuan-2.0-thinking`), `hunyuan-2.0-instruct-20251111` (`hunyuan-2.0-instruct`)
 
@@ -174,7 +190,7 @@ All methods support both sync and async clients:
 |   | Streaming single | `chat.create(stream=True)`          | `Iterator[Dict]`      |
 |   | Non-streaming batch | `chat.batch()`         | `BatchResponse`       |
 |   | Streaming batch | `chat.batch(stream=True)`          | `Iterator[Dict]`      |
-|   | Mixed streaming batch | `chat.batch(requests=[{"stream": True}, {"stream": False}])` | `BatchResponse`       |
+|   | Mixed streaming batch | `chat.batch(requests=[{"stream": True}, {"stream": False}])` | `Iterator[Dict]`       |
 | **embeddings** | Embeddings single | `embeddings.create()` | `Dict`                |
 |   | Embeddings batch | `embeddings.batch()` | `EmbeddingResponse`   |
 
@@ -483,9 +499,14 @@ Batch calls support **retry strategy, concurrency control** parameter configurat
 | `timeout`        | `int`   | 30       | Per-request timeout (seconds)                                   |
 | `max_retries`    | `int`   | 3        | Max retry times                                     |
 | `retry_delay`    | `float` | 1.0      | Retry delay (seconds)                                    |
+| `performance`    | `bool`  | `False`  | Pooled distribution, weighted by model throughput, fast/slow models don't block each other |
 
-**batch\_size**:
+**batch_size**:
 Only supported for batch Embeddings calls, defaults to adaptive calculation based on request count, manual configuration not recommended.
+
+**max_concurrent, rps, performance**:
+Non-streaming batch (`chat.batch(stream=False)`) uses adaptive scheduler by default; manual `max_concurrent` and `rps` override is not recommended.
+Setting `performance=True` enables pooled distribution (requires `fallback_models`), weighted by model throughput; `max_concurrent` and `rps` cannot be configured.
 
 ### 2.5 Batch Call Advanced Features
 
@@ -695,6 +716,7 @@ Note: Not all supported models support all request parameters. Please refer to v
    - GLM, DeepSeek, Baidu, Hunyuan, Xiaomi, Kimi: `True` → `{"type": "enabled"}`, `False` → `{"type": "disabled"}`
    - Doubao: `True` → `"enabled"`, `False` → `"disabled"`, `"auto"` → `"auto"`
    - Qwen: `True` → `enable_thinking: true`, `False` → `enable_thinking: false`
+   - MiniMax (M3): `True` → `{"type": "adaptive"}`, `False` → `{"type": "disabled"}`
 
 #### 4.1.2 Advanced Parameters
 
@@ -730,7 +752,7 @@ Parameters supported by models but not covered in 4.1.1/4.1.2 will be passed thr
 | **KIMI** | `prompt_cache_key`, `safety_identifier`, `stream_options` |
 | **Doubao** | `service_tier`, `stream_options` |
 | **GLM** | `do_sample`, `request_id`, `tool_stream`, `dimensions` |
-| **MiniMax** | `stream_options`, `group_id` |
+| **MiniMax** | `stream_options`(native API), `group_id`(native API) |
 | **Qwen** | `enable_thinking`, `preserve_thinking`, `thinking_budget`, `top_k`, `repetition_penalty`, `vl_high_resolution_images`, `enable_code_interpreter`, `enable_search`, `search_options`, `parallel_tool_calls`, `dimensions` |
 | **Baidu** | `enable_thinking`, `thinking_budget`, `thinking_strategy`, `penalty_score`, `repetition_penalty`, `parallel_tool_calls`, `web_search`, `metadata` |
 

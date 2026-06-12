@@ -410,6 +410,102 @@ class BaseAdapter:
         accumulator = StreamAccumulator(chunks_iterator, self)
         return iter(accumulator)
 
+    async def _ahandle_stream(self, client: BaseHttpClient, api_path: str, payload: Dict[str, Any], extra_headers: Dict[str, str] = None) -> AsyncIterator[Dict[str, Any]]:
+        from .accumulators.single_accumulator import AsyncStreamAccumulator
+        from ..utils.stream import AsyncStreamHandler
+        self._raw_response = {}
+        self._cnllm_extra = {}
+        async_it = AsyncStreamHandler.ahandle_stream(client, api_path, payload, extra_headers)
+        first = await async_it.__anext__()
+        async def _prepend_first():
+            yield first
+            async for chunk in async_it:
+                yield chunk
+        accumulator = AsyncStreamAccumulator(_prepend_first(), self)
+        return accumulator
+
+    async def async_create_completion(
+        self,
+        messages: List[Dict[str, str]] = None,
+        prompt: str = None,
+        model: str = None,
+        temperature: float = None,
+        max_tokens: Optional[int] = None,
+        stream: bool = False,
+        **kwargs
+    ) -> Dict[str, Any]:
+        if messages is None and prompt is not None:
+            messages = [{"role": "user", "content": prompt}]
+
+        if model is not None:
+            self._validator.validate_model(model)
+        else:
+            model = self.model
+
+        params = {
+            "model": model,
+            "messages": messages,
+            "temperature": temperature,
+            "max_tokens": max_tokens,
+            "stream": stream,
+            **kwargs
+        }
+
+        protocol_vendor_yaml = dict(self._config or {})
+        proto_fields = self._get_optional_fields()
+        if proto_fields:
+            protocol_vendor_yaml["optional_fields"] = proto_fields
+        protocol_excluded = self._get_protocol_excluded_params()
+        params = validate_for_scope(
+            params=params,
+            scope="chat",
+            vendor_yaml=protocol_vendor_yaml,
+            drop_params=self.drop_params,
+            protocol_excluded_params=protocol_excluded,
+        )
+        self._validate_one_of(params)
+
+        payload = self._build_payload(params)
+
+        api_path = self.get_api_path()
+        client = BaseHttpClient(
+            api_key=self.api_key,
+            base_url=self.base_url,
+            timeout=self.timeout,
+            max_retries=self.max_retries,
+            retry_delay=self.retry_delay,
+            provider=self.ADAPTER_NAME,
+            header_mappings=self.get_header_mappings(),
+            yaml_default=self.get_yaml_base_url_default(),
+        )
+
+        extra_headers = {}
+        for user_key, header_key in self.get_header_mappings().items():
+            if user_key in params and params[user_key]:
+                extra_headers[header_key] = params[user_key]
+
+        try:
+            if stream:
+                return await self._ahandle_stream(client, api_path, payload, extra_headers)
+            else:
+                raw_resp = await client.apost(api_path, payload, extra_headers)
+                self._check_response_error(raw_resp)
+
+                from .accumulators.single_accumulator import AsyncNonStreamAccumulator
+                responder = self._get_responder()
+                accumulator = AsyncNonStreamAccumulator(raw_resp, self, responder)
+                result = await accumulator.process()
+
+                return result
+        except (AuthenticationError, ContentFilteredError, ModelBusinessError, CNLLMTimeoutError, NetworkError, RateLimitError, InvalidRequestError, ServerError, InvalidURLError):
+            raise
+        except Exception as e:
+            error_msg = getattr(e, 'message', str(e))
+            raise ModelAPIError(
+                f"{self.ADAPTER_NAME} API 请求失败: {error_msg}",
+                provider=self.ADAPTER_NAME
+            )
+
     def _to_openai_format(self, raw: Dict[str, Any], model: str) -> Dict[str, Any]:
         raise NotImplementedError("子类必须实现 _to_openai_format")
 
@@ -543,12 +639,3 @@ class BaseAdapter:
                 f"{self.ADAPTER_NAME} API 请求失败: {error_msg}",
                 provider=self.ADAPTER_NAME
             )
-
-    async def _ahandle_stream(self, client: BaseHttpClient, api_path: str, payload: Dict[str, Any], extra_headers: Dict[str, str] = None) -> AsyncIterator[Dict[str, Any]]:
-        if not self._cnllm_extra:
-            self._cnllm_extra = {}
-        ait = AsyncStreamHandler.ahandle_stream(client, api_path, payload, extra_headers)
-        first = await ait.__anext__()
-        yield first
-        async for raw_chunk in ait:
-            yield raw_chunk
