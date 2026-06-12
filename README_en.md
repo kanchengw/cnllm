@@ -14,7 +14,7 @@
 
 ## Why CNLLM?
 
-CNLLM Python SDK provides Chinese LLMs with a **unified OpenAI-compatible interface layer** and a set of **standardized parameter rules and response format specifications**. 
+The CNLLM Python toolkit offers a **unified OpenAI-compatible interface layer** for all Chinese LLMs, alongside a suite of **enhanced utilities** to streamline LLM development workflows.. 
 
 Through CNLLM, developers can seamlessly use Chinese LLMs in the OpenAI ecosystem — LangChain, LlamaIndex, AutoGen, Haystack, DeepEval and other mainstream large language model application frameworks. Especially in development and application scenarios requiring multi-model collaboration, using CNLLM can **significantly reduce adaptation, parsing, feature implementation, and maintenance workload, and effectively lower token consumption in AI agent development**.
 
