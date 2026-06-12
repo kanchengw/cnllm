@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "cnllm"
 version = "0.9.10"
-description = "Unified Python library for Chinese LLMs, with flexible batch capacity, feedback on vendor-native parameter validation, and structured overview and automated accumulation for streaming."
+description = "Python toolkit for Chinese LLMs, with flexible batch capacity, structured real-time visulization and automated accumulation for streaming, and explicit feedback on vendor-native parameter validation."
 readme = "README_en.md"
 license = "Apache-2.0"
 authors = [
