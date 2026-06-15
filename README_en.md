@@ -46,7 +46,6 @@ Or contact us at: <wangkancheng1122@163.com>
 Project Documentation:
 
 - [System Architecture](docs/ARCHITECTURE.md)
-- [Vendor Development Guide](docs/CONTRIBUTOR.md)
 - [Feature Documentation](docs/feature/)
 
 ***
@@ -67,21 +66,12 @@ Project Documentation:
   - `thinking` parameter supports `True`/`False` for thinking mode (M3 only)
 - ✨ **Qwen** adds `qwen3.7-max`, `qwen3.7-plus` models
 
-### v0.9.3 (2026-05-29)
-
-- ✨ **Context Building Tool**
-  - New `ContextBox` class: one line of code to automatically format model responses, reasoning process, and tool call messages, and add them to the `messages` context list.
-  - Supports `executor` parameter for custom tool executor function.
-- ✨ **LangChain Integration**
-  - `LangChainRunnable(BaseChatModel)` adds support for `bind_tools()` / `with_structured_output()` methods
-  - New `LangChainEmbeddings`: adapts `langchain_core.embeddings.Embeddings`, supports `embed_documents()` / `embed_query()`
-
 ## Supported Models
 
 ### Chat Completions:
 
 - **DeepSeek**
-  - `deepseek-chat`, `deepseek-reasoner`, `deepseek-v4-pro`, `deepseek-v4-flash`
+  - `deepseek-v4-pro`, `deepseek-v4-flash`
 - **KIMI (Moonshot AI)**
   - `kimi-k2.6`, `kimi-k2.5`, `moonshot-v1-128k` (`moonshot-v1`), `moonshot-v1-8k`, `moonshot-v1-32k`, `moonshot-v1-vision-preview`
 - **Doubao**

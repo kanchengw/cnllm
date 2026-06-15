@@ -386,6 +386,8 @@ class asyncCNLLM:
             )
             self.parent._last_adapter = fb_manager._last_adapter
             if actual_stream:
+                if isinstance(resp, AsyncStreamAccumulator):
+                    return resp
                 return AsyncStreamAccumulator(resp, fb_manager._last_adapter)
             responder = fb_manager._last_adapter._get_responder()
             accumulator = AsyncNonStreamAccumulator(resp, fb_manager._last_adapter, responder)
