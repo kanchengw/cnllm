@@ -46,7 +46,6 @@ CNLLM Python 工具包为各类中文大语言模型提供**统一的 OpenAI 兼
 项目开发文档：
 
 - [系统架构](docs/ARCHITECTURE.md)
-- [厂商适配](docs/CONTRIBUTOR.md)
 - [功能性文档](docs/feature/)
 
 ***
@@ -72,7 +71,7 @@ CNLLM Python 工具包为各类中文大语言模型提供**统一的 OpenAI 兼
 ### Chat Completions 支持：
 
 - **DeepSeek**
-  - `deepseek-chat`、`deepseek-reasoner`、`deepseek-v4-pro`、`deepseek-v4-flash`
+  - `deepseek-v4-pro`、`deepseek-v4-flash`
 - **KIMI (Moonshot AI)**
   - `kimi-k2.6`、`kimi-k2.5`、`moonshot-v1-128k`（`moonshot-v1`）、`moonshot-v1-8k`、`moonshot-v1-32k`、`moonshot-v1-vision-preview`
 - **豆包 Doubao**
